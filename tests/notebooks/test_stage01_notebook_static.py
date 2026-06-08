@@ -74,3 +74,7 @@ def test_stage01_notebook_guarded_stage_import() -> None:
     assert "stage00_drive_path_parts" in code_text
     assert "no_final_model_selected" in code_text
     assert "holdout_test_contact" in code_text
+    assert "run_dir = Path(result.output_dir)" in code_text
+    assert 'inventory_path = run_dir / "artifact_inventory.csv"' in code_text
+    assert 'summary_path = run_dir / "01_feature_window_search_summary.csv"' in code_text
+    assert 'summary_path = OUTPUT_DIR / "01_feature_window_search_summary.csv"' not in code_text
