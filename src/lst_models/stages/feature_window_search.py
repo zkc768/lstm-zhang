@@ -118,7 +118,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage01Result:
     ledger.to_csv(ledger_path, index=False)
     folds.to_csv(fold_path, index=False)
 
-    notebook_path = Path(str(inputs["notebook_path"]))
+    notebook_path = _resolve_repo_path(inputs["notebook_path"])
     manifest_payload = {
         "route": config["route"],
         "stage_name": config["stage_name"],
@@ -188,6 +188,17 @@ def _load_json(path: Path) -> dict[str, Any]:
     if not isinstance(loaded, dict):
         raise ValueError(f"expected JSON object in {path}")
     return loaded
+
+
+def _resolve_repo_path(path_value: Any) -> Path:
+    path = Path(str(path_value))
+    if path.is_absolute():
+        return path
+    return _repo_root() / path
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
 
 
 def _load_sample_event_index(path: Path) -> pd.DataFrame:

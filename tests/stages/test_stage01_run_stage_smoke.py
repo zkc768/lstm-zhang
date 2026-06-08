@@ -181,6 +181,19 @@ def test_stage01_rejects_official_validation_selection(tmp_path: Path) -> None:
         run_stage(config)
 
 
+def test_stage01_resolves_repo_relative_notebook_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    stage00_run_dir = tmp_path / "stage00"
+    write_stage00_artifacts(stage00_run_dir)
+    config = stage01_config(tmp_path, stage00_run_dir)
+    config["inputs"]["notebook_path"] = "notebooks/01_feature_window_search_colab.ipynb"
+    monkeypatch.chdir(tmp_path)
+
+    result = run_stage(config)
+
+    manifest = json.loads(result.run_manifest.read_text(encoding="utf-8"))
+    assert len(manifest["notebook_sha256"]) == 64
+
+
 def test_stage01_reports_exact_missing_stage00_artifact(tmp_path: Path) -> None:
     stage00_run_dir = tmp_path / "stage00"
     write_stage00_artifacts(stage00_run_dir)
