@@ -1,5 +1,5 @@
 # AGENTS.md - lst_models V2 route
-<!-- AGENTS_VERSION: v1.3-colab-github-bootstrap -->
+<!-- AGENTS_VERSION: v1.5-exact-upstream-run-inputs -->
 
 This is a compact Colab-first research project for the V2 `lst_models` route.
 It is not a backend project, not a general ML framework, and not a place to
@@ -122,6 +122,18 @@ The short version:
   required project files such as `configs/`, `src/lst_models/`, `docs/protocols/`,
   or the active stage sidecars. The fix is to push/sync the full bundle, not to
   silently run from a partial notebook-only state.
+- Stage artifacts may be written first to Colab runtime paths such as
+  `/content/lst_models_results/...`, then optionally backed up to Drive. Any
+  `artifact_inventory.csv` must remain portable after that backup: use
+  `file_name` and `relative_path` as locators, keep `original_runtime_path` as
+  provenance only, and do not require downstream stages to read a stale
+  `/content/...` absolute path.
+- Downstream stages must point to exact upstream run folders by run id and
+  required artifact names. They must not infer the latest run from a parent
+  folder, and they must not use a copied `artifact_inventory.csv`
+  `original_runtime_path` as the active input locator. If a Colab runtime lacks
+  the frozen upstream run folder, the notebook may fetch the required upstream
+  artifacts from Drive by exact path parts before execution.
 - Put research question, protocol summary, scope, and config near the top.
 - Use `RUN_FULL = False` or equivalent guards for heavy cells by default.
 - Keep committed outputs empty unless the notebook is explicitly a run-copy.

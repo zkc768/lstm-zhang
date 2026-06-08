@@ -122,8 +122,7 @@ intraday_stock_direction_research/
 │   ├── notebooks/
 │   └── contracts/
 └── results/
-    └── lst_models/
-        └── <stage_name>/
+    └── <stage_name>/
 ```
 
 This layout intentionally avoids a large framework tree such as `trainer/`,
@@ -261,7 +260,7 @@ Use lowercase snake_case everywhere.
 | protocol doc | `<nn>_<stage_name>_protocol.md` | `01_feature_window_search_protocol.md` |
 | stage config | `<nn>_<stage_name>.yaml` | `01_feature_window_search.yaml` |
 | Python stage module | `<stage_name_without_number>.py` | `feature_window_search.py` |
-| result folder | `results/lst_models/<stage_name>/` | `results/lst_models/01_feature_window_search/` |
+| result folder | `results/<stage_name>/` | `results/01_feature_window_search/` |
 | run folder | `<timestamp>_<run_id>/` | `2026-06-08_1430_a1b2c3/` |
 | manifest | `run_manifest.json` | `run_manifest.json` |
 | summary table | `<stage_name>_summary.csv` | `feature_window_search_summary.csv` |
@@ -588,17 +587,64 @@ function names such as do_it, process, run_all, get_data2
 
 ## 11. Artifact Naming
 
-Each run writes one manifest and a small inventory.
+Each run writes one manifest and a small portable inventory.
+
+Canonical result locations:
+
+```text
+Colab runtime: /content/lst_models_results/<stage_name>/<run_id>/
+Drive backup:  My Drive/lst_models/results/<stage_name>/<run_id>/
+Repo-relative: results/<stage_name>/<run_id>/
+```
 
 Required run files:
 
 ```text
-results/lst_models/<stage_name>/<run_id>/
+results/<stage_name>/<run_id>/
 ├── run_manifest.json
 ├── artifact_inventory.csv
 ├── <stage_name>_summary.csv
 └── logs.txt                         # optional, keep short
 ```
+
+`artifact_inventory.csv` must be portable across Colab runtime and Drive
+backup. Do not make a runtime-only absolute `path` column the only locator.
+Minimum columns:
+
+```text
+artifact_name
+file_name
+relative_path
+original_runtime_path
+exists
+bytes
+sha256
+```
+
+Consumers must locate artifacts as:
+
+```text
+run_folder / relative_path
+```
+
+`original_runtime_path` is provenance only. Stage 01 and later stages must not
+use it as the input path after a run folder has been copied to Drive or another
+machine.
+
+Downstream stage configs must point to exact upstream run folders, not parent
+stage folders. For example Stage 01 must freeze:
+
+```text
+stage00_run_id
+stage00_runtime_run_dir
+stage00_drive_path_parts
+stage00_run_manifest
+```
+
+If a Colab runtime is missing the frozen upstream run folder, the notebook may
+download the required upstream artifacts from Drive by exact path parts through
+the Drive API. It must not scan for the latest run, use a stale `/content/...`
+inventory path, or require manual upload of upstream results.
 
 Manifest minimum fields:
 

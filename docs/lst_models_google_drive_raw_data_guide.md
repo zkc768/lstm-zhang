@@ -97,8 +97,11 @@ output_columns: [ticker, timestamp, open, high, low, close, volume]
 ```
 
 Apply the regular trading hours filter to both the 1-minute rows and the
-resampled 5-minute rows. Sort by `(ticker, timestamp)` before downstream split,
-label, feature, and window construction.
+resampled 5-minute rows. The raw 1-minute filter may include the `16:00` row,
+but the resampled 5-minute output must not keep a partial `16:00` bucket; the
+last regular full 5-minute bar is labeled `15:55`. Sort by
+`(ticker, timestamp)` before downstream split, label, feature, and window
+construction.
 
 ## 5. Holdout/Test Boundary
 
