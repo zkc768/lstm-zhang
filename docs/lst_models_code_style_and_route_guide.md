@@ -271,7 +271,56 @@ Keep notebook numbers in V2 because this route is a visible thesis execution
 sequence. Keep Python imports unnumbered because import paths should describe
 behavior, not order.
 
-## 7. Notebook Style
+## 7. Single-Notebook User Flow
+
+Each stage has exactly one user-facing execution notebook. The notebook is what
+the user opens, reviews, and runs in Colab. GitHub sidecar files exist to make
+the notebook reproducible and safe; they must not become extra manual steps for
+the user.
+
+User workflow:
+
+```text
+open one Colab notebook
+review config cell
+run approved cells
+read compact outputs
+```
+
+Agent workflow when creating or materially changing a stage notebook:
+
+```text
+read AGENTS.md and this guide
+create/update the one stage notebook
+create/update the matching protocol doc
+create/update the matching stage config
+create/update static notebook gates if notebook safety rules changed
+create/update contract or data tests if reusable logic or artifact schemas changed
+leave heavy execution off by default
+```
+
+Required sidecar bundle:
+
+| user-facing file | required sidecar files |
+|---|---|
+| `notebooks/<nn>_<stage>_colab.ipynb` | `docs/protocols/<nn>_<stage>_protocol.md` |
+| same notebook | `configs/stages/<nn>_<stage>.yaml` |
+| same notebook, if reusable stage logic exists | `src/lst_models/stages/<stage>.py` |
+| same notebook, if model HPO search changes | `configs/models/<model>/search_space.yaml` |
+| same notebook, if selected params freeze | `configs/frozen_params/<stage>/<model>_best_params.yaml` |
+| same notebook, if safety behavior changes | targeted tests under `tests/` |
+
+Important: `scripts/notebooks/generate_<stage>_colab.py` is an optional agent
+helper for repeatable notebook creation. It is not a required user command and
+must not be treated as a second execution surface. If a generator exists, it
+must generate the same single user-facing notebook and keep sidecars aligned.
+
+Do not ask the user to separately "generate protocol", "generate config", or
+"generate tests" after asking for a notebook. If those files are required by the
+GitHub contract, the agent creates or updates them in the same implementation
+task.
+
+## 8. Notebook Style
 
 Each notebook is a readable execution report, not the canonical source of all
 logic.
@@ -335,7 +384,7 @@ else:
     print("RUN_FULL=False; stage not executed.")
 ```
 
-## 8. Config Style
+## 9. Config Style
 
 Config files should be boring, explicit, and small.
 
@@ -384,7 +433,7 @@ configs/
         └── lstm_lcb_candidate_best_params.yaml
 ```
 
-## 9. Python Code Style
+## 10. Python Code Style
 
 Python should be small, direct, and testable.
 
@@ -481,7 +530,7 @@ random train_test_split for time-series validation
 function names such as do_it, process, run_all, get_data2
 ```
 
-## 10. Artifact Naming
+## 11. Artifact Naming
 
 Each run writes one manifest and a small inventory.
 
@@ -520,7 +569,7 @@ Artifact rules:
   a specific small artifact is needed for thesis evidence.
 - Every result table that supports a claim must include `scope`.
 
-## 11. Minimum Tests For GitHub
+## 12. Minimum Tests For GitHub
 
 Do not delete all tests. Keep a small but hard test set.
 
@@ -558,7 +607,7 @@ E:\codex_workspace\_envs\py311_shared\python.exe -m pytest tests\data tests\stag
 The default GitHub test suite should be fast enough to run often. Heavy training
 is not required to prove chronology, leakage, manifests, and notebook safety.
 
-## 12. What Not To Build
+## 13. What Not To Build
 
 Do not add these unless a later stage proves the need:
 
@@ -582,7 +631,7 @@ small Python helpers
 minimum safety tests
 ```
 
-## 13. Acceptance Checklist
+## 14. Acceptance Checklist
 
 Before calling the V2 route GitHub-ready:
 

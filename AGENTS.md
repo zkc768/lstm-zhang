@@ -1,5 +1,5 @@
 # AGENTS.md - lst_models V2 route
-<!-- AGENTS_VERSION: v1.1-lst-models-placement-gate -->
+<!-- AGENTS_VERSION: v1.2-single-notebook-sidecars -->
 
 This is a compact Colab-first research project for the V2 `lst_models` route.
 It is not a backend project, not a general ML framework, and not a place to
@@ -11,6 +11,8 @@ recreate the large historical project surface.
 - Parent research context: intraday stock direction classification using
   chronological validation.
 - Default execution surface: Colab `.ipynb` notebooks.
+- User workflow: one user-facing notebook per stage; sidecar files are created
+  or updated by agents in the same implementation task.
 - Canonical Python package path: `src/lst_models/`.
 - Canonical style guide:
   `docs/lst_models_code_style_and_route_guide.md`.
@@ -61,6 +63,11 @@ The V2 stage route is:
 06_ian_final_progress_record_colab.ipynb
 ```
 
+Each executable stage has exactly one user-facing notebook. When an agent
+creates or materially changes that notebook, the same task must create or update
+the GitHub sidecar bundle. The user should not need a separate manual generation
+step.
+
 Each executable stage must have:
 
 - one notebook in `notebooks/`
@@ -70,12 +77,17 @@ Each executable stage must have:
   `run_stage(config)`
 - one run manifest when execution occurs
 
+Sidecar files are a repository contract, not extra user workflow. Optional
+`scripts/notebooks/generate_<stage>_colab.py` helpers may exist for agents, but
+they must not become a required user command or a second execution surface.
+
 ## 4. Code Style Rules
 
 Follow `docs/lst_models_code_style_and_route_guide.md` as the source of truth.
 The short version:
 
 - Keep notebooks readable and linear.
+- Keep one user-facing notebook per stage; update sidecars in the same task.
 - Keep Python files small and purpose-specific.
 - Use lowercase snake_case for files, folders, functions, configs, and artifacts.
 - Prefer explicit config over hidden defaults.
@@ -101,6 +113,8 @@ The short version:
 - Do not mount Drive in the default setup cell.
 - Do not rely on machine-local paths as the active research path.
 - Prefer compact tables and a small number of useful plots over long logs.
+- Do not ask the user to run a separate generator just to obtain the required
+  protocol, config, or tests; agents maintain those files with the notebook.
 
 ## 6. Research Safety Rules
 
@@ -141,6 +155,8 @@ Before writing code, the implementer MUST record a placement decision:
 The implementation MUST preserve:
 
 - Colab-first execution
+- one user-facing notebook per stage
+- sidecar docs/configs/tests updated in the same task when required
 - one run_stage(config) per executable stage
 - canonical Python package path: src/lst_models/
 - small Python helpers, no framework expansion
