@@ -6,7 +6,7 @@ from textwrap import dedent
 import nbformat as nbf
 
 
-PROJECT_REPO_COMMIT = "16a136cc37d742f7f127d9e9226b32e8364b9c0e"
+PROJECT_REPO_COMMIT = "1b0fd7552fc94f58472a057d9313583a65f3c281"
 
 
 def markdown(source: str) -> nbf.NotebookNode:
