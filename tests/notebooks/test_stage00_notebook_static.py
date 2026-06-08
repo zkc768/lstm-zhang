@@ -34,6 +34,8 @@ def test_stage00_notebook_is_single_stage00_entrypoint() -> None:
     assert "RUN_DOWNLOAD = False" in text
     assert "git\", \"clone\"" in text
     assert "git\", \"checkout\"" in text
+    assert "clear_project_import_cache" in text
+    assert "importlib.invalidate_caches()" in text
     assert "download_and_extract_project_zip_from_drive" in text
 
 

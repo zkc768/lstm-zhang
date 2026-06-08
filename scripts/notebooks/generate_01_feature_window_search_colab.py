@@ -53,6 +53,7 @@ CELL_SPECS = [('markdown',
   'and `holdout_test_contact=false`.\n'),
  ('code',
   'from pathlib import Path\n'
+  'import importlib\n'
   'import json\n'
   'import subprocess\n'
   'import sys\n'
@@ -227,6 +228,14 @@ CELL_SPECS = [('markdown',
   'SRC_PATH = PROJECT_ROOT / "src"\n'
   'if str(SRC_PATH) not in sys.path:\n'
   '    sys.path.insert(0, str(SRC_PATH))\n'
+  '\n'
+  'def clear_project_import_cache():\n'
+  '    cached = [name for name in sys.modules if name == "lst_models" or name.startswith("lst_models.")]\n'
+  '    for name in cached:\n'
+  '        del sys.modules[name]\n'
+  '    importlib.invalidate_caches()\n'
+  '\n'
+  'clear_project_import_cache()\n'
   '\n'
   'print("PROJECT_ROOT:", PROJECT_ROOT)\n'
   'print("PROJECT_BOOTSTRAP_MODE:", PROJECT_BOOTSTRAP_MODE)\n'

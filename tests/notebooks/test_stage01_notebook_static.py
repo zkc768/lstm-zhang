@@ -42,6 +42,8 @@ def test_stage01_notebook_is_single_stage01_entrypoint() -> None:
     assert "shallow_lstm" in text
     assert "git\", \"clone\"" in text
     assert "git\", \"checkout\"" in text
+    assert "clear_project_import_cache" in text
+    assert "importlib.invalidate_caches()" in text
     assert "src\" / \"lst_models\" / \"stages\" / \"feature_window_search.py" in text
     assert "sync_stage00_artifacts_from_drive" in text
     assert "resolve_drive_folder" in text

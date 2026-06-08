@@ -65,6 +65,7 @@ def build_notebook() -> nbf.NotebookNode:
         code(
             f"""
             from pathlib import Path
+            import importlib
             import subprocess
             import sys
             import zipfile
@@ -222,6 +223,18 @@ def build_notebook() -> nbf.NotebookNode:
             SRC_PATH = PROJECT_ROOT / "src"
             if str(SRC_PATH) not in sys.path:
                 sys.path.insert(0, str(SRC_PATH))
+
+            def clear_project_import_cache():
+                cached = [
+                    name
+                    for name in sys.modules
+                    if name == "lst_models" or name.startswith("lst_models.")
+                ]
+                for name in cached:
+                    del sys.modules[name]
+                importlib.invalidate_caches()
+
+            clear_project_import_cache()
 
             print("PROJECT_ROOT:", PROJECT_ROOT)
             print("PROJECT_BOOTSTRAP_MODE:", PROJECT_BOOTSTRAP_MODE)
