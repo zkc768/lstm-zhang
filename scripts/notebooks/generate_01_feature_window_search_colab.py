@@ -64,7 +64,7 @@ CELL_SPECS = [('markdown',
   'already_present\n'
   '\n'
   'PROJECT_REPO_URL = "https://github.com/zkc768/lstm-zhang.git"\n'
-  'PROJECT_REPO_COMMIT = "cf6ced19a0eed10f2e9ed2f210d2e639bcfcb2bc"\n'
+  'PROJECT_REPO_COMMIT = "b6e055239d945db631f63a4fee7b5133ea04a5d5"\n'
   'PROJECT_ROOT = Path("/content/lst_models")\n'
   'PROJECT_DRIVE_BUNDLE_FILE_ID = ""\n'
   'PROJECT_DRIVE_BUNDLE_NAME = "lst_models_stage01_colab_project.zip"\n'
