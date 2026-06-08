@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Notebook runtime noise
+.ipynb_checkpoints/
+notebooks/*_run_all*.ipynb
+notebooks/*_full_run*.ipynb
+notebooks/*.bak*
+
+# Raw data and generated outputs
+data/raw/
+data/interim/
+data/processed/
+results/**
+!results/.gitkeep
+!results/lst_models/.gitkeep
+artifacts/**
+!artifacts/.gitkeep
+
+# Model/checkpoint outputs
+models/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.pkl
+*.joblib
+
+# Local env files
+.env
+.venv/
+venv/

@@ -1,0 +1,67 @@
+# lst_models raw-data manifest.
+# Authoritative source: Google Drive file IDs for the five raw 1-minute ticker
+# .txt files. New notebooks must read this manifest or copy these values exactly;
+# they must not discover raw data by scanning mounted MyDrive folders.
+
+version: 1
+route: lst_models
+research_scope: validation_only
+holdout_test_contact: false
+
+tickers: [CSCO, JPM, KO, MSFT, WMT]
+
+raw_source:
+  kind: one_minute_txt
+  drive_folder_id: "154SlcH3nViUcvPXFBM-E4NPg_ybljBTG"
+  drive_folder_name: "s&p 100 adjusted 1 min data"
+  drive_folder_url: "https://drive.google.com/drive/folders/154SlcH3nViUcvPXFBM-E4NPg_ybljBTG"
+  local_download_dir: "/content/lst_models_raw_stock_data"
+  files:
+    CSCO:
+      name: "CSCO.txt"
+      file_id: "17A49kUiMELuQqdkOhw1KrpudjP5i5xIN"
+      url: "https://drive.google.com/file/d/17A49kUiMELuQqdkOhw1KrpudjP5i5xIN/view"
+    JPM:
+      name: "JPM.txt"
+      file_id: "11UQUJKVXTrBb8XFWY5Z8JDQ8_4i_DE-q"
+      url: "https://drive.google.com/file/d/11UQUJKVXTrBb8XFWY5Z8JDQ8_4i_DE-q/view"
+    KO:
+      name: "KO.txt"
+      file_id: "1XmtwuZ2dTP20NsU27w5dMyRdSvdnNTSn"
+      url: "https://drive.google.com/file/d/1XmtwuZ2dTP20NsU27w5dMyRdSvdnNTSn/view"
+    MSFT:
+      name: "MSFT.txt"
+      file_id: "1Ud1SQpQbaiRKemFf9dgu1o_raUPnFvGs"
+      url: "https://drive.google.com/file/d/1Ud1SQpQbaiRKemFf9dgu1o_raUPnFvGs/view"
+    WMT:
+      name: "WMT.txt"
+      file_id: "1NNfsoUJrrsj2ae5EnC-PTPcZs_QGR_7c"
+      url: "https://drive.google.com/file/d/1NNfsoUJrrsj2ae5EnC-PTPcZs_QGR_7c/view"
+  txt_columns: [Date, Time, Open, High, Low, Close, Volume]
+  date_format: "%m/%d/%Y"
+  time_format: "%H:%M"
+
+five_minute_recipe:
+  input_frequency: "1min"
+  output_frequency: "5min"
+  resample_rule: "5min"
+  market_open: "09:30"
+  market_close: "16:00"
+  agg:
+    open: first
+    high: max
+    low: min
+    close: last
+    volume: sum
+  drop_na_subset: [open, high, low, close, volume]
+  output_columns: [ticker, timestamp, open, high, low, close, volume]
+
+boundaries:
+  val_end: "2017-01-25"
+
+notebook_rules:
+  no_default_drive_mount: true
+  download_by_file_id_only: true
+  do_not_scan_my_drive_for_raw_data: true
+  write_outputs_to_local_runtime_first: true
+  optional_drive_backup_folder: "/content/drive/MyDrive/lst_models/results"
