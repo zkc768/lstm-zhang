@@ -9,10 +9,10 @@ or touch holdout/test data.
 
 ## 1. Decision
 
-Do not place the V2 route directly inside `zkc768/lstm-zhang`.
+Current GitHub remote: `https://github.com/zkc768/lstm-zhang.git`.
 
 The practical target is a small, readable `lst_models` research route inside
-the `intraday_stock_direction_research` style of repository:
+that repo, while keeping the compact `intraday_stock_direction_research` style:
 
 - Colab `.ipynb` remains the visible execution entrypoint.
 - Core reusable logic lives in a small number of `.py` files.
@@ -282,10 +282,66 @@ User workflow:
 
 ```text
 open one Colab notebook
-review config cell
+run first bootstrap/config cell
+verify PROJECT_ROOT and PROJECT_COMMIT
+review stage config cell
 run approved cells
 read compact outputs
 ```
+
+Colab project bootstrap policy:
+
+```text
+github_commit -> drive_bundle -> manual_upload
+```
+
+| mode | status | allowed use |
+|---|---|---|
+| `github_commit` | default | Clone `https://github.com/zkc768/lstm-zhang.git` at an exact commit and add `/content/lst_models/src` to `sys.path`. |
+| `drive_bundle` | fallback | Download a project bundle zip by explicit Google Drive file ID for unpushed review work. |
+| `manual_upload` | emergency fallback | Upload a project bundle zip only when GitHub or Drive bundle access is unavailable. |
+| `already_present` | local/runtime fallback | Use an existing `/content/lst_models` tree only after required files are verified. |
+
+A package-backed notebook must never assume that the `.ipynb` file alone is
+sufficient. The bootstrap target must contain:
+
+```text
+configs/
+src/lst_models/
+docs/protocols/
+notebooks/
+```
+
+For an active stage, the exact commit or bundle must also contain that stage's
+notebook, protocol, config, and required source/test sidecars. If any required
+path is missing, fail loudly with the exact missing path. Do not continue from a
+partial notebook-only state.
+
+Notebook bootstrap switches should follow this pattern:
+
+```python
+RUN_PROJECT_BOOTSTRAP = False
+PROJECT_BOOTSTRAP_MODE = "github_commit"  # github_commit | drive_bundle | manual_upload | already_present
+
+PROJECT_REPO_URL = "https://github.com/zkc768/lstm-zhang.git"
+PROJECT_REPO_COMMIT = "<exact_commit_hash>"
+PROJECT_ROOT = Path("/content/lst_models")
+
+PROJECT_DRIVE_BUNDLE_FILE_ID = ""  # required only for drive_bundle
+RUN_DOWNLOAD = False
+RUN_STAGE00 = False
+```
+
+Rules:
+
+- Do not clone a floating branch such as `main` as the research runtime.
+- Do not ask the user to manually run `git clone` in a Colab terminal.
+- Do not make zip upload the normal workflow.
+- Update `PROJECT_REPO_COMMIT` whenever package/config/protocol code needed by
+  the notebook changes and is pushed.
+- If local Stage 00/01 files exist only on this machine and are not pushed to
+  GitHub, `github_commit` bootstrap is not ready for those files. Use a Drive
+  bundle only as a temporary fallback, or push the full stage bundle first.
 
 Agent workflow when creating or materially changing a stage notebook:
 

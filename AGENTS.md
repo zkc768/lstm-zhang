@@ -1,5 +1,5 @@
 # AGENTS.md - lst_models V2 route
-<!-- AGENTS_VERSION: v1.2-single-notebook-sidecars -->
+<!-- AGENTS_VERSION: v1.3-colab-github-bootstrap -->
 
 This is a compact Colab-first research project for the V2 `lst_models` route.
 It is not a backend project, not a general ML framework, and not a place to
@@ -13,6 +13,8 @@ recreate the large historical project surface.
 - Default execution surface: Colab `.ipynb` notebooks.
 - User workflow: one user-facing notebook per stage; sidecar files are created
   or updated by agents in the same implementation task.
+- Default Colab bootstrap: clone this repo from GitHub at an exact commit,
+  then add `src/` to `sys.path`. Zip upload is fallback only.
 - Canonical Python package path: `src/lst_models/`.
 - Canonical style guide:
   `docs/lst_models_code_style_and_route_guide.md`.
@@ -107,6 +109,19 @@ The short version:
 ## 5. Notebook Rules
 
 - Colab `.ipynb` is the visible execution entrypoint.
+- Package-backed notebooks must include a first bootstrap/config cell that can
+  clone `https://github.com/zkc768/lstm-zhang.git` at an exact commit and add
+  `/content/lst_models/src` to `sys.path`.
+- The user should not manually run `git clone` in Colab. The notebook bootstrap
+  cell owns clone/fetch/checkout and verifies the resolved commit.
+- Normal Colab workflow must not require uploading a project zip on every run.
+  Manual zip upload is emergency fallback only.
+- Google Drive project bundle zip is fallback for unpushed review work only and
+  should use an explicit Drive file ID, not filename search, when possible.
+- A package-backed notebook must fail loudly if its bootstrap target is missing
+  required project files such as `configs/`, `src/lst_models/`, `docs/protocols/`,
+  or the active stage sidecars. The fix is to push/sync the full bundle, not to
+  silently run from a partial notebook-only state.
 - Put research question, protocol summary, scope, and config near the top.
 - Use `RUN_FULL = False` or equivalent guards for heavy cells by default.
 - Keep committed outputs empty unless the notebook is explicitly a run-copy.
