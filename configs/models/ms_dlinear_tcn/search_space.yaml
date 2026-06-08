@@ -1,0 +1,31 @@
+model_family: ms_dlinear_tcn
+search_mode: bounded_profiles
+profiles:
+  - profile_id: msdt_p01
+    moving_avg_kernels: [3, 5, 9]
+    tcn_channels: [16, 16]
+    tcn_kernel_size: 3
+    dropout: 0.10
+    learning_rate: 0.001
+    weight_decay: 0.0001
+  - profile_id: msdt_p02
+    moving_avg_kernels: [3, 5, 9, 15]
+    tcn_channels: [32, 32]
+    tcn_kernel_size: 3
+    dropout: 0.10
+    learning_rate: 0.001
+    weight_decay: 0.0001
+  - profile_id: msdt_p03
+    moving_avg_kernels: [3, 6, 12, 24]
+    tcn_channels: [32, 32]
+    tcn_kernel_size: 5
+    dropout: 0.20
+    learning_rate: 0.0003
+    weight_decay: 0.0001
+  - profile_id: msdt_p04
+    moving_avg_kernels: [3, 5, 7]
+    tcn_channels: [32, 32, 32]
+    tcn_kernel_size: 3
+    dropout: 0.05
+    learning_rate: 0.003
+    weight_decay: 0.0
