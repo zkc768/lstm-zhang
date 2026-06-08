@@ -89,13 +89,22 @@ intraday_stock_direction_research/
 │   ├── 05_thesis_synthesis_colab.ipynb
 │   └── 06_ian_final_progress_record_colab.ipynb
 ├── src/
-│   └── intraday_research/
+│   └── lst_models/
 │       ├── config.py
-│       ├── data/
-│       ├── features.py
+│       ├── data.py
+│       ├── splits.py
 │       ├── labels.py
+│       ├── features.py
+│       ├── windows.py
+│       ├── preprocessing.py
 │       ├── metrics.py
 │       ├── artifacts.py
+│       ├── device.py
+│       ├── models/
+│       │   ├── registry.py
+│       │   ├── lstm.py
+│       │   ├── gru.py
+│       │   └── ms_dlinear_tcn.py
 │       └── stages/
 │           ├── data_split_label_freeze.py
 │           ├── feature_window_search.py
@@ -138,14 +147,19 @@ and update the guide before creating a new directory or abstraction.
 | `docs/lst_models_code_style_and_route_guide.md` | Repo layout, naming, file placement, style rules, minimum tests | Stage-specific metric claims |
 | `docs/lst_models_google_drive_raw_data_guide.md` | Drive/raw-data access rules and file-ID policy | Duplicate raw data |
 | `notebooks/<nn>_<stage>_colab.ipynb` | Colab entrypoint: config display, stage call, artifact display, compact interpretation | Canonical reusable logic, hidden imports from other notebooks |
-| `src/intraday_research/config.py` | Config loading, path normalization, hash helpers | Stage-specific model logic |
-| `src/intraday_research/data/` | Raw bar schemas, Drive download helpers, split/window boundary helpers | Model training or thesis prose |
-| `src/intraday_research/features.py` | Feature construction that is reused or safety-critical | One-off exploratory plots |
-| `src/intraday_research/labels.py` | Label construction and boundary invalidation | Threshold decisions based on validation results |
-| `src/intraday_research/metrics.py` | Macro F1, balanced accuracy, dummy-baseline deltas, aggregation helpers | Wording decisions or thesis claims |
-| `src/intraday_research/artifacts.py` | Manifest writing, artifact inventory, schema checks | Model architecture |
-| `src/intraday_research/models/` | Small model classes and wrappers: LSTM, GRU, DLinear, TCN, LightGBM wrappers | Stage orchestration or data loading |
-| `src/intraday_research/stages/<stage>.py` | One public `run_stage(config)` orchestration function per executable stage | Notebook UI, markdown display, raw HPO notebooks |
+| `src/lst_models/config.py` | Config loading, path normalization, config hash helpers | Stage-specific model logic |
+| `src/lst_models/data.py` | Raw bar schemas, Drive file-ID manifest loading, 1min-to-5min conversion | Model training or thesis prose |
+| `src/lst_models/splits.py` | Chronological train/validation/closed-holdout boundary helpers | Random or shuffled time-series splits |
+| `src/lst_models/labels.py` | Label construction, no-trade band labels, boundary invalidation | Threshold decisions based on validation results |
+| `src/lst_models/features.py` | Feature construction that is reused or safety-critical | One-off exploratory plots |
+| `src/lst_models/windows.py` | Per-ticker window creation and trading-day/window boundary checks | Cross-ticker batching or model code |
+| `src/lst_models/preprocessing.py` | Train-only scaler/imputer helpers and transform contracts | Fit-on-all-data shortcuts |
+| `src/lst_models/metrics.py` | Macro F1, balanced accuracy, dummy-baseline deltas, LCB helpers | Wording decisions or thesis claims |
+| `src/lst_models/artifacts.py` | Manifest writing, artifact inventory, schema checks, artifact paths | Model architecture |
+| `src/lst_models/device.py` | CUDA/CPU resolution and manifest fields | Research-selection decisions |
+| `src/lst_models/models/registry.py` | Small model registry and model lookup | Stage orchestration or training loops |
+| `src/lst_models/models/<model>.py` | One compact model class/wrapper per model family | Config parsing, data loading, result writing |
+| `src/lst_models/stages/<stage>.py` | One public `run_stage(config)` orchestration function per executable stage | Notebook UI, markdown display, raw HPO notebooks |
 | `scripts/notebooks/generate_<stage>_colab.py` | Notebook generation only | Research logic that should be tested as package code |
 | `tests/data/` | Raw schema, split, label, window, train-only preprocessing tests | Slow full training |
 | `tests/stages/` | `run_stage(config)` smoke and contract tests with tiny synthetic data | GPU-required full HPO |
@@ -157,9 +171,9 @@ and update the guide before creating a new directory or abstraction.
 
 Placement rules:
 
-- If code is reused by two notebooks, move it to `src/intraday_research/`.
+- If code is reused by two notebooks, move it to `src/lst_models/`.
 - If code protects chronology, leakage, labels, windows, metrics, manifests, or
-  artifacts, move it to `src/intraday_research/` and test it.
+  artifacts, move it to `src/lst_models/` and test it.
 - If code only displays a table or plot for one stage, keep it in the notebook.
 - If a value changes the research conclusion, put it in a config or protocol,
   not as a hidden Python default.
@@ -180,7 +194,63 @@ stage logic placed in scripts/notebooks/
 GPU-only checks required by the fast test suite
 ```
 
-## 5. Naming Rules
+## 5. Code File Types And Common Function Placement
+
+Use this section before writing code. A technical doc that asks for code must
+name the target file type and expected module from this table. If it cannot,
+the doc is not implementation-ready.
+
+| Function or class type | Put it here | Naming pattern | Test location |
+|---|---|---|---|
+| YAML read/write, config merge, config hash | `src/lst_models/config.py` | `load_stage_config`, `hash_config` | `tests/contracts/` |
+| Google Drive raw-data manifest helpers | `src/lst_models/data.py` | `load_raw_manifest`, `download_raw_files` | `tests/data/` |
+| Raw `.txt` schema checks | `src/lst_models/data.py` | `validate_raw_bar_schema` | `tests/data/` |
+| 1-minute to 5-minute OHLCV conversion | `src/lst_models/data.py` | `resample_1min_to_5min` | `tests/data/` |
+| Chronological split construction | `src/lst_models/splits.py` | `make_chronological_splits` | `tests/data/` |
+| Split-boundary and closed-holdout guards | `src/lst_models/splits.py` | `assert_no_holdout_contact` | `tests/contracts/` |
+| Direction labels and no-trade band | `src/lst_models/labels.py` | `make_direction_labels` | `tests/data/` |
+| Label horizon invalidation | `src/lst_models/labels.py` | `invalidate_cross_boundary_labels` | `tests/data/` |
+| Feature construction | `src/lst_models/features.py` | `build_feature_frame` | `tests/data/` |
+| Window tensors | `src/lst_models/windows.py` | `make_ticker_windows` | `tests/data/` |
+| Train-only preprocessing | `src/lst_models/preprocessing.py` | `fit_train_preprocessor`, `transform_with_preprocessor` | `tests/data/` |
+| Dummy baseline | `src/lst_models/metrics.py` | `score_stratified_dummy` | `tests/contracts/` |
+| Classification metrics and LCB | `src/lst_models/metrics.py` | `score_classifier`, `compute_metric_lcb` | `tests/contracts/` |
+| Run manifest | `src/lst_models/artifacts.py` | `write_run_manifest` | `tests/contracts/` |
+| Artifact names and paths | `src/lst_models/artifacts.py` | `build_stage_artifact_paths` | `tests/contracts/` |
+| CUDA/CPU resolution | `src/lst_models/device.py` | `resolve_torch_device` | `tests/contracts/` |
+| Model lookup | `src/lst_models/models/registry.py` | `register_model`, `get_model_class` | `tests/contracts/` |
+| Model architecture | `src/lst_models/models/<model>.py` | `<ModelName>Model` | `tests/stages/` or `tests/contracts/` |
+| Stage orchestration | `src/lst_models/stages/<stage>.py` | `run_stage` | `tests/stages/` |
+| Notebook generation | `scripts/notebooks/generate_<stage>_colab.py` | `build_notebook` | `tests/notebooks/` |
+
+Rules for common functions:
+
+- Do not create a broad `utils.py`. If a helper has a clear domain, put it in
+  that domain file. If it has no clear domain, the design is not clear enough.
+- Do not put HPO search ranges inside model source. Use
+  `configs/models/<model>/search_space.yaml`.
+- Do not put selected HPO params inside model source. Use
+  `configs/frozen_params/<stage>/<model>_best_params.yaml`.
+- Do not put train loops in notebooks after the package-backed route begins.
+  Notebooks call a stage; stages call tested helpers.
+- Do not let `models/<model>.py` read files, write results, parse YAML, or know
+  Drive paths. Models receive tensors and config values.
+- Do not let `metrics.py` choose thesis wording. Metrics returns numbers and
+  flags; protocols decide allowed wording.
+
+Borrowed pattern from `compare_forecasting_models`:
+
+```text
+configs/models/<model>/search_space.yaml
+    -> src/lst_models/stages/02_model_hpo_train_inner.py
+    -> configs/frozen_params/02_model_hpo_train_inner/<model>_best_params.yaml
+```
+
+This pattern is acceptable because search ranges, HPO execution, and frozen
+results live in different file types. It should stay small; do not recreate a
+large benchmark framework.
+
+## 6. Naming Rules
 
 Use lowercase snake_case everywhere.
 
@@ -201,7 +271,7 @@ Keep notebook numbers in V2 because this route is a visible thesis execution
 sequence. Keep Python imports unnumbered because import paths should describe
 behavior, not order.
 
-## 6. Notebook Style
+## 7. Notebook Style
 
 Each notebook is a readable execution report, not the canonical source of all
 logic.
@@ -256,7 +326,7 @@ config = {
 Example stage call:
 
 ```python
-from intraday_research.stages.feature_window_search import run_stage
+from lst_models.stages.feature_window_search import run_stage
 
 if RUN_FULL:
     result = run_stage(config)
@@ -265,7 +335,7 @@ else:
     print("RUN_FULL=False; stage not executed.")
 ```
 
-## 7. Config Style
+## 8. Config Style
 
 Config files should be boring, explicit, and small.
 
@@ -314,7 +384,7 @@ configs/
         └── lstm_lcb_candidate_best_params.yaml
 ```
 
-## 8. Python Code Style
+## 9. Python Code Style
 
 Python should be small, direct, and testable.
 
@@ -411,7 +481,7 @@ random train_test_split for time-series validation
 function names such as do_it, process, run_all, get_data2
 ```
 
-## 9. Artifact Naming
+## 10. Artifact Naming
 
 Each run writes one manifest and a small inventory.
 
@@ -450,7 +520,7 @@ Artifact rules:
   a specific small artifact is needed for thesis evidence.
 - Every result table that supports a claim must include `scope`.
 
-## 10. Minimum Tests For GitHub
+## 11. Minimum Tests For GitHub
 
 Do not delete all tests. Keep a small but hard test set.
 
@@ -488,7 +558,7 @@ E:\codex_workspace\_envs\py311_shared\python.exe -m pytest tests\data tests\stag
 The default GitHub test suite should be fast enough to run often. Heavy training
 is not required to prove chronology, leakage, manifests, and notebook safety.
 
-## 11. What Not To Build
+## 12. What Not To Build
 
 Do not add these unless a later stage proves the need:
 
@@ -512,7 +582,7 @@ small Python helpers
 minimum safety tests
 ```
 
-## 12. Acceptance Checklist
+## 13. Acceptance Checklist
 
 Before calling the V2 route GitHub-ready:
 

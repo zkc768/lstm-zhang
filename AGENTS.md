@@ -1,5 +1,5 @@
 # AGENTS.md - lst_models V2 route
-<!-- AGENTS_VERSION: v1.0-lst-models-code-style-gate -->
+<!-- AGENTS_VERSION: v1.1-lst-models-placement-gate -->
 
 This is a compact Colab-first research project for the V2 `lst_models` route.
 It is not a backend project, not a general ML framework, and not a place to
@@ -11,6 +11,7 @@ recreate the large historical project surface.
 - Parent research context: intraday stock direction classification using
   chronological validation.
 - Default execution surface: Colab `.ipynb` notebooks.
+- Canonical Python package path: `src/lst_models/`.
 - Canonical style guide:
   `docs/lst_models_code_style_and_route_guide.md`.
 - Canonical route shape: one notebook + one protocol doc + one config file per
@@ -27,8 +28,21 @@ protocol docs, tests, or artifacts, read these files before producing code:
 3. the target stage protocol doc, if it exists
 4. the target notebook, config, Python module, or test
 
-Do not produce code until the response or working notes identify which
-`lst_models` style rules apply to the change.
+Do not produce code until the response or working notes include a placement
+decision with these fields:
+
+```text
+placement_decision:
+  target_file_type: <notebook|stage_config|model_search_space|python_module|test|protocol|artifact>
+  target_path: <exact intended path>
+  guide_sections: ["Where Code Goes", "Code File Types And Common Function Placement"]
+  why_not_notebook: <required when creating Python helper code>
+  why_not_utils: <required when creating Python helper code>
+  safety_tests: <target tests or "not applicable">
+```
+
+If the implementer cannot fill this block, stop and update or create the
+technical design/protocol first. Do not guess a file location.
 
 If `docs/lst_models_code_style_and_route_guide.md` is missing, stop and report
 that exact missing path before creating or editing stage code.
@@ -65,7 +79,13 @@ The short version:
 - Keep Python files small and purpose-specific.
 - Use lowercase snake_case for files, folders, functions, configs, and artifacts.
 - Prefer explicit config over hidden defaults.
-- For file placement, follow `docs/lst_models_code_style_and_route_guide.md` section `Where Code Goes`; if a change does not fit, stop and update the guide first.
+- For file placement, follow `docs/lst_models_code_style_and_route_guide.md`
+  sections `Where Code Goes` and `Code File Types And Common Function
+  Placement`; if a change does not fit, stop and update the guide first.
+- Reusable Python logic belongs under `src/lst_models/`, not in notebooks,
+  `scripts/notebooks/`, or a broad `utils.py`.
+- HPO search ranges belong in `configs/models/<model>/search_space.yaml`.
+- Frozen selected params belong in `configs/frozen_params/<stage>/`.
 - Use `run_stage(config)` as the public entry point for executable stage code.
 - Raise exact-path errors for missing data or artifacts.
 - Do not add a generic trainer, callback framework, plugin registry, or broad
@@ -109,10 +129,20 @@ Before writing or changing code for this stage, the implementer MUST read:
 - this protocol document
 - the target notebook or module
 
+Before writing code, the implementer MUST record a placement decision:
+
+- target_file_type
+- target_path
+- guide_sections used
+- why_not_notebook, when creating Python helper code
+- why_not_utils, when creating Python helper code
+- safety_tests
+
 The implementation MUST preserve:
 
 - Colab-first execution
 - one run_stage(config) per executable stage
+- canonical Python package path: src/lst_models/
 - small Python helpers, no framework expansion
 - validation-only scope unless explicitly authorized
 - no holdout/test read, transform, window, score, or summary
