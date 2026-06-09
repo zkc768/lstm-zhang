@@ -1,11 +1,11 @@
 # Stage 02 Protocol: Train-Inner Model HPO
 
-Status: protocol revision aligned to the current Stage 02 scaffold plus the
-future formal HPO target.
+Status: active formal Stage 02 train-inner HPO contract.
 
-This document defines the Stage 02 research contract. It does not claim that
-full HPO fitting is implemented. The current executable sidecar still plans HPO
-rows and blocks Stage 03 when fitters are not implemented.
+This document defines the Stage 02 research contract and the current executable
+sidecar behavior. Stage 02 now runs bounded, predeclared HPO profiles on
+train-inner folds only. It still does not read official validation, test, or
+holdout rows, and it still does not select a final model.
 
 ## 1. Implementation Gate
 
@@ -77,46 +77,42 @@ train-inner folds.
 
 ## 3. Current Executable Status
 
-The current Stage 02 executable contract is a planning scaffold, not a completed
-HPO runner.
+The current Stage 02 executable contract is a formal train-inner HPO runner for
+the Stage 01-approved families enabled in the Stage 02 config.
 
-Current scaffold outputs are:
+Current active outputs are:
 
 - `02_model_hpo_train_inner_summary.csv`
 - `02_hpo_plan_ledger.csv`
-- `02_best_params_by_family.json`
-- `02_stage03_handoff.json`
-- `run_manifest.json`
-- `artifact_inventory.csv`
-
-Current scaffold behavior:
-
-- Builds HPO plan rows from Stage 01 candidate inputs, approved families, search
-  profiles, train-inner folds, and seeds.
-- Marks planned fit rows as `skipped_not_implemented`.
-- Writes no frozen model params.
-- Sets Stage 03 readiness to false.
-- Keeps `holdout_test_contact=false`.
-
-This scaffold must not be reported as completed HPO. A scaffold run does not
-authorize Stage 03 official validation readout.
-
-Formal HPO completion outputs may be added later, but only with a synchronized
-config, code, notebook, and test update. Target formal outputs are:
-
 - `02_hpo_trial_ledger.csv`
 - `02_hpo_summary.csv`
 - `02_baseline_control_summary.csv`
 - `02_frozen_candidate.json`
 - `02_frozen_candidate.md`
-- Frozen params YAML files under `configs/frozen_params/02_model_hpo_train_inner/`
+- `02_best_params_by_family.json`
+- `02_stage03_handoff.json`
+- frozen params YAML files under the run folder's `frozen_params/` directory,
+  when a primary/fallback freeze succeeds
 - `run_manifest.json`
 - `artifact_inventory.csv`
 
-Do not silently replace the active scaffold artifact names in the protocol alone.
-If the formal output names become active, update `configs/stages/02_model_hpo_train_inner.yaml`,
-`src/lst_models/stages/model_hpo_train_inner.py`, the Stage 02 notebook, and
-Stage 02 tests in the same implementation task.
+Current runner behavior:
+
+- Rebuilds Stage 02 train-inner data from frozen Stage 00 artifacts and raw data.
+- Consumes the exact Stage 01 candidate handoff run configured in the Stage 02
+  config.
+- Executes every approved enabled family/profile/fold/seed HPO row, subject to
+  the declared budget.
+- Scores required same-row baselines on the exact same fold rows.
+- Writes formal HPO trial, summary, baseline/control, frozen-candidate, and
+  Stage 03 handoff artifacts.
+- Sets Stage 03 readiness to true only when a primary and fallback candidate are
+  frozen from completed train-inner HPO rows and all configured gates pass.
+- Keeps `holdout_test_contact=false`.
+
+Stage 03 is authorized to read official validation only when
+`02_stage03_handoff.json` records `ready_for_stage03=true`. A completed HPO run
+that fails the freeze gates must still block Stage 03.
 
 ## 4. Upstream Inputs
 
@@ -263,15 +259,16 @@ Baseline and control rules:
 - Controls may not read official validation, test, or holdout rows.
 - Controls may not become additional thesis candidates after results are seen.
 
-The current scaffold uses `stratified_dummy_train_prior` as the configured
-baseline label. Formal output schemas should retain the Stage 00 baseline
-registry names above or update config, code, tests, and docs together.
+The current config uses `stratified_dummy_train_prior` as the primary selection
+baseline and reports all four mandatory baseline controls in
+`02_baseline_control_summary.csv`. Output schemas must retain the Stage 00
+baseline registry names above or update config, code, tests, and docs together.
 
 ## 8. Budget Arithmetic
 
 Budget must be countable before any Stage 02 fitting starts.
 
-For the current scaffold, planned rows are:
+For the current formal HPO runner, planned rows are:
 
 ```text
 planned_rows =
@@ -292,8 +289,7 @@ planned_rows =
   * len(train_inner.seeds)
 ```
 
-For future formal HPO, add any extra search axis to this formula before
-execution, including:
+Add any extra search axis to this formula before execution, including:
 
 - `modeling_scope` variants.
 - Loss choices.
@@ -367,9 +363,6 @@ information into earlier train-inner evaluation rows.
 
 ## 10. Same-Row Candidate Comparability
 
-This section applies to the formal HPO layer. In the current scaffold, planned
-rows have no fitted metrics and cannot support candidate ranking.
-
 Same-row fairness must cover both candidate-versus-baseline and
 candidate-versus-candidate comparisons.
 
@@ -437,9 +430,6 @@ resampling inherited from Stage 01, for example ticker or trading-day blocks,
 rather than treating six fold/seed scores as a stable confidence distribution.
 
 ## 12. Search Axes
-
-This section applies to the formal HPO layer. The current scaffold only loads
-bounded search-space profiles and writes planned rows.
 
 Stage 02 may only search axes declared in config or model search-space files
 before execution.
@@ -563,12 +553,13 @@ Freeze requirements:
 - `no_final_model_selected=true` until Stage 03 makes the authorized validation
   readout.
 
-Current scaffold handoff:
+Current formal handoff:
 
 - Writes `02_stage03_handoff.json`.
-- Sets `ready_for_stage03=false`.
-- Uses the decision `do_not_start_stage03_hpo_fits_not_implemented` when only
-  planning rows were created.
+- Sets `ready_for_stage03=true` only when a primary and fallback train-inner HPO
+  candidate are frozen.
+- Uses a fail-closed `do_not_start_stage03_*` decision when candidate inputs are
+  missing, trials fail, or no candidate clears the baseline gates.
 
 Stage 03 may read official validation only after Stage 02 writes a formal frozen
 candidate handoff. Stage 03 may not reopen Stage 02 HPO.
@@ -615,34 +606,37 @@ If the workspace is not a git repository, the manifest should record
 
 ## 17. Required Tests And Static Gates
 
-Minimum tests for the current scaffold:
+Minimum tests for the active formal HPO runner:
 
 - Config preserves `scope=validation_only` and `holdout_test_contact=false`.
+- Config points to exact Stage 00 and Stage 01 run folders.
 - Config points to an exact Stage 01 run folder.
 - Config declares enabled HPO families and existing search-space files.
 - Budget test validates `max_hpo_plan_rows` and train-inner fold/seed settings.
+- Formal output names and baseline controls are declared.
 - Optional recurrent controls are not promoted to HPO by default.
 - Forbidden search axes are declared.
 - `run_stage(config)` blocks when Stage 01 has no candidate inputs.
-- `run_stage(config)` builds plan rows for Stage 01 candidates.
+- `run_stage(config)` runs formal HPO rows for Stage 01 candidates under a
+  monkeypatched tiny chronology-safe test fixture.
+- HPO trial ledger schema.
+- Baseline same-row contract across candidate-versus-baseline comparisons.
+- Frozen candidate schema.
+- Baseline/control summary schema.
 - `run_stage(config)` rejects Stage 01 holdout/test contact.
 - `run_stage(config)` rejects Stage 01-approved families not enabled in Stage 02.
 - Notebook static gate verifies safe defaults, package-backed bootstrap, and no
   direct official validation/test/holdout metric reads.
 
-Additional tests required before formal HPO becomes active:
+Additional tests to add if future code broadens the modeling surface:
 
-- HPO trial ledger schema.
-- Baseline same-row contract across candidate-versus-baseline comparisons.
 - Candidate-versus-candidate row-contract comparability.
 - Fold chronology and purge/embargo checks.
 - Train-only preprocessing and early-stopping checks.
-- Frozen candidate schema.
-- Baseline/control summary schema.
 - Device provenance schema.
 - No official validation/test/holdout read during HPO.
-- Static gate that rejects frozen-candidate claims when HPO fitters are not
-  implemented.
+- Static gate that rejects unbudgeted families, losses, thresholds, or modeling
+  scope axes.
 
 ## 18. Colab Checkpointing
 
@@ -675,38 +669,31 @@ Rules:
 - Do not move files between Drive folders through Colab as the primary checkpoint
   mechanism; if that operation is interrupted, data may be lost in transit.
 - Checkpoint only Stage 02-safe data: Stage 02 config, protocol, search-space
-  files, exact Stage 01 handoff artifacts, and Stage 02 scaffold/formal run
-  outputs. Do not checkpoint official validation, test, or holdout artifacts.
-
-Current scaffold checkpoint semantics:
-
-- Post-run Drive result backup saves the current scaffold result files:
+  files, exact Stage 00 artifacts, exact Stage 01 handoff artifacts, and Stage
+  02 formal run outputs. Do not checkpoint official validation, test, or holdout
+  artifacts.
+- Post-run Drive result backup saves the active formal result files:
   `run_manifest.json`, `artifact_inventory.csv`,
   `02_model_hpo_train_inner_summary.csv`, `02_hpo_plan_ledger.csv`,
-  `02_best_params_by_family.json`, `02_stage03_handoff.json`, and
+  `02_hpo_trial_ledger.csv`, `02_hpo_summary.csv`,
+  `02_baseline_control_summary.csv`, `02_frozen_candidate.json`,
+  `02_frozen_candidate.md`, `02_best_params_by_family.json`,
+  `02_stage03_handoff.json`, frozen param YAML files when produced, and
   `drive_backup_manifest.json`.
-- Pre-run checkpoint may archive the Stage 02 sidecars and exact Stage 01 input
-  artifacts needed to reconstruct the HPO plan.
+- Pre-run checkpoint may archive the Stage 02 sidecars and exact Stage 00/01
+  input artifacts needed to reconstruct the HPO run.
 - Post-run checkpoint may archive the Stage 02 run folder after `run_stage`
   returns.
+- The runner writes incremental local checkpoints after bounded trial batches
+  according to `checkpointing.checkpoint_every_trials`.
 - A checkpoint archive does not make Stage 02 ready for Stage 03. Readiness still
-  depends on the Stage 02 handoff artifact and, in the current scaffold,
-  `ready_for_stage03=false`.
-
-Formal HPO checkpoint semantics:
-
-- Long-running HPO must add runner-level incremental checkpoints after completed
-  trials or bounded trial batches. Notebook-level post-run upload is not enough
-  to protect a run that dies inside a long fitting loop.
-- Every formal checkpoint must include enough ledger state to resume or audit
-  completed trials without rereading official validation, test, or holdout rows.
+  depends on `02_stage03_handoff.json`.
 
 ## 19. Scientific Risks And Protections
 
 Risk: Protocol and executable contract diverge.
-Protection: Keep scaffold artifacts and formal HPO target artifacts explicitly
-separate. Activate formal HPO names only with synchronized config, code,
-notebook, and tests.
+Protection: Keep config, code, notebook, protocol, and tests synchronized when
+artifact names, gates, families, or search axes change.
 
 Risk: HPO overfitting to train-inner folds.
 Protection: Bound the family count, profile count, folds, seeds, and all crossed
@@ -755,7 +742,7 @@ This protocol is aligned with:
 
 - Stage 00 data/split/label/sample freeze requirements.
 - Stage 01 feature/window and family-shortlist requirements.
-- The current Stage 02 config, scaffold runner, notebook, and tests.
+- The current Stage 02 config, formal HPO runner, notebook, and tests.
 - The project route guide's one-notebook, one-protocol, one-config contract.
 - Time-series leakage controls for chronological train-inner evaluation.
 - Ian-route guidance that weak-signal stock direction modeling should emphasize

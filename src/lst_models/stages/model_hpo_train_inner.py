@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+import numpy as np
 import pandas as pd
+import yaml
 
+from lst_models import metrics
 from lst_models.artifacts import require_artifacts, write_artifact_inventory, write_json
 from lst_models.config import hash_file, hash_mapping, load_yaml
+from lst_models.stages import feature_window_search as stage01
 
 
 SUMMARY_COLUMNS = [
@@ -18,27 +23,121 @@ SUMMARY_COLUMNS = [
     "model_family_count",
     "planned_hpo_rows",
     "completed_hpo_rows",
+    "failed_hpo_rows",
     "selected_family_count",
+    "ready_for_stage03",
+    "primary_candidate_id",
+    "primary_model_family",
+    "primary_hpo_profile_id",
+    "fallback_candidate_id",
+    "fallback_model_family",
+    "fallback_hpo_profile_id",
     "decision",
     "block_reason",
 ]
 
-HPO_LEDGER_COLUMNS = [
+HPO_TRIAL_LEDGER_COLUMNS = [
+    "trial_id",
+    "candidate_id",
+    "feature_set",
+    "feature_columns_json",
+    "window_size",
+    "model_family",
+    "probe_id",
+    "hpo_profile_id",
+    "hpo_profile_params_json",
+    "fold_id",
+    "seed",
+    "fit_status",
+    "n_train_samples",
+    "n_eval_samples",
+    "train_sample_id_hash",
+    "eval_sample_id_hash",
+    "sample_id_hash",
+    "baseline_id",
+    "baseline_fit_status",
+    "baseline_macro_f1",
+    "baseline_balanced_accuracy",
+    "baseline_accuracy",
+    "baseline_roc_auc",
+    "baseline_mcc",
+    "macro_f1",
+    "balanced_accuracy",
+    "accuracy",
+    "roc_auc",
+    "mcc",
+    "delta_macro_f1_vs_baseline",
+    "delta_balanced_accuracy_vs_baseline",
+    "positive_ticker_count",
+    "ticker_delta_macro_f1_json",
+    "block_delta_macro_f1_json",
+    "requested_device",
+    "resolved_device",
+    "device_fallback_reason",
+    "best_iteration",
+    "selected_for_stage03",
+    "error_message",
+]
+
+HPO_SUMMARY_COLUMNS = [
     "candidate_id",
     "feature_set",
     "window_size",
     "model_family",
+    "probe_id",
     "hpo_profile_id",
+    "hpo_profile_params_json",
+    "expected_rows",
+    "completed_rows",
+    "failed_rows",
+    "mean_macro_f1",
+    "mean_balanced_accuracy",
+    "mean_roc_auc",
+    "mean_mcc",
+    "mean_delta_macro_f1_vs_stratified_dummy_train_prior",
+    "lcb_delta_macro_f1_vs_stratified_dummy_train_prior",
+    "mean_delta_macro_f1_vs_majority_train_prior",
+    "lcb_delta_macro_f1_vs_majority_train_prior",
+    "min_positive_ticker_count",
+    "mean_positive_ticker_count",
+    "selected_role",
+    "selection_reason",
+]
+
+BASELINE_CONTROL_COLUMNS = [
+    "candidate_id",
+    "feature_set",
+    "window_size",
     "fold_id",
     "seed",
+    "baseline_id",
     "fit_status",
+    "n_train_samples",
+    "n_eval_samples",
+    "train_sample_id_hash",
+    "eval_sample_id_hash",
+    "sample_id_hash",
     "macro_f1",
     "balanced_accuracy",
-    "baseline_macro_f1",
-    "delta_macro_f1_vs_baseline",
-    "selected_for_stage03",
+    "accuracy",
+    "roc_auc",
+    "mcc",
     "error_message",
 ]
+
+PROBE_BY_FAMILY = {
+    "lightgbm": "lightgbm_small",
+    "standard_dlinear": "standard_dlinear_tiny",
+    "tcn": "tcn_tiny",
+    "ms_dlinear_tcn": "ms_dlinear_tcn_tiny",
+}
+TORCH_FAMILIES = {"standard_dlinear", "tcn", "ms_dlinear_tcn"}
+DEFAULT_BASELINES = (
+    "stratified_dummy_train_prior",
+    "majority_train_prior",
+    "constant_up",
+    "constant_down",
+)
 
 
 @dataclass(frozen=True)
@@ -50,6 +149,22 @@ class Stage02Result:
     hpo_plan_ledger: Path
     best_params_by_family: Path
     stage03_handoff: Path
+    hpo_trial_ledger: Path
+    hpo_summary: Path
+    baseline_control_summary: Path
+    frozen_candidate: Path
+    frozen_candidate_markdown: Path
+
+
+@dataclass(frozen=True)
+class Stage02DataContext:
+    stage00_paths: Mapping[str, Path]
+    stage00_manifest: Mapping[str, Any]
+    raw_manifest: Mapping[str, Any]
+    split_freeze: Mapping[str, Any]
+    train_events: pd.DataFrame
+    feature_frame: pd.DataFrame
+    folds: pd.DataFrame
 
 
 def run_stage(config: Mapping[str, Any]) -> Stage02Result:
@@ -62,85 +177,172 @@ def run_stage(config: Mapping[str, Any]) -> Stage02Result:
 
     stage01_manifest = _load_json(stage01_paths["run_manifest.json"])
     stage01_handoff = _load_json(stage01_paths["01_candidate_inputs.json"])
-    _validate_stage01_contract(stage01_manifest, stage01_handoff)
+    _validate_stage01_contract(config, stage01_manifest, stage01_handoff)
 
     candidates = _candidate_inputs(stage01_handoff)
     approved_families = _approved_families(stage01_handoff, config)
     blocked_reason = _stage01_block_reason(stage01_handoff, candidates, approved_families)
 
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+    output_dir = Path(str(outputs["output_dir"])) / run_id
+    output_dir.mkdir(parents=True, exist_ok=False)
+
     if blocked_reason:
-        ledger = pd.DataFrame(columns=HPO_LEDGER_COLUMNS)
+        trial_ledger = pd.DataFrame(columns=HPO_TRIAL_LEDGER_COLUMNS)
+        baseline_summary = pd.DataFrame(columns=BASELINE_CONTROL_COLUMNS)
+        hpo_summary = pd.DataFrame(columns=HPO_SUMMARY_COLUMNS)
         summary = _summary_row(
             status="blocked",
             candidate_count=len(candidates),
             model_family_count=len(approved_families),
             planned_hpo_rows=0,
             completed_hpo_rows=0,
+            failed_hpo_rows=0,
             selected_family_count=0,
+            ready_for_stage03=False,
+            primary=None,
+            fallback=None,
             decision="do_not_start_stage03_stage02_blocked_by_stage01",
             block_reason=blocked_reason,
         )
-        best_params = _blocked_best_params(config, stage01_handoff, blocked_reason)
-        stage03_handoff = _blocked_stage03_handoff(config, stage01_handoff, blocked_reason)
+        decision_bundle = _selection_bundle(
+            ready_for_stage03=False,
+            decision="do_not_start_stage03_stage02_blocked_by_stage01",
+            block_reason=blocked_reason,
+            primary=None,
+            fallback=None,
+        )
+        stage00_context: Stage02DataContext | None = None
+        profiles_by_family: dict[str, list[Mapping[str, Any]]] = {}
         execution_mode = "blocked_by_stage01_no_candidate_inputs"
     else:
+        stage00_context = _load_stage02_data_context(config, stage01_handoff)
         profiles_by_family = _load_search_profiles(approved_families, config)
-        ledger = _build_hpo_plan_ledger(candidates, profiles_by_family, config)
-        _enforce_budget(len(ledger), config)
+        planned_rows = _planned_hpo_rows(candidates, profiles_by_family, stage00_context.folds, config)
+        _enforce_budget(planned_rows, config)
+        trial_ledger, baseline_summary = _run_hpo_trials(
+            candidates,
+            profiles_by_family,
+            stage00_context,
+            config,
+            run_id=run_id,
+        )
+        hpo_summary = _build_hpo_summary(trial_ledger, baseline_summary)
+        decision_bundle = _select_frozen_candidates(hpo_summary, trial_ledger, config)
+        trial_ledger = _mark_selected_trials(trial_ledger, decision_bundle)
+        hpo_summary = _mark_selected_summary(hpo_summary, decision_bundle)
+        completed_rows = int(trial_ledger["fit_status"].eq("completed").sum())
+        failed_rows = int(len(trial_ledger) - completed_rows)
         summary = _summary_row(
-            status="planned_not_executed",
+            status=_status_from_selection(decision_bundle, failed_rows),
             candidate_count=len(candidates),
             model_family_count=len(approved_families),
-            planned_hpo_rows=len(ledger),
-            completed_hpo_rows=0,
-            selected_family_count=0,
-            decision="do_not_start_stage03_hpo_fits_not_implemented",
-            block_reason="hpo_fitters_not_implemented",
+            planned_hpo_rows=len(trial_ledger),
+            completed_hpo_rows=completed_rows,
+            failed_hpo_rows=failed_rows,
+            selected_family_count=_selected_family_count(decision_bundle),
+            ready_for_stage03=bool(decision_bundle["ready_for_stage03"]),
+            primary=decision_bundle.get("primary_candidate"),
+            fallback=decision_bundle.get("fallback_candidate"),
+            decision=str(decision_bundle["decision"]),
+            block_reason=str(decision_bundle["block_reason"]),
         )
-        best_params = _planned_best_params(config, stage01_handoff, approved_families)
-        stage03_handoff = _planned_stage03_handoff(config, stage01_handoff)
-        execution_mode = "hpo_plan_scaffold_no_training"
+        execution_mode = "formal_train_inner_hpo_completed"
 
-    run_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    output_dir = Path(str(outputs["output_dir"])) / run_id
-    output_dir.mkdir(parents=True, exist_ok=True)
+    frozen_candidate = _frozen_candidate_payload(
+        config=config,
+        stage01_handoff=stage01_handoff,
+        decision_bundle=decision_bundle,
+        hpo_summary=hpo_summary,
+    )
+    best_params = _best_params_payload(
+        config=config,
+        stage01_handoff=stage01_handoff,
+        profiles_by_family=profiles_by_family,
+        hpo_summary=hpo_summary,
+        decision_bundle=decision_bundle,
+    )
+    stage03_handoff = _stage03_handoff_payload(config, stage01_handoff, decision_bundle)
 
-    summary_path = output_dir / str(outputs["summary"])
-    ledger_path = output_dir / str(outputs["hpo_plan_ledger"])
-    best_params_path = write_json(output_dir / str(outputs["best_params_by_family"]), best_params)
-    handoff_path = write_json(output_dir / str(outputs["stage03_handoff"]), stage03_handoff)
+    summary_path = output_dir / _output_name(outputs, "summary", "02_model_hpo_train_inner_summary.csv")
+    plan_ledger_path = output_dir / _output_name(outputs, "hpo_plan_ledger", "02_hpo_plan_ledger.csv")
+    trial_ledger_path = output_dir / _output_name(outputs, "hpo_trial_ledger", "02_hpo_trial_ledger.csv")
+    hpo_summary_path = output_dir / _output_name(outputs, "hpo_summary", "02_hpo_summary.csv")
+    baseline_summary_path = output_dir / _output_name(
+        outputs, "baseline_control_summary", "02_baseline_control_summary.csv"
+    )
+    frozen_candidate_path = output_dir / _output_name(outputs, "frozen_candidate", "02_frozen_candidate.json")
+    frozen_md_path = output_dir / _output_name(outputs, "frozen_candidate_markdown", "02_frozen_candidate.md")
+    best_params_path = output_dir / _output_name(outputs, "best_params_by_family", "02_best_params_by_family.json")
+    handoff_path = output_dir / _output_name(outputs, "stage03_handoff", "02_stage03_handoff.json")
+
     summary.to_csv(summary_path, index=False)
-    ledger.to_csv(ledger_path, index=False)
+    trial_ledger.to_csv(trial_ledger_path, index=False)
+    trial_ledger.to_csv(plan_ledger_path, index=False)
+    hpo_summary.to_csv(hpo_summary_path, index=False)
+    baseline_summary.to_csv(baseline_summary_path, index=False)
+    frozen_candidate_path = write_json(frozen_candidate_path, frozen_candidate)
+    frozen_md_path.write_text(_frozen_candidate_markdown(frozen_candidate), encoding="utf-8")
+    best_params_path = write_json(best_params_path, best_params)
+    handoff_path = write_json(handoff_path, stage03_handoff)
+    frozen_param_paths = _write_frozen_param_yamls(output_dir, outputs, frozen_candidate)
 
     notebook_path = _resolve_repo_path(inputs["notebook_path"])
+    input_artifacts = [str(path) for path in stage01_paths.values()]
+    if stage00_context is not None:
+        input_artifacts.extend(str(path) for path in stage00_context.stage00_paths.values())
     manifest_payload = {
         "route": config["route"],
         "stage_name": config["stage_name"],
         "scope": config["scope"],
         "config_sha256": hash_mapping(config),
         "notebook_sha256": hash_file(notebook_path),
+        "source_stage00_run_id": inputs.get("stage00_run_id", stage01_handoff.get("source_stage00_run_id")),
         "source_stage01_run_id": inputs["stage01_run_id"],
-        "input_artifacts": [str(path) for path in stage01_paths.values()],
+        "input_artifacts": input_artifacts,
         "output_artifacts": [
-            str(outputs["summary"]),
-            str(outputs["hpo_plan_ledger"]),
-            str(outputs["best_params_by_family"]),
-            str(outputs["stage03_handoff"]),
+            summary_path.name,
+            plan_ledger_path.name,
+            trial_ledger_path.name,
+            hpo_summary_path.name,
+            baseline_summary_path.name,
+            frozen_candidate_path.name,
+            frozen_md_path.name,
+            best_params_path.name,
+            handoff_path.name,
+            *[str(path.relative_to(output_dir)) for path in frozen_param_paths],
         ],
         "stage02_execution_mode": execution_mode,
+        "hpo_method": "bounded_predeclared_profile_grid",
+        "hpo_budget_rows": int(len(trial_ledger)),
+        "hpo_completed_rows": int(trial_ledger["fit_status"].eq("completed").sum())
+        if not trial_ledger.empty
+        else 0,
+        "approved_model_families_for_stage02": list(approved_families),
+        "baseline_registry_names": _baseline_ids(config),
         "official_validation_for_selection": False,
         "no_final_model_selected": True,
         "holdout_test_contact": False,
     }
-    manifest_path = write_json(output_dir / str(outputs["manifest"]), manifest_payload)
+    manifest_payload.update(_device_manifest_fields(config, trial_ledger))
+    manifest_path = write_json(output_dir / _output_name(outputs, "manifest", "run_manifest.json"), manifest_payload)
     inventory_path = write_artifact_inventory(
         output_dir,
         {
             "run_manifest": manifest_path,
             "summary": summary_path,
-            "hpo_plan_ledger": ledger_path,
+            "hpo_plan_ledger": plan_ledger_path,
+            "hpo_trial_ledger": trial_ledger_path,
+            "hpo_summary": hpo_summary_path,
+            "baseline_control_summary": baseline_summary_path,
+            "frozen_candidate": frozen_candidate_path,
+            "frozen_candidate_markdown": frozen_md_path,
             "best_params_by_family": best_params_path,
             "stage03_handoff": handoff_path,
+            **{
+                f"frozen_params_{index}": path
+                for index, path in enumerate(frozen_param_paths, start=1)
+            },
         },
     )
 
@@ -149,9 +351,14 @@ def run_stage(config: Mapping[str, Any]) -> Stage02Result:
         run_manifest=manifest_path,
         artifact_inventory=inventory_path,
         summary=summary_path,
-        hpo_plan_ledger=ledger_path,
+        hpo_plan_ledger=plan_ledger_path,
         best_params_by_family=best_params_path,
         stage03_handoff=handoff_path,
+        hpo_trial_ledger=trial_ledger_path,
+        hpo_summary=hpo_summary_path,
+        baseline_control_summary=baseline_summary_path,
+        frozen_candidate=frozen_candidate_path,
+        frozen_candidate_markdown=frozen_md_path,
     )
 
 
@@ -162,6 +369,10 @@ def _validate_config(config: Mapping[str, Any]) -> None:
         raise ValueError(f"expected validation_only scope, got {config.get('scope')!r}")
     if config.get("holdout_test_contact") is not False:
         raise ValueError("Stage 02 requires holdout_test_contact=false")
+
+    inputs = _as_mapping(config["inputs"], "inputs")
+    if "stage01_run_id" not in inputs:
+        raise ValueError("Stage 02 config requires inputs.stage01_run_id")
 
     train_inner = _as_mapping(config["train_inner"], "train_inner")
     if train_inner.get("official_validation_for_selection") is not False:
@@ -201,8 +412,14 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
+def _output_name(outputs: Mapping[str, Any], key: str, default: str) -> str:
+    return str(outputs.get(key, default))
+
+
 def _validate_stage01_contract(
-    stage01_manifest: Mapping[str, Any], stage01_handoff: Mapping[str, Any]
+    config: Mapping[str, Any],
+    stage01_manifest: Mapping[str, Any],
+    stage01_handoff: Mapping[str, Any],
 ) -> None:
     if stage01_manifest.get("holdout_test_contact") is not False:
         raise ValueError("Stage 02 requires Stage 01 run_manifest holdout_test_contact=false")
@@ -210,6 +427,13 @@ def _validate_stage01_contract(
         raise ValueError("Stage 02 requires Stage 01 candidate handoff holdout_test_contact=false")
     if stage01_handoff.get("no_final_model_selected") is not True:
         raise ValueError("Stage 02 requires Stage 01 handoff no_final_model_selected=true")
+    configured_stage00 = config["inputs"].get("stage00_run_id")
+    source_stage00 = stage01_handoff.get("source_stage00_run_id")
+    if configured_stage00 and source_stage00 and str(configured_stage00) != str(source_stage00):
+        raise ValueError(
+            "Stage 02 configured Stage 00 run id does not match Stage 01 handoff: "
+            f"{configured_stage00!r} != {source_stage00!r}"
+        )
 
 
 def _candidate_inputs(stage01_handoff: Mapping[str, Any]) -> list[Mapping[str, Any]]:
@@ -242,6 +466,8 @@ def _active_hpo_families(config: Mapping[str, Any]) -> tuple[str, ...]:
     active = []
     for family, family_config in families.items():
         if _as_mapping(family_config, f"hpo_families.{family}").get("enabled") is True:
+            if str(family) not in PROBE_BY_FAMILY:
+                raise ValueError(f"Stage 02 enabled unknown HPO family: {family}")
             active.append(str(family))
     if not active:
         raise ValueError("Stage 02 requires at least one enabled HPO family")
@@ -261,6 +487,41 @@ def _stage01_block_reason(
     if not approved_families:
         return "stage01_approved_model_families_empty"
     return ""
+
+
+def _load_stage02_data_context(
+    config: Mapping[str, Any], stage01_handoff: Mapping[str, Any]
+) -> Stage02DataContext:
+    inputs = _as_mapping(config["inputs"], "inputs")
+    stage00_run_dir = Path(str(inputs["stage00_runtime_run_dir"]))
+    stage00_paths = require_artifacts(stage00_run_dir, inputs["required_stage00_artifacts"])
+
+    stage00_manifest = _load_json(stage00_paths["run_manifest.json"])
+    if stage00_manifest.get("holdout_test_contact") is not False:
+        raise ValueError("Stage 02 requires Stage 00 run_manifest holdout_test_contact=false")
+    if stage01_handoff.get("source_stage00_run_id") and inputs.get("stage00_run_id"):
+        if str(stage01_handoff["source_stage00_run_id"]) != str(inputs["stage00_run_id"]):
+            raise ValueError("Stage 02 Stage 00 run id does not match Stage 01 handoff")
+
+    raw_manifest = _load_json(stage00_paths["raw_data_manifest.json"])
+    split_freeze = _load_json(stage00_paths["split_freeze.json"])
+    sample_events = stage01._load_sample_event_index(stage00_paths["sample_event_index.csv"])
+    train_events = stage01._train_valid_events(sample_events)
+    train_bars = stage01._load_train_bars(raw_manifest, split_freeze, inputs)
+    feature_frame = stage01._build_feature_frame(train_bars)
+    folds = stage01._build_train_inner_folds(train_events, int(config["train_inner"]["n_folds"]))
+    expected_overlap = int(config["train_inner"].get("event_overlap_count_required", 0))
+    if not folds["event_overlap_count"].eq(expected_overlap).all():
+        raise ValueError("Stage 02 train-inner fold overlap check failed")
+    return Stage02DataContext(
+        stage00_paths=stage00_paths,
+        stage00_manifest=stage00_manifest,
+        raw_manifest=raw_manifest,
+        split_freeze=split_freeze,
+        train_events=train_events,
+        feature_frame=feature_frame,
+        folds=folds,
+    )
 
 
 def _load_search_profiles(
@@ -290,52 +551,803 @@ def _load_search_profiles(
     return profiles_by_family
 
 
-def _build_hpo_plan_ledger(
+def _planned_hpo_rows(
     candidates: list[Mapping[str, Any]],
     profiles_by_family: Mapping[str, list[Mapping[str, Any]]],
+    folds: pd.DataFrame,
     config: Mapping[str, Any],
-) -> pd.DataFrame:
-    train_inner = _as_mapping(config["train_inner"], "train_inner")
-    n_folds = int(train_inner["n_folds"])
-    seeds = tuple(int(seed) for seed in train_inner["seeds"])
-    rows = []
-    for candidate in candidates:
-        candidate_id = str(candidate["candidate_id"])
-        feature_set = str(candidate["feature_set"])
-        window_size = int(candidate["window_size"])
-        for family, profiles in profiles_by_family.items():
-            for profile in profiles:
-                profile_id = str(profile["profile_id"])
-                for fold_index in range(n_folds):
-                    for seed in seeds:
-                        rows.append(
-                            {
-                                "candidate_id": candidate_id,
-                                "feature_set": feature_set,
-                                "window_size": window_size,
-                                "model_family": family,
-                                "hpo_profile_id": profile_id,
-                                "fold_id": f"fold_{fold_index}",
-                                "seed": seed,
-                                "fit_status": "skipped_not_implemented",
-                                "macro_f1": pd.NA,
-                                "balanced_accuracy": pd.NA,
-                                "baseline_macro_f1": pd.NA,
-                                "delta_macro_f1_vs_baseline": pd.NA,
-                                "selected_for_stage03": False,
-                                "error_message": (
-                                    "Stage 02 HPO trainer is not implemented in this "
-                                    "package-backed scaffold"
-                                ),
-                            }
-                        )
-    return pd.DataFrame(rows, columns=HPO_LEDGER_COLUMNS)
+) -> int:
+    seeds = tuple(int(seed) for seed in config["train_inner"]["seeds"])
+    return int(len(candidates) * sum(len(profiles) for profiles in profiles_by_family.values()) * len(folds) * len(seeds))
 
 
 def _enforce_budget(planned_rows: int, config: Mapping[str, Any]) -> None:
     cap = int(_as_mapping(config["budget"], "budget")["max_hpo_plan_rows"])
     if planned_rows > cap:
         raise ValueError(f"Stage 02 planned HPO rows {planned_rows} exceed budget cap {cap}")
+
+
+def _run_hpo_trials(
+    candidates: list[Mapping[str, Any]],
+    profiles_by_family: Mapping[str, list[Mapping[str, Any]]],
+    data_context: Stage02DataContext,
+    config: Mapping[str, Any],
+    *,
+    run_id: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    seeds = tuple(int(seed) for seed in config["train_inner"]["seeds"])
+    primary_baseline = str(config["selection_rules"]["baseline"])
+    baseline_ids = _baseline_ids(config)
+    trial_rows: list[dict[str, Any]] = []
+    baseline_rows: list[dict[str, Any]] = []
+
+    for candidate in candidates:
+        dataset = _prepare_candidate_dataset(candidate, data_context)
+        feature_columns = tuple(str(column) for column in candidate.get("feature_columns", []))
+        for fold in data_context.folds.to_dict(orient="records"):
+            train_idx, eval_idx = _fold_capped_indices(dataset, fold, config)
+            x_train, train_meta, x_eval, eval_meta = _materialize_fold_data(dataset, train_idx, eval_idx)
+            train_hash = stage01._sample_id_hash(train_meta["sample_id"].tolist())
+            eval_hash = stage01._sample_id_hash(eval_meta["sample_id"].tolist())
+            y_train = train_meta["label"].to_numpy(dtype=int)
+            y_eval = eval_meta["label"].to_numpy(dtype=int)
+            for seed in seeds:
+                baseline_scores = {
+                    baseline_id: _score_stage02_baseline(baseline_id, y_train, y_eval, seed)
+                    for baseline_id in baseline_ids
+                }
+                for baseline_id, baseline_score in baseline_scores.items():
+                    baseline_rows.append(
+                        _baseline_summary_row(
+                            candidate,
+                            fold,
+                            seed,
+                            baseline_id,
+                            baseline_score,
+                            len(train_meta),
+                            len(eval_meta),
+                            train_hash,
+                            eval_hash,
+                        )
+                    )
+                selected_baseline = baseline_scores[primary_baseline]
+                for family, profiles in profiles_by_family.items():
+                    probe_id = PROBE_BY_FAMILY[family]
+                    for profile in profiles:
+                        row = _empty_trial_row(
+                            candidate=candidate,
+                            feature_columns=feature_columns,
+                            family=family,
+                            probe_id=probe_id,
+                            profile=profile,
+                            fold=fold,
+                            seed=seed,
+                            n_train=len(train_meta),
+                            n_eval=len(eval_meta),
+                            train_hash=train_hash,
+                            eval_hash=eval_hash,
+                            baseline_id=primary_baseline,
+                            baseline_score=selected_baseline,
+                        )
+                        if selected_baseline["fit_status"] != "completed_baseline":
+                            row["fit_status"] = "skipped_baseline_failed"
+                            row["error_message"] = str(selected_baseline["error_message"])
+                        else:
+                            outcome = _fit_stage02_model(
+                                family=family,
+                                profile=profile,
+                                x_train=x_train,
+                                train_meta=train_meta,
+                                x_eval=x_eval,
+                                eval_meta=eval_meta,
+                                config=config,
+                                seed=seed,
+                                window_size=int(candidate["window_size"]),
+                                n_features=len(feature_columns),
+                                baseline_predictions=selected_baseline["predictions"],
+                            )
+                            row.update(_trial_outcome_fields(outcome, selected_baseline))
+                        trial_rows.append(row)
+                        _maybe_write_incremental_checkpoint(
+                            config=config,
+                            run_id=run_id,
+                            trial_rows=trial_rows,
+                            baseline_rows=baseline_rows,
+                        )
+
+    return (
+        pd.DataFrame(trial_rows, columns=HPO_TRIAL_LEDGER_COLUMNS),
+        pd.DataFrame(baseline_rows, columns=BASELINE_CONTROL_COLUMNS),
+    )
+
+
+def _prepare_candidate_dataset(
+    candidate: Mapping[str, Any], data_context: Stage02DataContext
+) -> stage01.CandidateDataset:
+    feature_set = str(candidate["feature_set"])
+    feature_columns = tuple(str(column) for column in candidate["feature_columns"])
+    stage01._require_feature_columns(feature_columns, data_context.feature_frame)
+    return stage01._build_window_dataset(
+        data_context.feature_frame,
+        data_context.train_events,
+        feature_set=feature_set,
+        feature_columns=feature_columns,
+        window_size=int(candidate["window_size"]),
+    )
+
+
+def _fold_capped_indices(
+    dataset: stage01.CandidateDataset, fold: Mapping[str, Any], config: Mapping[str, Any]
+) -> tuple[np.ndarray, np.ndarray]:
+    train_idx, eval_idx = stage01._fold_indices(dataset.metadata, fold)
+    sample_policy = _as_mapping(config.get("hpo_sample_policy", {}), "hpo_sample_policy")
+    train_cap = int(sample_policy.get("max_train_samples_per_fold", 0))
+    eval_cap = int(sample_policy.get("max_eval_samples_per_fold", 0))
+    return (
+        stage01._cap_indices(dataset.metadata, train_idx, train_cap),
+        stage01._cap_indices(dataset.metadata, eval_idx, eval_cap),
+    )
+
+
+def _materialize_fold_data(
+    dataset: stage01.CandidateDataset, train_idx: np.ndarray, eval_idx: np.ndarray
+) -> tuple[np.ndarray, pd.DataFrame, np.ndarray, pd.DataFrame]:
+    train_meta = dataset.metadata.iloc[train_idx].copy().reset_index(drop=True)
+    eval_meta = dataset.metadata.iloc[eval_idx].copy().reset_index(drop=True)
+    x_train = stage01._materialize_window_matrix(dataset, train_idx)
+    x_eval = stage01._materialize_window_matrix(dataset, eval_idx)
+    return x_train, train_meta, x_eval, eval_meta
+
+
+def _baseline_ids(config: Mapping[str, Any]) -> list[str]:
+    baseline_controls = config.get("baseline_controls", {})
+    if isinstance(baseline_controls, Mapping):
+        declared = baseline_controls.get("mandatory", DEFAULT_BASELINES)
+    else:
+        declared = DEFAULT_BASELINES
+    baseline_ids = [str(value) for value in declared]
+    missing_primary = str(config["selection_rules"]["baseline"]) not in baseline_ids
+    if missing_primary:
+        baseline_ids.insert(0, str(config["selection_rules"]["baseline"]))
+    return baseline_ids
+
+
+def _score_stage02_baseline(
+    baseline_id: str, y_train: np.ndarray, y_eval: np.ndarray, seed: int
+) -> dict[str, Any]:
+    if baseline_id in {"stratified_dummy_train_prior", "majority_train_prior"}:
+        return stage01._score_train_prior_baseline(baseline_id, y_train, y_eval, seed)
+    if len(y_train) == 0 or len(y_eval) == 0:
+        predictions = np.zeros(len(y_eval), dtype=int)
+        return {
+            "fit_status": "skipped_no_fold_samples",
+            "predictions": predictions,
+            "scores": np.full(len(y_eval), 0.5, dtype=float),
+            "error_message": "baseline has no train/eval samples for this fold",
+            "macro_f1": np.nan,
+            "balanced_accuracy": np.nan,
+            "accuracy": np.nan,
+            "roc_auc": np.nan,
+            "mcc": np.nan,
+        }
+    if baseline_id == "constant_up":
+        predictions = np.ones(len(y_eval), dtype=int)
+        scores = np.ones(len(y_eval), dtype=float)
+    elif baseline_id == "constant_down":
+        predictions = np.zeros(len(y_eval), dtype=int)
+        scores = np.zeros(len(y_eval), dtype=float)
+    else:
+        raise ValueError(f"unknown Stage 02 baseline control: {baseline_id}")
+    scored = metrics.score_classifier(y_eval.astype(int), predictions, y_score=scores)
+    return {
+        "fit_status": "completed_baseline",
+        "predictions": predictions,
+        "scores": scores,
+        "error_message": "",
+        **scored,
+    }
+
+
+def _baseline_summary_row(
+    candidate: Mapping[str, Any],
+    fold: Mapping[str, Any],
+    seed: int,
+    baseline_id: str,
+    baseline_score: Mapping[str, Any],
+    n_train: int,
+    n_eval: int,
+    train_hash: str,
+    eval_hash: str,
+) -> dict[str, Any]:
+    return {
+        "candidate_id": str(candidate["candidate_id"]),
+        "feature_set": str(candidate["feature_set"]),
+        "window_size": int(candidate["window_size"]),
+        "fold_id": str(fold["fold_id"]),
+        "seed": int(seed),
+        "baseline_id": baseline_id,
+        "fit_status": baseline_score["fit_status"],
+        "n_train_samples": int(n_train),
+        "n_eval_samples": int(n_eval),
+        "train_sample_id_hash": train_hash,
+        "eval_sample_id_hash": eval_hash,
+        "sample_id_hash": eval_hash,
+        "macro_f1": baseline_score["macro_f1"],
+        "balanced_accuracy": baseline_score["balanced_accuracy"],
+        "accuracy": baseline_score["accuracy"],
+        "roc_auc": baseline_score["roc_auc"],
+        "mcc": baseline_score["mcc"],
+        "error_message": baseline_score["error_message"],
+    }
+
+
+def _empty_trial_row(
+    *,
+    candidate: Mapping[str, Any],
+    feature_columns: tuple[str, ...],
+    family: str,
+    probe_id: str,
+    profile: Mapping[str, Any],
+    fold: Mapping[str, Any],
+    seed: int,
+    n_train: int,
+    n_eval: int,
+    train_hash: str,
+    eval_hash: str,
+    baseline_id: str,
+    baseline_score: Mapping[str, Any],
+) -> dict[str, Any]:
+    profile_id = str(profile["profile_id"])
+    candidate_id = str(candidate["candidate_id"])
+    return {
+        "trial_id": f"{candidate_id}__{family}__{profile_id}__{fold['fold_id']}__seed{seed}",
+        "candidate_id": candidate_id,
+        "feature_set": str(candidate["feature_set"]),
+        "feature_columns_json": json.dumps(list(feature_columns)),
+        "window_size": int(candidate["window_size"]),
+        "model_family": family,
+        "probe_id": probe_id,
+        "hpo_profile_id": profile_id,
+        "hpo_profile_params_json": json.dumps(_profile_params(profile), sort_keys=True),
+        "fold_id": str(fold["fold_id"]),
+        "seed": int(seed),
+        "fit_status": "not_started",
+        "n_train_samples": int(n_train),
+        "n_eval_samples": int(n_eval),
+        "train_sample_id_hash": train_hash,
+        "eval_sample_id_hash": eval_hash,
+        "sample_id_hash": eval_hash,
+        "baseline_id": baseline_id,
+        "baseline_fit_status": baseline_score["fit_status"],
+        "baseline_macro_f1": baseline_score["macro_f1"],
+        "baseline_balanced_accuracy": baseline_score["balanced_accuracy"],
+        "baseline_accuracy": baseline_score["accuracy"],
+        "baseline_roc_auc": baseline_score["roc_auc"],
+        "baseline_mcc": baseline_score["mcc"],
+        "macro_f1": pd.NA,
+        "balanced_accuracy": pd.NA,
+        "accuracy": pd.NA,
+        "roc_auc": pd.NA,
+        "mcc": pd.NA,
+        "delta_macro_f1_vs_baseline": pd.NA,
+        "delta_balanced_accuracy_vs_baseline": pd.NA,
+        "positive_ticker_count": pd.NA,
+        "ticker_delta_macro_f1_json": "{}",
+        "block_delta_macro_f1_json": "{}",
+        "requested_device": pd.NA,
+        "resolved_device": pd.NA,
+        "device_fallback_reason": pd.NA,
+        "best_iteration": pd.NA,
+        "selected_for_stage03": False,
+        "error_message": "",
+    }
+
+
+def _profile_params(profile: Mapping[str, Any]) -> dict[str, Any]:
+    return {str(key): value for key, value in profile.items() if str(key) != "profile_id"}
+
+
+def _fit_stage02_model(
+    *,
+    family: str,
+    profile: Mapping[str, Any],
+    x_train: np.ndarray,
+    train_meta: pd.DataFrame,
+    x_eval: np.ndarray,
+    eval_meta: pd.DataFrame,
+    config: Mapping[str, Any],
+    seed: int,
+    window_size: int,
+    n_features: int,
+    baseline_predictions: np.ndarray,
+) -> dict[str, Any]:
+    y_train = train_meta["label"].to_numpy(dtype=int)
+    y_eval = eval_meta["label"].to_numpy(dtype=int)
+    if len(y_train) == 0 or len(y_eval) == 0:
+        return {
+            "fit_status": "skipped_no_fold_samples",
+            "error_message": "trial has no train/eval samples for this fold",
+        }
+    if len(np.unique(y_train)) < 2:
+        return {
+            "fit_status": "failed_single_class_train",
+            "error_message": "train-inner fold train labels contain fewer than two classes",
+        }
+    if family == "lightgbm":
+        return _fit_lightgbm_hpo_trial(
+            profile=profile,
+            x_train=x_train,
+            y_train=y_train,
+            x_eval=x_eval,
+            y_eval=y_eval,
+            eval_meta=eval_meta,
+            seed=seed,
+            baseline_predictions=baseline_predictions,
+            config=config,
+        )
+    probe_id = PROBE_BY_FAMILY[family]
+    trial_config = _trial_probe_config(config, probe_id, profile)
+    return stage01._fit_probe(
+        probe_id,
+        x_train,
+        train_meta,
+        x_eval,
+        eval_meta,
+        trial_config,
+        seed,
+        window_size,
+        n_features,
+        baseline_predictions,
+    )
+
+
+def _fit_lightgbm_hpo_trial(
+    *,
+    profile: Mapping[str, Any],
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    x_eval: np.ndarray,
+    y_eval: np.ndarray,
+    eval_meta: pd.DataFrame,
+    seed: int,
+    baseline_predictions: np.ndarray,
+    config: Mapping[str, Any],
+) -> dict[str, Any]:
+    try:
+        from lightgbm import LGBMClassifier, early_stopping, log_evaluation
+    except ModuleNotFoundError as exc:
+        return {"fit_status": "failed_dependency_missing", "error_message": str(exc)}
+
+    params = _lightgbm_params(profile)
+    model = LGBMClassifier(**params, random_state=seed, verbosity=-1)
+    training_defaults = _as_mapping(
+        config.get("lightgbm_training_defaults", {}), "lightgbm_training_defaults"
+    )
+    early_rounds = int(training_defaults.get("early_stopping_rounds", 25))
+    callbacks = [log_evaluation(period=0)]
+    if early_rounds > 0:
+        callbacks.append(early_stopping(early_rounds, verbose=False))
+    try:
+        model.fit(
+            x_train,
+            y_train,
+            eval_set=[(x_eval, y_eval)],
+            eval_metric=str(training_defaults.get("eval_metric", "binary_logloss")),
+            callbacks=callbacks,
+        )
+        predictions = model.predict(x_eval).astype(int)
+        scores = model.predict_proba(x_eval)[:, 1].astype(float)
+        outcome = _score_model_predictions(eval_meta, predictions, scores, baseline_predictions)
+        outcome["best_iteration"] = getattr(model, "best_iteration_", None)
+        return outcome
+    except (ValueError, RuntimeError, FloatingPointError) as exc:
+        return {"fit_status": "failed_exception", "error_message": f"{type(exc).__name__}: {exc}"}
+
+
+def _lightgbm_params(profile: Mapping[str, Any]) -> dict[str, Any]:
+    params = _profile_params(profile)
+    renames = {
+        "min_data_in_leaf": "min_child_samples",
+        "feature_fraction": "colsample_bytree",
+        "bagging_fraction": "subsample",
+        "bagging_freq": "subsample_freq",
+        "lambda_l1": "reg_alpha",
+        "lambda_l2": "reg_lambda",
+    }
+    for old, new in renames.items():
+        if old in params and new not in params:
+            params[new] = params.pop(old)
+    params.setdefault("n_estimators", 200)
+    params.setdefault("learning_rate", 0.03)
+    params.setdefault("max_depth", 6)
+    params.setdefault("num_leaves", 31)
+    params.setdefault("subsample", 0.9)
+    if float(params.get("subsample", 1.0)) < 1.0:
+        params.setdefault("subsample_freq", 1)
+    params.setdefault("colsample_bytree", 0.9)
+    params.setdefault("class_weight", "balanced")
+    return params
+
+
+def _trial_probe_config(
+    config: Mapping[str, Any], probe_id: str, profile: Mapping[str, Any]
+) -> dict[str, Any]:
+    fixed_defaults = _profile_params(profile)
+    torch_defaults = dict(_torch_defaults(config))
+    for key in ("learning_rate", "weight_decay", "batch_size", "epochs"):
+        if key in fixed_defaults:
+            torch_defaults[key] = fixed_defaults[key]
+    return {
+        "lightweight_probes": {probe_id: {"enabled": True, "fixed_defaults": fixed_defaults}},
+        "probe_training_defaults": {"torch": torch_defaults},
+    }
+
+
+def _torch_defaults(config: Mapping[str, Any]) -> Mapping[str, Any]:
+    return _as_mapping(
+        _as_mapping(config.get("probe_training_defaults", {}), "probe_training_defaults").get(
+            "torch", {}
+        ),
+        "probe_training_defaults.torch",
+    )
+
+
+def _device_manifest_fields(config: Mapping[str, Any], trial_ledger: pd.DataFrame) -> dict[str, Any]:
+    requested_device = str(_torch_defaults(config).get("device", "auto"))
+    if trial_ledger.empty:
+        return {
+            "requested_device": requested_device,
+            "resolved_device": "not_resolved",
+            "cuda_available": False,
+            "gpu_name_or_null": None,
+            "device_fallback_reason": "no_hpo_trials_completed",
+        }
+
+    torch_rows = trial_ledger.loc[trial_ledger["model_family"].isin(TORCH_FAMILIES)]
+    completed = torch_rows.loc[torch_rows["fit_status"].eq("completed")]
+    if completed.empty:
+        resolved_device = "not_resolved"
+        fallback_reason = "torch_hpo_trials_not_completed"
+    else:
+        resolved_values = sorted(
+            str(value)
+            for value in completed["resolved_device"].dropna().unique()
+            if str(value) and str(value) != "<NA>"
+        )
+        fallback_values = sorted(
+            str(value)
+            for value in completed["device_fallback_reason"].dropna().unique()
+            if str(value) and str(value) != "<NA>"
+        )
+        resolved_device = ",".join(resolved_values) if resolved_values else "not_resolved"
+        fallback_reason = ",".join(fallback_values)
+    cuda_available = any(value.strip().startswith("cuda") for value in resolved_device.split(","))
+    return {
+        "requested_device": requested_device,
+        "resolved_device": resolved_device,
+        "cuda_available": bool(cuda_available),
+        "gpu_name_or_null": None,
+        "device_fallback_reason": fallback_reason,
+    }
+
+
+def _score_model_predictions(
+    eval_meta: pd.DataFrame,
+    predictions: np.ndarray,
+    scores: np.ndarray,
+    baseline_predictions: np.ndarray,
+) -> dict[str, Any]:
+    y_eval = eval_meta["label"].to_numpy(dtype=int)
+    scored = metrics.score_classifier(y_eval, predictions, y_score=scores)
+    ticker_deltas, positive_ticker_count = stage01._ticker_delta_macro_f1(
+        eval_meta, predictions, baseline_predictions
+    )
+    block_deltas = stage01._block_delta_macro_f1(eval_meta, predictions, baseline_predictions)
+    return {
+        "fit_status": "completed",
+        "macro_f1": scored["macro_f1"],
+        "balanced_accuracy": scored["balanced_accuracy"],
+        "accuracy": scored["accuracy"],
+        "roc_auc": scored["roc_auc"],
+        "mcc": scored["mcc"],
+        "error_message": "",
+        "positive_ticker_count": int(positive_ticker_count),
+        "ticker_delta_macro_f1_json": json.dumps(ticker_deltas, sort_keys=True),
+        "block_delta_macro_f1_json": json.dumps(block_deltas, sort_keys=True),
+        "requested_device": "cpu",
+        "resolved_device": "cpu",
+        "device_fallback_reason": "not_gpu_capable_trial",
+    }
+
+
+def _trial_outcome_fields(
+    outcome: Mapping[str, Any], baseline_score: Mapping[str, Any]
+) -> dict[str, Any]:
+    if outcome.get("fit_status") != "completed":
+        return {
+            "fit_status": outcome.get("fit_status", "failed_unknown"),
+            "error_message": outcome.get("error_message", ""),
+        }
+    macro_f1 = float(outcome["macro_f1"])
+    balanced_accuracy = float(outcome["balanced_accuracy"])
+    baseline_macro = float(baseline_score["macro_f1"])
+    baseline_balanced = float(baseline_score["balanced_accuracy"])
+    return {
+        "fit_status": "completed",
+        "macro_f1": macro_f1,
+        "balanced_accuracy": balanced_accuracy,
+        "accuracy": outcome.get("accuracy", pd.NA),
+        "roc_auc": outcome.get("roc_auc", pd.NA),
+        "mcc": outcome.get("mcc", pd.NA),
+        "delta_macro_f1_vs_baseline": macro_f1 - baseline_macro,
+        "delta_balanced_accuracy_vs_baseline": balanced_accuracy - baseline_balanced,
+        "positive_ticker_count": outcome.get("positive_ticker_count", pd.NA),
+        "ticker_delta_macro_f1_json": outcome.get("ticker_delta_macro_f1_json", "{}"),
+        "block_delta_macro_f1_json": outcome.get("block_delta_macro_f1_json", "{}"),
+        "requested_device": outcome.get("requested_device", pd.NA),
+        "resolved_device": outcome.get("resolved_device", pd.NA),
+        "device_fallback_reason": outcome.get("device_fallback_reason", pd.NA),
+        "best_iteration": outcome.get("best_iteration", pd.NA),
+        "error_message": "",
+    }
+
+
+def _maybe_write_incremental_checkpoint(
+    *,
+    config: Mapping[str, Any],
+    run_id: str,
+    trial_rows: list[Mapping[str, Any]],
+    baseline_rows: list[Mapping[str, Any]],
+) -> None:
+    checkpointing = config.get("checkpointing", {})
+    if not isinstance(checkpointing, Mapping) or checkpointing.get("enabled") is not True:
+        return
+    every = max(1, int(checkpointing.get("checkpoint_every_trials", 8)))
+    if len(trial_rows) % every != 0:
+        return
+    checkpoint_root = Path(
+        str(checkpointing.get("checkpoint_dir", "/content/lst_models_checkpoints/02_model_hpo_train_inner"))
+    )
+    checkpoint_dir = checkpoint_root / run_id
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(trial_rows, columns=HPO_TRIAL_LEDGER_COLUMNS).to_csv(
+        checkpoint_dir / "02_hpo_trial_ledger_partial.csv", index=False
+    )
+    pd.DataFrame(baseline_rows, columns=BASELINE_CONTROL_COLUMNS).to_csv(
+        checkpoint_dir / "02_baseline_control_summary_partial.csv", index=False
+    )
+    manifest = {
+        "stage_name": "02_model_hpo_train_inner",
+        "run_id": run_id,
+        "completed_or_attempted_trial_rows": len(trial_rows),
+        "baseline_rows": len(baseline_rows),
+        "holdout_test_contact": False,
+        "official_validation_for_selection": False,
+        "checkpoint_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+    }
+    write_json(checkpoint_dir / "checkpoint_manifest.json", manifest)
+
+
+def _build_hpo_summary(
+    trial_ledger: pd.DataFrame, baseline_summary: pd.DataFrame
+) -> pd.DataFrame:
+    if trial_ledger.empty:
+        return pd.DataFrame(columns=HPO_SUMMARY_COLUMNS)
+    baseline_lookup = _baseline_lookup(baseline_summary)
+    rows = []
+    group_columns = [
+        "candidate_id",
+        "feature_set",
+        "window_size",
+        "model_family",
+        "probe_id",
+        "hpo_profile_id",
+        "hpo_profile_params_json",
+    ]
+    for key, group in trial_ledger.groupby(group_columns, sort=True, dropna=False):
+        completed = group.loc[group["fit_status"].eq("completed")].copy()
+        deltas = _baseline_delta_series(completed, baseline_lookup)
+        rows.append(
+            {
+                "candidate_id": key[0],
+                "feature_set": key[1],
+                "window_size": int(key[2]),
+                "model_family": key[3],
+                "probe_id": key[4],
+                "hpo_profile_id": key[5],
+                "hpo_profile_params_json": key[6],
+                "expected_rows": int(len(group)),
+                "completed_rows": int(len(completed)),
+                "failed_rows": int(len(group) - len(completed)),
+                "mean_macro_f1": _mean_or_nan(completed["macro_f1"]),
+                "mean_balanced_accuracy": _mean_or_nan(completed["balanced_accuracy"]),
+                "mean_roc_auc": _mean_or_nan(completed["roc_auc"]),
+                "mean_mcc": _mean_or_nan(completed["mcc"]),
+                "mean_delta_macro_f1_vs_stratified_dummy_train_prior": _mean_or_nan(
+                    deltas["stratified_dummy_train_prior"]
+                ),
+                "lcb_delta_macro_f1_vs_stratified_dummy_train_prior": metrics.compute_metric_lcb(
+                    deltas["stratified_dummy_train_prior"].to_numpy(dtype=float)
+                ),
+                "mean_delta_macro_f1_vs_majority_train_prior": _mean_or_nan(
+                    deltas["majority_train_prior"]
+                ),
+                "lcb_delta_macro_f1_vs_majority_train_prior": metrics.compute_metric_lcb(
+                    deltas["majority_train_prior"].to_numpy(dtype=float)
+                ),
+                "min_positive_ticker_count": _min_or_nan(completed["positive_ticker_count"]),
+                "mean_positive_ticker_count": _mean_or_nan(completed["positive_ticker_count"]),
+                "selected_role": "",
+                "selection_reason": "",
+            }
+        )
+    return pd.DataFrame(rows, columns=HPO_SUMMARY_COLUMNS)
+
+
+def _baseline_lookup(baseline_summary: pd.DataFrame) -> dict[tuple[str, str, int, str], float]:
+    lookup: dict[tuple[str, str, int, str], float] = {}
+    if baseline_summary.empty:
+        return lookup
+    for row in baseline_summary.to_dict(orient="records"):
+        lookup[
+            (
+                str(row["candidate_id"]),
+                str(row["fold_id"]),
+                int(row["seed"]),
+                str(row["baseline_id"]),
+            )
+        ] = float(row["macro_f1"]) if pd.notna(row["macro_f1"]) else np.nan
+    return lookup
+
+
+def _baseline_delta_series(
+    completed: pd.DataFrame, baseline_lookup: Mapping[tuple[str, str, int, str], float]
+) -> dict[str, pd.Series]:
+    result = {}
+    for baseline_id in ("stratified_dummy_train_prior", "majority_train_prior"):
+        values = []
+        for row in completed.to_dict(orient="records"):
+            baseline_value = baseline_lookup.get(
+                (str(row["candidate_id"]), str(row["fold_id"]), int(row["seed"]), baseline_id),
+                np.nan,
+            )
+            values.append(float(row["macro_f1"]) - baseline_value)
+        result[baseline_id] = pd.Series(values, dtype=float)
+    return result
+
+
+def _select_frozen_candidates(
+    hpo_summary: pd.DataFrame, trial_ledger: pd.DataFrame, config: Mapping[str, Any]
+) -> dict[str, Any]:
+    if hpo_summary.empty:
+        return _selection_bundle(
+            ready_for_stage03=False,
+            decision="do_not_start_stage03_no_hpo_summary_rows",
+            block_reason="no_hpo_summary_rows",
+            primary=None,
+            fallback=None,
+        )
+    if bool(config["selection_rules"].get("require_completed_rows_before_stage03", True)):
+        if not trial_ledger["fit_status"].eq("completed").all():
+            return _selection_bundle(
+                ready_for_stage03=False,
+                decision="do_not_start_stage03_hpo_trials_incomplete",
+                block_reason="one_or_more_hpo_trials_failed_or_skipped",
+                primary=None,
+                fallback=None,
+            )
+    eligible = hpo_summary.loc[
+        (hpo_summary["completed_rows"] == hpo_summary["expected_rows"])
+        & (hpo_summary["mean_delta_macro_f1_vs_stratified_dummy_train_prior"] > 0.0)
+        & (hpo_summary["mean_delta_macro_f1_vs_majority_train_prior"] > 0.0)
+    ].copy()
+    if eligible.empty:
+        return _selection_bundle(
+            ready_for_stage03=False,
+            decision="do_not_start_stage03_no_hpo_candidate_cleared_baseline_gates",
+            block_reason="no_hpo_candidate_cleared_baseline_gates",
+            primary=None,
+            fallback=None,
+        )
+    ranked = eligible.sort_values(
+        [
+            "lcb_delta_macro_f1_vs_stratified_dummy_train_prior",
+            "mean_delta_macro_f1_vs_stratified_dummy_train_prior",
+            "mean_macro_f1",
+            "min_positive_ticker_count",
+        ],
+        ascending=[False, False, False, False],
+    )
+    selections = [_selection_record(row) for row in ranked.to_dict(orient="records")]
+    primary = selections[0] if selections else None
+    fallback = selections[1] if len(selections) > 1 else None
+    if primary is None or fallback is None:
+        return _selection_bundle(
+            ready_for_stage03=False,
+            decision="do_not_start_stage03_missing_primary_or_fallback_candidate",
+            block_reason="stage02_requires_primary_and_fallback_candidates",
+            primary=primary,
+            fallback=fallback,
+        )
+    return _selection_bundle(
+        ready_for_stage03=True,
+        decision="ready_for_stage03_frozen_train_inner_hpo_candidates",
+        block_reason="",
+        primary=primary,
+        fallback=fallback,
+    )
+
+
+def _selection_record(row: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "candidate_id": str(row["candidate_id"]),
+        "feature_set": str(row["feature_set"]),
+        "window_size": int(row["window_size"]),
+        "model_family": str(row["model_family"]),
+        "probe_id": str(row["probe_id"]),
+        "hpo_profile_id": str(row["hpo_profile_id"]),
+        "hpo_profile_params": json.loads(str(row["hpo_profile_params_json"])),
+        "mean_macro_f1": _json_number(row["mean_macro_f1"]),
+        "mean_delta_macro_f1_vs_stratified_dummy_train_prior": _json_number(
+            row["mean_delta_macro_f1_vs_stratified_dummy_train_prior"]
+        ),
+        "lcb_delta_macro_f1_vs_stratified_dummy_train_prior": _json_number(
+            row["lcb_delta_macro_f1_vs_stratified_dummy_train_prior"]
+        ),
+        "mean_delta_macro_f1_vs_majority_train_prior": _json_number(
+            row["mean_delta_macro_f1_vs_majority_train_prior"]
+        ),
+    }
+
+
+def _selection_bundle(
+    *,
+    ready_for_stage03: bool,
+    decision: str,
+    block_reason: str,
+    primary: Mapping[str, Any] | None,
+    fallback: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    return {
+        "ready_for_stage03": bool(ready_for_stage03),
+        "decision": decision,
+        "block_reason": block_reason,
+        "primary_candidate": dict(primary) if primary is not None else None,
+        "fallback_candidate": dict(fallback) if fallback is not None else None,
+    }
+
+
+def _mark_selected_trials(trial_ledger: pd.DataFrame, decision_bundle: Mapping[str, Any]) -> pd.DataFrame:
+    current = trial_ledger.copy()
+    current["selected_for_stage03"] = False
+    for selection in [decision_bundle.get("primary_candidate"), decision_bundle.get("fallback_candidate")]:
+        if selection:
+            mask = _selection_mask(current, selection)
+            current.loc[mask, "selected_for_stage03"] = True
+    return current
+
+
+def _mark_selected_summary(hpo_summary: pd.DataFrame, decision_bundle: Mapping[str, Any]) -> pd.DataFrame:
+    current = hpo_summary.copy()
+    current["selected_role"] = ""
+    current["selection_reason"] = ""
+    for role, selection in [
+        ("primary", decision_bundle.get("primary_candidate")),
+        ("fallback", decision_bundle.get("fallback_candidate")),
+    ]:
+        if selection:
+            mask = _selection_mask(current, selection)
+            current.loc[mask, "selected_role"] = role
+            current.loc[mask, "selection_reason"] = "selected_train_inner_hpo"
+    return current
+
+
+def _selection_mask(frame: pd.DataFrame, selection: Mapping[str, Any]) -> pd.Series:
+    return (
+        frame["candidate_id"].eq(selection["candidate_id"])
+        & frame["model_family"].eq(selection["model_family"])
+        & frame["hpo_profile_id"].eq(selection["hpo_profile_id"])
+    )
 
 
 def _summary_row(
@@ -345,7 +1357,11 @@ def _summary_row(
     model_family_count: int,
     planned_hpo_rows: int,
     completed_hpo_rows: int,
+    failed_hpo_rows: int,
     selected_family_count: int,
+    ready_for_stage03: bool,
+    primary: Mapping[str, Any] | None,
+    fallback: Mapping[str, Any] | None,
     decision: str,
     block_reason: str,
 ) -> pd.DataFrame:
@@ -357,7 +1373,15 @@ def _summary_row(
                 "model_family_count": model_family_count,
                 "planned_hpo_rows": planned_hpo_rows,
                 "completed_hpo_rows": completed_hpo_rows,
+                "failed_hpo_rows": failed_hpo_rows,
                 "selected_family_count": selected_family_count,
+                "ready_for_stage03": ready_for_stage03,
+                "primary_candidate_id": primary.get("candidate_id") if primary else "",
+                "primary_model_family": primary.get("model_family") if primary else "",
+                "primary_hpo_profile_id": primary.get("hpo_profile_id") if primary else "",
+                "fallback_candidate_id": fallback.get("candidate_id") if fallback else "",
+                "fallback_model_family": fallback.get("model_family") if fallback else "",
+                "fallback_hpo_profile_id": fallback.get("hpo_profile_id") if fallback else "",
                 "decision": decision,
                 "block_reason": block_reason,
             }
@@ -366,63 +1390,196 @@ def _summary_row(
     )
 
 
-def _blocked_best_params(
-    config: Mapping[str, Any], stage01_handoff: Mapping[str, Any], reason: str
-) -> dict[str, Any]:
-    return {
-        "route": config["route"],
-        "stage_name": config["stage_name"],
-        "source_stage01_run_id": config["inputs"]["stage01_run_id"],
-        "source_stage01_decision": stage01_handoff.get("decision"),
-        "decision": "no_frozen_params",
-        "frozen_params": {},
-        "block_reason": reason,
-        "holdout_test_contact": False,
+def _status_from_selection(decision_bundle: Mapping[str, Any], failed_rows: int) -> str:
+    if failed_rows:
+        return "formal_hpo_incomplete_failed_trials"
+    if decision_bundle.get("ready_for_stage03") is True:
+        return "formal_hpo_complete_ready_for_stage03"
+    return "formal_hpo_complete_not_ready_for_stage03"
+
+
+def _selected_family_count(decision_bundle: Mapping[str, Any]) -> int:
+    families = {
+        str(selection["model_family"])
+        for selection in [
+            decision_bundle.get("primary_candidate"),
+            decision_bundle.get("fallback_candidate"),
+        ]
+        if selection
     }
+    return len(families)
 
 
-def _planned_best_params(
+def _frozen_candidate_payload(
+    *,
     config: Mapping[str, Any],
     stage01_handoff: Mapping[str, Any],
-    approved_families: tuple[str, ...],
+    decision_bundle: Mapping[str, Any],
+    hpo_summary: pd.DataFrame,
 ) -> dict[str, Any]:
+    return {
+        "route": config["route"],
+        "stage_name": config["stage_name"],
+        "source_stage00_run_id": config["inputs"].get(
+            "stage00_run_id", stage01_handoff.get("source_stage00_run_id")
+        ),
+        "source_stage01_run_id": config["inputs"]["stage01_run_id"],
+        "source_stage01_decision": stage01_handoff.get("decision"),
+        "ready_for_stage03": bool(decision_bundle["ready_for_stage03"]),
+        "decision": decision_bundle["decision"],
+        "block_reason": decision_bundle["block_reason"],
+        "selection_metric": config["selection_rules"]["primary_metric"],
+        "selection_baseline": config["selection_rules"]["baseline"],
+        "primary_candidate": decision_bundle.get("primary_candidate"),
+        "fallback_candidate": decision_bundle.get("fallback_candidate"),
+        "hpo_summary_rows": int(len(hpo_summary)),
+        "holdout_test_contact": False,
+        "official_validation_for_selection": False,
+        "no_final_model_selected": True,
+    }
+
+
+def _best_params_payload(
+    *,
+    config: Mapping[str, Any],
+    stage01_handoff: Mapping[str, Any],
+    profiles_by_family: Mapping[str, list[Mapping[str, Any]]],
+    hpo_summary: pd.DataFrame,
+    decision_bundle: Mapping[str, Any],
+) -> dict[str, Any]:
+    best_by_family = {}
+    if not hpo_summary.empty:
+        completed = hpo_summary.loc[hpo_summary["completed_rows"] == hpo_summary["expected_rows"]]
+        for family, group in completed.groupby("model_family", sort=True):
+            ranked = group.sort_values(
+                [
+                    "lcb_delta_macro_f1_vs_stratified_dummy_train_prior",
+                    "mean_delta_macro_f1_vs_stratified_dummy_train_prior",
+                    "mean_macro_f1",
+                ],
+                ascending=[False, False, False],
+            )
+            if not ranked.empty:
+                best_by_family[str(family)] = _selection_record(ranked.iloc[0].to_dict())
     return {
         "route": config["route"],
         "stage_name": config["stage_name"],
         "source_stage01_run_id": config["inputs"]["stage01_run_id"],
         "source_stage01_decision": stage01_handoff.get("decision"),
-        "approved_model_families_for_stage02": list(approved_families),
-        "decision": "no_frozen_params_hpo_fits_not_implemented",
-        "frozen_params": {},
+        "approved_model_families_for_stage02": list(profiles_by_family),
+        "decision": decision_bundle["decision"],
+        "best_params_by_family": best_by_family,
+        "primary_candidate": decision_bundle.get("primary_candidate"),
+        "fallback_candidate": decision_bundle.get("fallback_candidate"),
         "holdout_test_contact": False,
     }
 
 
-def _blocked_stage03_handoff(
-    config: Mapping[str, Any], stage01_handoff: Mapping[str, Any], reason: str
+def _stage03_handoff_payload(
+    config: Mapping[str, Any],
+    stage01_handoff: Mapping[str, Any],
+    decision_bundle: Mapping[str, Any],
 ) -> dict[str, Any]:
     return {
         "route": config["route"],
         "stage_name": config["stage_name"],
+        "source_stage00_run_id": config["inputs"].get(
+            "stage00_run_id", stage01_handoff.get("source_stage00_run_id")
+        ),
         "source_stage01_run_id": config["inputs"]["stage01_run_id"],
         "source_stage01_decision": stage01_handoff.get("decision"),
-        "ready_for_stage03": False,
-        "decision": "do_not_start_stage03_stage02_blocked_by_stage01",
-        "block_reason": reason,
+        "ready_for_stage03": bool(decision_bundle["ready_for_stage03"]),
+        "decision": decision_bundle["decision"],
+        "block_reason": decision_bundle["block_reason"],
+        "primary_candidate": decision_bundle.get("primary_candidate"),
+        "fallback_candidate": decision_bundle.get("fallback_candidate"),
+        "frozen_candidate_artifact": "02_frozen_candidate.json",
+        "hpo_trial_ledger": "02_hpo_trial_ledger.csv",
+        "hpo_summary": "02_hpo_summary.csv",
+        "baseline_control_summary": "02_baseline_control_summary.csv",
+        "official_validation_for_selection": False,
+        "no_final_model_selected": True,
         "holdout_test_contact": False,
     }
 
 
-def _planned_stage03_handoff(
-    config: Mapping[str, Any], stage01_handoff: Mapping[str, Any]
-) -> dict[str, Any]:
-    return {
-        "route": config["route"],
-        "stage_name": config["stage_name"],
-        "source_stage01_run_id": config["inputs"]["stage01_run_id"],
-        "source_stage01_decision": stage01_handoff.get("decision"),
-        "ready_for_stage03": False,
-        "decision": "do_not_start_stage03_hpo_fits_not_implemented",
-        "block_reason": "hpo_fitters_not_implemented",
-        "holdout_test_contact": False,
-    }
+def _write_frozen_param_yamls(
+    output_dir: Path, outputs: Mapping[str, Any], frozen_candidate: Mapping[str, Any]
+) -> list[Path]:
+    if frozen_candidate.get("ready_for_stage03") is not True:
+        return []
+    frozen_dir = output_dir / _output_name(outputs, "frozen_params_dir", "frozen_params")
+    frozen_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for role in ("primary_candidate", "fallback_candidate"):
+        selection = frozen_candidate.get(role)
+        if not selection:
+            continue
+        name = _safe_filename(
+            f"{role}_{selection['candidate_id']}_{selection['model_family']}_{selection['hpo_profile_id']}.yaml"
+        )
+        path = frozen_dir / name
+        payload = {
+            "role": role.replace("_candidate", ""),
+            "source_stage01_run_id": frozen_candidate["source_stage01_run_id"],
+            "candidate": selection,
+            "holdout_test_contact": False,
+            "official_validation_for_selection": False,
+            "no_final_model_selected": True,
+        }
+        path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+        paths.append(path)
+    return paths
+
+
+def _safe_filename(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", value)
+
+
+def _frozen_candidate_markdown(payload: Mapping[str, Any]) -> str:
+    lines = [
+        "# Stage 02 Frozen Candidate",
+        "",
+        f"- decision: `{payload['decision']}`",
+        f"- ready_for_stage03: `{payload['ready_for_stage03']}`",
+        f"- source_stage01_run_id: `{payload['source_stage01_run_id']}`",
+        f"- holdout_test_contact: `{payload['holdout_test_contact']}`",
+        f"- no_final_model_selected: `{payload['no_final_model_selected']}`",
+        "",
+    ]
+    for label, key in [("Primary", "primary_candidate"), ("Fallback", "fallback_candidate")]:
+        selection = payload.get(key)
+        lines.append(f"## {label}")
+        if not selection:
+            lines.append("")
+            lines.append("No candidate frozen.")
+            lines.append("")
+            continue
+        lines.extend(
+            [
+                "",
+                f"- candidate_id: `{selection['candidate_id']}`",
+                f"- model_family: `{selection['model_family']}`",
+                f"- hpo_profile_id: `{selection['hpo_profile_id']}`",
+                f"- feature_set: `{selection['feature_set']}`",
+                f"- window_size: `{selection['window_size']}`",
+                "",
+            ]
+        )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _mean_or_nan(values: pd.Series) -> float:
+    current = pd.to_numeric(values, errors="coerce").dropna()
+    return float(current.mean()) if len(current) else np.nan
+
+
+def _min_or_nan(values: pd.Series) -> float:
+    current = pd.to_numeric(values, errors="coerce").dropna()
+    return float(current.min()) if len(current) else np.nan
+
+
+def _json_number(value: Any) -> float | None:
+    if pd.isna(value):
+        return None
+    return float(value)

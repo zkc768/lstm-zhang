@@ -8,6 +8,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs" / "stages" / "02_model_hpo_train_inner.yaml"
 CURRENT_STAGE01_RUN_ID = "20260609_070204"
+CURRENT_STAGE00_RUN_ID = "20260609_015034_927813"
 
 
 def load_config() -> dict:
@@ -26,6 +27,29 @@ def test_stage02_config_preserves_validation_only_scope() -> None:
 def test_stage02_config_points_to_exact_stage01_run_folder() -> None:
     config = load_config()
     inputs = config["inputs"]
+    assert inputs["stage00_run_id"] == CURRENT_STAGE00_RUN_ID
+    assert inputs["stage00_runtime_run_dir"].endswith(
+        f"/00_data_split_label_freeze/{CURRENT_STAGE00_RUN_ID}"
+    )
+    assert inputs["stage00_drive_run_dir"].endswith(
+        f"lst_models/results/00_data_split_label_freeze/{CURRENT_STAGE00_RUN_ID}"
+    )
+    assert inputs["stage00_drive_path_parts"] == [
+        "lst_models",
+        "results",
+        "00_data_split_label_freeze",
+        CURRENT_STAGE00_RUN_ID,
+    ]
+    assert inputs["raw_data_manifest"] == "configs/lst_models_data.yaml"
+    assert inputs["raw_data_dir"] == "/content/lst_models_raw_stock_data"
+    assert set(inputs["required_stage00_artifacts"]) == {
+        "raw_data_manifest.json",
+        "split_freeze.json",
+        "label_policy.json",
+        "baseline_registry.json",
+        "sample_event_index.csv",
+        "run_manifest.json",
+    }
     assert inputs["stage01_run_id"] == CURRENT_STAGE01_RUN_ID
     assert inputs["stage01_runtime_run_dir"].endswith(
         f"/01_feature_window_search/{CURRENT_STAGE01_RUN_ID}"
@@ -69,8 +93,31 @@ def test_stage02_config_budget_and_train_inner_rules() -> None:
     assert config["train_inner"]["seeds"] == [101, 202]
     assert config["train_inner"]["official_validation_for_selection"] is False
     assert config["budget"]["max_hpo_plan_rows"] == 240
+    assert config["hpo_sample_policy"]["max_train_samples_per_fold"] == 50000
+    assert config["hpo_sample_policy"]["max_eval_samples_per_fold"] == 20000
+    assert config["lightgbm_training_defaults"]["early_stopping_rounds"] == 25
+    assert config["probe_training_defaults"]["torch"]["epochs"] == 12
+    assert config["checkpointing"]["enabled"] is True
+    assert config["checkpointing"]["checkpoint_every_trials"] == 8
     assert config["selection_rules"]["no_official_validation_selection"] is True
     assert config["selection_rules"]["no_final_model_selected"] is True
+
+
+def test_stage02_config_declares_formal_outputs_and_baselines() -> None:
+    config = load_config()
+    outputs = config["outputs"]
+    assert outputs["hpo_trial_ledger"] == "02_hpo_trial_ledger.csv"
+    assert outputs["hpo_summary"] == "02_hpo_summary.csv"
+    assert outputs["baseline_control_summary"] == "02_baseline_control_summary.csv"
+    assert outputs["frozen_candidate"] == "02_frozen_candidate.json"
+    assert outputs["frozen_candidate_markdown"] == "02_frozen_candidate.md"
+    assert outputs["frozen_params_dir"] == "frozen_params"
+    assert config["baseline_controls"]["mandatory"] == [
+        "stratified_dummy_train_prior",
+        "majority_train_prior",
+        "constant_up",
+        "constant_down",
+    ]
 
 
 def test_stage02_config_does_not_promote_recurrent_controls_to_hpo() -> None:
