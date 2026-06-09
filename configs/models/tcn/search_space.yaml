@@ -1,4 +1,4 @@
-model_family: tcn_only
+model_family: tcn
 search_mode: bounded_profiles
 profiles:
   - profile_id: tcn_p01

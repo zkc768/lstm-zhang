@@ -41,12 +41,12 @@ hpo_families:
   lightgbm:
     enabled: true
     search_space: configs/models/lightgbm/search_space.yaml
-  dlinear_only:
+  standard_dlinear:
     enabled: true
-    search_space: configs/models/dlinear_only/search_space.yaml
-  tcn_only:
+    search_space: configs/models/standard_dlinear/search_space.yaml
+  tcn:
     enabled: true
-    search_space: configs/models/tcn_only/search_space.yaml
+    search_space: configs/models/tcn/search_space.yaml
   ms_dlinear_tcn:
     enabled: true
     search_space: configs/models/ms_dlinear_tcn/search_space.yaml

@@ -42,7 +42,7 @@ def test_stage02_config_points_to_exact_stage01_run_folder() -> None:
 
 def test_stage02_config_declares_core_hpo_families_and_search_spaces() -> None:
     config = load_config()
-    expected = ["lightgbm", "dlinear_only", "tcn_only", "ms_dlinear_tcn"]
+    expected = ["lightgbm", "standard_dlinear", "tcn", "ms_dlinear_tcn"]
     active = [
         family
         for family, family_config in config["hpo_families"].items()

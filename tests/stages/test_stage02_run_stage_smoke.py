@@ -64,7 +64,7 @@ def stage02_config(tmp_path: Path, stage01_run_dir: Path) -> dict:
     notebook_path = tmp_path / "02_model_hpo_train_inner_colab.ipynb"
     notebook_path.write_text("{}", encoding="utf-8")
     search_root = tmp_path / "search_spaces"
-    for family in ["lightgbm", "dlinear_only", "tcn_only", "ms_dlinear_tcn"]:
+    for family in ["lightgbm", "standard_dlinear", "tcn", "ms_dlinear_tcn"]:
         write_search_space(search_root / family / "search_space.yaml", family, ["p01", "p02"])
     return {
         "stage_name": "02_model_hpo_train_inner",
@@ -103,10 +103,10 @@ def stage02_config(tmp_path: Path, stage01_run_dir: Path) -> dict:
         },
         "hpo_families": {
             family: {
-                "enabled": family in ["lightgbm", "dlinear_only"],
+                "enabled": family in ["lightgbm", "standard_dlinear"],
                 "search_space": str(search_root / family / "search_space.yaml"),
             }
-            for family in ["lightgbm", "dlinear_only", "tcn_only", "ms_dlinear_tcn"]
+            for family in ["lightgbm", "standard_dlinear", "tcn", "ms_dlinear_tcn"]
         },
         "optional_fixed_controls": {"simple_gru": {"enabled": False}},
         "budget": {"max_hpo_plan_rows": 20, "max_profiles_per_family": 2},
@@ -166,7 +166,7 @@ def test_stage02_plans_hpo_rows_for_stage01_candidates(tmp_path: Path) -> None:
                 "window_size": 10,
             }
         ],
-        "approved_model_families_for_stage02": ["lightgbm", "dlinear_only"],
+        "approved_model_families_for_stage02": ["lightgbm", "standard_dlinear"],
         "decision": "selected_candidate_inputs_for_stage02_train_inner_hpo",
         "no_final_model_selected": True,
         "holdout_test_contact": False,
@@ -180,7 +180,7 @@ def test_stage02_plans_hpo_rows_for_stage01_candidates(tmp_path: Path) -> None:
 
     ledger = pd.read_csv(result.hpo_plan_ledger)
     assert len(ledger) == 8
-    assert set(ledger["model_family"]) == {"lightgbm", "dlinear_only"}
+    assert set(ledger["model_family"]) == {"lightgbm", "standard_dlinear"}
     assert set(ledger["fit_status"]) == {"skipped_not_implemented"}
     assert ledger["selected_for_stage03"].eq(False).all()
 

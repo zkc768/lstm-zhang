@@ -14,6 +14,7 @@ inputs:
     - "20260608_164408"
   stage00_run_manifest: /content/lst_models_results/00_data_split_label_freeze/20260608_164408/run_manifest.json
   raw_data_manifest: configs/lst_models_data.yaml
+  raw_data_dir: /content/lst_models_raw_stock_data
   notebook_path: notebooks/01_feature_window_search_colab.ipynb
   required_stage00_artifacts:
     - raw_data_manifest.json
@@ -89,11 +90,13 @@ lightweight_probes:
       subsample: 0.9
       colsample_bytree: 0.9
       class_weight: balanced
-  dlinear_tiny:
+  standard_dlinear_tiny:
     enabled: true
     role: simple_sequence_linear_probe
     fixed_defaults:
       mode: tiny_probe
+      moving_avg_kernel: 5
+      dropout: 0.10
   tcn_tiny:
     enabled: true
     role: causal_convolution_sequence_probe
@@ -106,6 +109,7 @@ lightweight_probes:
     role: ian_aligned_hybrid_shape_signal_probe
     fixed_defaults:
       mode: tiny_probe
+      moving_avg_kernels: [3, 5, 9, 15]
       tcn_channels: [32, 32]
       tcn_kernel_size: 3
       dropout: 0.10
@@ -125,9 +129,16 @@ probe_training_defaults:
     learning_rate: 0.001
     weight_decay: 0.0001
     dropout: 0.10
+    device: auto
+    require_gpu: false
     optimizer: AdamW
     loss: class_weighted_cross_entropy
     early_stopping: none
+
+screening_sample_policy:
+  max_train_samples_per_fold: 50000
+  max_eval_samples_per_fold: 20000
+  sample_method: deterministic_even_stride_by_ticker_label
 
 budget:
   max_counted_probe_rows: 240
@@ -143,8 +154,8 @@ selection_rules:
 stage02_handoff:
   recommended_model_families:
     - lightgbm
-    - dlinear_only
-    - tcn_only
+    - standard_dlinear
+    - tcn
     - ms_dlinear_tcn
   control_models:
     - last_step_lightgbm_control

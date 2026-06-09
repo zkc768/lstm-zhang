@@ -262,7 +262,7 @@ delta_macro_f1_vs_baseline
 delta_balanced_accuracy_vs_baseline
 ```
 
-`LightGBM`, `last_step_mlp`, `dlinear_only`, `tcn_only`, and hybrid sequence
+`LightGBM`, `last_step_mlp`, `standard_dlinear`, `tcn`, and hybrid sequence
 models are controls or candidate models, not trivial baselines.
 
 ## 12. Forbidden Operations

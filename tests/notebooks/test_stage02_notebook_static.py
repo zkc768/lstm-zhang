@@ -28,7 +28,7 @@ def test_stage02_notebook_is_single_stage02_entrypoint() -> None:
     assert "RUN_PROJECT_BOOTSTRAP = True" in text
     assert 'PROJECT_BOOTSTRAP_MODE = "github_commit"' in text
     assert 'PROJECT_REPO_URL = "https://github.com/zkc768/lstm-zhang.git"' in text
-    assert 'PROJECT_REPO_COMMIT = "0ed7f4446120271d154acab29524fa56068e9330"' in text
+    assert 'PROJECT_REPO_COMMIT = "8036ca3bbef0dec0ea8e5e2c38cf2deb1c3767e0"' in text
     assert "RUN_STAGE01_DRIVE_SYNC = True" in text
     assert "RUN_STAGE02 = False" in text
     assert "RUN_ARTIFACT_DISPLAY = False" in text

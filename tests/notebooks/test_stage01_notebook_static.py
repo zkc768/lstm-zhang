@@ -31,13 +31,17 @@ def test_stage01_notebook_is_single_stage01_entrypoint() -> None:
     assert 'PROJECT_REPO_URL = "https://github.com/zkc768/lstm-zhang.git"' in text
     assert 'PROJECT_REPO_COMMIT = "b6e055239d945db631f63a4fee7b5133ea04a5d5"' in text
     assert "PROJECT_DRIVE_BUNDLE_FILE_ID = \"\"" in text
+    assert "RUN_RAW_DOWNLOAD = False" in text
     assert "RUN_STAGE00_DRIVE_SYNC = True" in text
     assert "RUN_STAGE01 = False" in text
     assert "RUN_ARTIFACT_DISPLAY = False" in text
+    assert 'stage00_inputs["raw_data_dir"] = str(RAW_DATA_DIR)' in text
     assert 'STAGE00_RUN_ID = "20260608_164408"' in text
     assert 'STAGE00_DRIVE_PATH_PARTS = ["lst_models", "results", "00_data_split_label_freeze", STAGE00_RUN_ID]' in text
     assert "EXPECTED_WINDOWS = [10, 20, 30]" in text
     assert "STAGE02_RECOMMENDED_FAMILIES" in text
+    assert "\"standard_dlinear\"" in text
+    assert "\"tcn\"" in text
     assert "simple_gru" in text
     assert "shallow_lstm" in text
     assert "git\", \"clone\"" in text
@@ -47,6 +51,8 @@ def test_stage01_notebook_is_single_stage01_entrypoint() -> None:
     assert "src\" / \"lst_models\" / \"stages\" / \"feature_window_search.py" in text
     assert "sync_stage00_artifacts_from_drive" in text
     assert "resolve_drive_folder" in text
+    assert "download_raw_file_by_id" in text
+    assert "RAW_DATA_DIR" in text
     assert "from lst_models.artifacts import require_artifacts" in text
 
 

@@ -50,6 +50,10 @@ def test_stage01_config_freezes_window_grid_and_budget() -> None:
     assert config["train_inner"]["seeds"] == [101, 202]
     assert config["budget"]["max_counted_probe_rows"] == 240
     assert config["train_inner"]["official_validation_for_selection"] is False
+    assert config["inputs"]["raw_data_dir"] == "/content/lst_models_raw_stock_data"
+    assert config["screening_sample_policy"]["sample_method"] == (
+        "deterministic_even_stride_by_ticker_label"
+    )
 
 
 def test_stage01_config_declares_feature_sets_and_probes() -> None:
@@ -66,7 +70,7 @@ def test_stage01_config_declares_feature_sets_and_probes() -> None:
     assert set(config["lightweight_probes"]) == {
         "logreg_flat_control",
         "lightgbm_small",
-        "dlinear_tiny",
+        "standard_dlinear_tiny",
         "tcn_tiny",
         "ms_dlinear_tcn_tiny",
     }
@@ -86,8 +90,8 @@ def test_stage01_config_handoff_and_forbidden_axes() -> None:
     assert config["selection_rules"]["max_candidate_inputs_for_stage02"] == 2
     assert config["stage02_handoff"]["recommended_model_families"] == [
         "lightgbm",
-        "dlinear_only",
-        "tcn_only",
+        "standard_dlinear",
+        "tcn",
         "ms_dlinear_tcn",
     ]
     assert config["stage02_handoff"]["control_models"] == ["last_step_lightgbm_control"]

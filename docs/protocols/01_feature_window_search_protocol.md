@@ -207,7 +207,7 @@ Recommended lightweight probes:
 |---|---|---|
 | `logreg_flat_control` | cheap linear sanity check on flattened windows | `solver=liblinear`, `class_weight=balanced`, `max_iter=2000` |
 | `lightgbm_small` | tabular non-linear probe and last-step/window control | `n_estimators=200`, `learning_rate=0.03`, `max_depth=6`, `num_leaves=31`, `subsample=0.9`, `colsample_bytree=0.9`, `class_weight=balanced` |
-| `dlinear_tiny` | simple sequence linear probe | fixed tiny architecture, no HPO |
+| `standard_dlinear_tiny` | simple sequence linear probe aligned to the standard DLinear baseline | fixed tiny architecture, no HPO |
 | `tcn_tiny` | causal convolution sequence probe | `channels=(32,32)`, `kernel_size=3`, `dropout=0.10` |
 | `ms_dlinear_tcn_tiny` | Ian-aligned hybrid shape/signal probe | fixed multi-scale DLinear plus small residual TCN |
 
@@ -247,6 +247,18 @@ lightweight_probes: 4 to 5   # excluding dummy baselines
 train_inner_folds: 2
 seeds: 2
 ```
+
+Predeclared screening sample cap:
+
+```text
+max_train_samples_per_fold: 50000
+max_eval_samples_per_fold: 20000
+sample_method: deterministic_even_stride_by_ticker_label
+```
+
+The cap is a compute guard only. It must be configured before execution and
+must not be adjusted after inspecting official validation, test, or holdout
+metrics.
 
 The expected counted rows are:
 
@@ -349,8 +361,8 @@ The recommended Stage 02 family set is:
 
 ```text
 lightgbm
-dlinear_only
-tcn_only
+standard_dlinear
+tcn
 ms_dlinear_tcn
 ```
 
@@ -405,7 +417,7 @@ class_weight: balanced
 Do not enumerate the full Cartesian product. Use profiles or bounded random
 search.
 
-### DLinear
+### Standard DLinear
 
 ```text
 moving_avg_kernel: 3, 5, 7, 11
@@ -442,7 +454,7 @@ moving_avg_kernels: (3,6,12,24)    # only for window_size=30
 ```
 
 The hybrid should be interpreted as useful only if it improves over both
-`dlinear_only` and `tcn_only` under the same train-inner budget.
+`standard_dlinear` and `tcn` under the same train-inner budget.
 
 Recommended Stage 02 budget:
 

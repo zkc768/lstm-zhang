@@ -58,8 +58,8 @@ The Stage 02 core family set is:
 
 ```text
 lightgbm
-dlinear_only
-tcn_only
+standard_dlinear
+tcn
 ms_dlinear_tcn
 ```
 

@@ -1,4 +1,4 @@
-model_family: dlinear_only
+model_family: standard_dlinear
 search_mode: bounded_profiles
 profiles:
   - profile_id: dlinear_p01
