@@ -7,6 +7,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs" / "stages" / "02_model_hpo_train_inner.yaml"
+CURRENT_STAGE01_RUN_ID = "20260609_070204"
 
 
 def load_config() -> dict:
@@ -25,19 +26,23 @@ def test_stage02_config_preserves_validation_only_scope() -> None:
 def test_stage02_config_points_to_exact_stage01_run_folder() -> None:
     config = load_config()
     inputs = config["inputs"]
-    assert inputs["stage01_run_id"] == "20260608_180233"
+    assert inputs["stage01_run_id"] == CURRENT_STAGE01_RUN_ID
     assert inputs["stage01_runtime_run_dir"].endswith(
-        "/01_feature_window_search/20260608_180233"
+        f"/01_feature_window_search/{CURRENT_STAGE01_RUN_ID}"
     )
     assert inputs["stage01_drive_run_dir"].endswith(
-        "lst_models/results/01_feature_window_search/20260608_180233"
+        f"lst_models/results/01_feature_window_search/{CURRENT_STAGE01_RUN_ID}"
     )
     assert inputs["stage01_drive_path_parts"] == [
         "lst_models",
         "results",
         "01_feature_window_search",
-        "20260608_180233",
+        CURRENT_STAGE01_RUN_ID,
     ]
+    assert inputs["stage01_candidate_inputs"].endswith(
+        f"/01_feature_window_search/{CURRENT_STAGE01_RUN_ID}/01_candidate_inputs.json"
+    )
+    assert "01_train_label_band_diagnostic.csv" in inputs["required_stage01_artifacts"]
 
 
 def test_stage02_config_declares_core_hpo_families_and_search_spaces() -> None:
