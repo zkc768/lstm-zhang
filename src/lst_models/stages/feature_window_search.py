@@ -10,6 +10,7 @@ from typing import Any, Mapping
 import numpy as np
 import pandas as pd
 
+from lst_models import metrics
 from lst_models.artifacts import require_artifacts, write_artifact_inventory, write_json
 from lst_models.config import hash_file, hash_mapping
 from lst_models.data import read_raw_txt_file, resample_1min_to_5min
@@ -31,10 +32,17 @@ SUMMARY_COLUMNS = [
     "n_probe_rows",
     "mean_macro_f1",
     "mean_balanced_accuracy",
+    "mean_roc_auc",
+    "mean_mcc",
     "mean_delta_macro_f1_vs_stratified_dummy",
     "lcb_delta_macro_f1_vs_stratified_dummy",
     "positive_ticker_count",
     "best_screening_family",
+    "family_lcb_selection_policy",
+    "median_family_lcb_delta_macro_f1_vs_stratified_dummy",
+    "min_family_lcb_delta_macro_f1_vs_stratified_dummy",
+    "best_family_lcb_delta_macro_f1_vs_stratified_dummy",
+    "positive_stage02_family_count",
     "family_mean_delta_macro_f1_json",
     "family_lcb_delta_macro_f1_json",
     "family_positive_ticker_count_json",
@@ -58,6 +66,8 @@ LEDGER_COLUMNS = [
     "macro_f1",
     "balanced_accuracy",
     "accuracy",
+    "roc_auc",
+    "mcc",
     "baseline_id",
     "baseline_macro_f1",
     "baseline_balanced_accuracy",
@@ -130,6 +140,7 @@ class CandidateDataset:
 @dataclass(frozen=True)
 class ProbeFitResult:
     predictions: np.ndarray
+    scores: np.ndarray
     requested_device: str
     resolved_device: str
     cuda_available: bool | None
@@ -494,7 +505,6 @@ def _quantile_value(quantiles: pd.Series, key: float) -> float:
 def _build_feature_frame(train_bars: pd.DataFrame) -> pd.DataFrame:
     frame = train_bars.sort_values(["ticker", "timestamp"]).copy()
     day_group = frame.groupby(["ticker", "trading_day"], sort=False)
-    ticker_group = frame.groupby("ticker", sort=False)
 
     previous_close = day_group["close"].shift(1)
     close = frame["close"].astype(float)
@@ -529,12 +539,17 @@ def _build_feature_frame(train_bars: pd.DataFrame) -> pd.DataFrame:
     upper = rolling_mean + 2.0 * rolling_std
     frame["bollinger_pctb"] = (close - lower) / (upper - lower).replace(0.0, np.nan)
 
-    ema12 = ticker_group["close"].transform(lambda series: series.ewm(span=12, adjust=False).mean())
-    ema26 = ticker_group["close"].transform(lambda series: series.ewm(span=26, adjust=False).mean())
+    # MACD/close_scale reset per trading day like every other feature in the set,
+    # so this one indicator does not silently carry overnight-gap state across
+    # sessions (which would make it behave differently from the day-local rest).
+    ema12 = day_group["close"].transform(lambda series: series.ewm(span=12, adjust=False).mean())
+    ema26 = day_group["close"].transform(lambda series: series.ewm(span=26, adjust=False).mean())
     macd = ema12 - ema26
-    signal = macd.groupby(frame["ticker"]).transform(lambda series: series.ewm(span=9, adjust=False).mean())
+    signal = macd.groupby([frame["ticker"], frame["trading_day"]]).transform(
+        lambda series: series.ewm(span=9, adjust=False).mean()
+    )
     macd_hist = macd - signal
-    close_scale = ticker_group["close"].transform(lambda series: series.rolling(20, min_periods=10).std())
+    close_scale = day_group["close"].transform(lambda series: series.rolling(20, min_periods=10).std())
     frame["normalized_macd_hist"] = macd_hist / close_scale.replace(0.0, np.nan)
 
     rolling_volume = day_group["volume"].transform(lambda series: series.rolling(20, min_periods=5).mean())
@@ -879,6 +894,8 @@ def _empty_ledger_row(
         "macro_f1": pd.NA,
         "balanced_accuracy": pd.NA,
         "accuracy": pd.NA,
+        "roc_auc": pd.NA,
+        "mcc": pd.NA,
         "baseline_id": baseline_id,
         "baseline_macro_f1": pd.NA,
         "baseline_balanced_accuracy": pd.NA,
@@ -926,6 +943,8 @@ def _baseline_ledger_row(
             "macro_f1": scores["macro_f1"],
             "balanced_accuracy": scores["balanced_accuracy"],
             "accuracy": scores["accuracy"],
+            "roc_auc": scores.get("roc_auc", pd.NA),
+            "mcc": scores.get("mcc", pd.NA),
             "baseline_macro_f1": scores["macro_f1"],
             "baseline_balanced_accuracy": scores["balanced_accuracy"],
             "delta_macro_f1_vs_baseline": 0.0,
@@ -946,29 +965,25 @@ def _score_train_prior_baseline(
             "macro_f1": np.nan,
             "balanced_accuracy": np.nan,
             "accuracy": np.nan,
+            "roc_auc": np.nan,
+            "mcc": np.nan,
             "predictions": predictions,
+            "scores": np.full(len(y_eval), 0.5),
             "error_message": "baseline has no train/eval samples for this fold",
         }
-    train_labels = y_train.astype(int)
-    eval_labels = y_eval.astype(int)
-    classes, counts = np.unique(train_labels, return_counts=True)
     if baseline_id == "stratified_dummy_train_prior":
-        probabilities = counts / counts.sum()
-        rng = np.random.default_rng(seed)
-        predictions = rng.choice(classes, size=len(eval_labels), p=probabilities).astype(int)
+        predictions, prediction_scores = metrics.predict_stratified_dummy(y_train, len(y_eval), seed)
     elif baseline_id == "majority_train_prior":
-        majority_class = int(classes[np.argmax(counts)])
-        predictions = np.full(len(eval_labels), majority_class, dtype=int)
+        predictions, prediction_scores = metrics.predict_majority(y_train, len(y_eval))
     else:
         raise ValueError(f"unknown Stage 01 mandatory baseline: {baseline_id}")
-    metrics = _classification_metrics(eval_labels, predictions)
+    scored = metrics.score_classifier(y_eval.astype(int), predictions, y_score=prediction_scores)
     return {
         "fit_status": "completed_baseline",
-        "macro_f1": metrics["macro_f1"],
-        "balanced_accuracy": metrics["balanced_accuracy"],
-        "accuracy": metrics["accuracy"],
         "predictions": predictions,
+        "scores": prediction_scores,
         "error_message": "",
+        **scored,
     }
 
 
@@ -993,10 +1008,10 @@ def _fit_probe(
         }
     try:
         if probe_id == "logreg_flat_control":
-            predictions = _fit_logreg_probe(x_train, y_train, x_eval, config, seed)
+            predictions, prediction_scores = _fit_logreg_probe(x_train, y_train, x_eval, config, seed)
             device_info = _non_gpu_device_info()
         elif probe_id == "lightgbm_small":
-            predictions = _fit_lightgbm_probe(x_train, y_train, x_eval, config, seed)
+            predictions, prediction_scores = _fit_lightgbm_probe(x_train, y_train, x_eval, config, seed)
             device_info = _non_gpu_device_info()
         elif probe_id in {"standard_dlinear_tiny", "tcn_tiny", "ms_dlinear_tcn_tiny"}:
             torch_result = _fit_torch_sequence_probe(
@@ -1010,6 +1025,7 @@ def _fit_probe(
                 n_features,
             )
             predictions = torch_result.predictions
+            prediction_scores = torch_result.scores
             device_info = {
                 "requested_device": torch_result.requested_device,
                 "resolved_device": torch_result.resolved_device,
@@ -1024,16 +1040,18 @@ def _fit_probe(
             raise
         return {"fit_status": "failed_exception", "error_message": f"{type(exc).__name__}: {exc}"}
 
-    metrics = _classification_metrics(y_eval, predictions)
+    scored = metrics.score_classifier(y_eval, predictions, y_score=prediction_scores)
     ticker_deltas, positive_ticker_count = _ticker_delta_macro_f1(
         eval_meta, predictions, baseline_predictions
     )
     block_deltas = _block_delta_macro_f1(eval_meta, predictions, baseline_predictions)
     return {
         "fit_status": "completed",
-        "macro_f1": metrics["macro_f1"],
-        "balanced_accuracy": metrics["balanced_accuracy"],
-        "accuracy": metrics["accuracy"],
+        "macro_f1": scored["macro_f1"],
+        "balanced_accuracy": scored["balanced_accuracy"],
+        "accuracy": scored["accuracy"],
+        "roc_auc": scored["roc_auc"],
+        "mcc": scored["mcc"],
         "error_message": "",
         "positive_ticker_count": int(positive_ticker_count),
         "ticker_delta_macro_f1_json": json.dumps(ticker_deltas, sort_keys=True),
@@ -1048,7 +1066,7 @@ def _fit_logreg_probe(
     x_eval: np.ndarray,
     config: Mapping[str, Any],
     seed: int,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     from sklearn.linear_model import LogisticRegression
     from sklearn.preprocessing import StandardScaler
 
@@ -1063,7 +1081,9 @@ def _fit_logreg_probe(
         random_state=seed,
     )
     model.fit(train_scaled, y_train)
-    return model.predict(eval_scaled).astype(int)
+    predictions = model.predict(eval_scaled).astype(int)
+    scores = model.predict_proba(eval_scaled)[:, 1].astype(float)
+    return predictions, scores
 
 
 def _fit_lightgbm_probe(
@@ -1072,7 +1092,7 @@ def _fit_lightgbm_probe(
     x_eval: np.ndarray,
     config: Mapping[str, Any],
     seed: int,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     from lightgbm import LGBMClassifier
 
     defaults = dict(_probe_defaults(config, "lightgbm_small"))
@@ -1086,7 +1106,9 @@ def _fit_lightgbm_probe(
     defaults.setdefault("class_weight", "balanced")
     model = LGBMClassifier(**defaults, random_state=seed, verbosity=-1)
     model.fit(x_train, y_train)
-    return model.predict(x_eval).astype(int)
+    predictions = model.predict(x_eval).astype(int)
+    scores = model.predict_proba(x_eval)[:, 1].astype(float)
+    return predictions, scores
 
 
 def _fit_torch_sequence_probe(
@@ -1178,10 +1200,12 @@ def _fit_torch_sequence_probe(
     model.eval()
     with torch.no_grad():
         logits = model(torch.as_tensor(eval_3d, dtype=torch.float32, device=device))
+        probabilities = torch.softmax(logits, dim=1)[:, 1].cpu().numpy().astype(float)
         predictions = logits.argmax(dim=1).cpu().numpy().astype(int)
     device_fields = build_device_manifest_fields(torch, requested_device, device, fallback_reason)
     return ProbeFitResult(
         predictions=predictions,
+        scores=probabilities,
         requested_device=str(device_fields["requested_device"]),
         resolved_device=str(device_fields["resolved_device"]),
         cuda_available=bool(device_fields["cuda_available"]),
@@ -1453,11 +1477,11 @@ def _block_delta_macro_f1(
     return deltas
 
 
-def _binary_probabilities(labels: np.ndarray) -> np.ndarray:
-    counts = np.array([(labels == 0).sum(), (labels == 1).sum()], dtype=float)
-    if counts.sum() == 0:
-        return np.array([0.5, 0.5])
-    return counts / counts.sum()
+def _nan_safe_mean(values: pd.Series) -> Any:
+    numeric = pd.to_numeric(values, errors="coerce").dropna()
+    if numeric.empty:
+        return pd.NA
+    return float(numeric.mean())
 
 
 def _summarize_candidate(
@@ -1492,10 +1516,17 @@ def _summarize_candidate(
         "n_probe_rows": int(len(folds) * len(seeds) * len(probe_ids)),
         "mean_macro_f1": pd.NA,
         "mean_balanced_accuracy": pd.NA,
+        "mean_roc_auc": pd.NA,
+        "mean_mcc": pd.NA,
         "mean_delta_macro_f1_vs_stratified_dummy": pd.NA,
         "lcb_delta_macro_f1_vs_stratified_dummy": pd.NA,
         "positive_ticker_count": 0,
         "best_screening_family": "",
+        "family_lcb_selection_policy": "median_stage02_family_lcb",
+        "median_family_lcb_delta_macro_f1_vs_stratified_dummy": pd.NA,
+        "min_family_lcb_delta_macro_f1_vs_stratified_dummy": pd.NA,
+        "best_family_lcb_delta_macro_f1_vs_stratified_dummy": pd.NA,
+        "positive_stage02_family_count": 0,
         "family_mean_delta_macro_f1_json": "{}",
         "family_lcb_delta_macro_f1_json": "{}",
         "family_positive_ticker_count_json": "{}",
@@ -1517,12 +1548,23 @@ def _summarize_candidate(
     row["mean_balanced_accuracy"] = float(
         screening_completed["balanced_accuracy"].astype(float).mean()
     )
+    row["mean_roc_auc"] = _nan_safe_mean(screening_completed["roc_auc"])
+    row["mean_mcc"] = _nan_safe_mean(screening_completed["mcc"])
     family_stats = _family_screening_stats(screening_completed)
     best_family, best_stats = _best_family_stats(family_stats)
+    selection_stats = _family_selection_stats(family_stats)
     row["best_screening_family"] = best_family
-    row["mean_delta_macro_f1_vs_stratified_dummy"] = best_stats["mean_delta"]
-    row["lcb_delta_macro_f1_vs_stratified_dummy"] = best_stats["lcb_delta"]
+    row["mean_delta_macro_f1_vs_stratified_dummy"] = selection_stats["median_mean_delta"]
+    row["lcb_delta_macro_f1_vs_stratified_dummy"] = selection_stats["median_lcb_delta"]
     row["positive_ticker_count"] = int(best_stats["positive_ticker_count"])
+    row["median_family_lcb_delta_macro_f1_vs_stratified_dummy"] = selection_stats[
+        "median_lcb_delta"
+    ]
+    row["min_family_lcb_delta_macro_f1_vs_stratified_dummy"] = selection_stats[
+        "min_lcb_delta"
+    ]
+    row["best_family_lcb_delta_macro_f1_vs_stratified_dummy"] = best_stats["lcb_delta"]
+    row["positive_stage02_family_count"] = selection_stats["positive_family_count"]
     row["family_mean_delta_macro_f1_json"] = json.dumps(
         {family: stats["mean_delta"] for family, stats in family_stats.items()},
         sort_keys=True,
@@ -1567,6 +1609,41 @@ def _best_family_stats(family_stats: Mapping[str, Mapping[str, Any]]) -> tuple[s
         reverse=True,
     )
     return str(ordered[0][0]), ordered[0][1]
+
+
+def _family_selection_stats(family_stats: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    mean_values = _finite_family_values(family_stats, "mean_delta")
+    lcb_values = _finite_family_values(family_stats, "lcb_delta")
+    positive_count = sum(1 for value in mean_values if value > 0.0)
+    return {
+        "median_mean_delta": _median_or_nan(mean_values),
+        "median_lcb_delta": _median_or_nan(lcb_values),
+        "min_lcb_delta": float(np.min(lcb_values)) if lcb_values else np.nan,
+        "positive_family_count": int(positive_count),
+    }
+
+
+def _finite_family_values(
+    family_stats: Mapping[str, Mapping[str, Any]], key: str
+) -> list[float]:
+    values = []
+    for stats in family_stats.values():
+        value = _to_float_or_nan(stats.get(key))
+        if np.isfinite(value):
+            values.append(float(value))
+    return values
+
+
+def _median_or_nan(values: list[float]) -> float:
+    return float(np.median(values)) if values else np.nan
+
+
+def _to_float_or_nan(value: Any) -> float:
+    try:
+        current = float(value)
+    except (TypeError, ValueError):
+        return np.nan
+    return current if np.isfinite(current) else np.nan
 
 
 def _nan_to_rank_value(value: Any) -> float:
@@ -1619,12 +1696,26 @@ def _select_candidates(summary: pd.DataFrame, config: Mapping[str, Any]) -> pd.D
     rules = _as_mapping(config["selection_rules"], "selection_rules")
     max_candidates = int(rules.get("max_candidate_inputs_for_stage02", 2))
     min_positive_tickers = int(rules.get("minimum_positive_ticker_count", 3))
-    metric = "lcb_delta_macro_f1_vs_stratified_dummy"
+    min_positive_families = int(rules.get("minimum_positive_stage02_family_count", 1))
+    policy = str(rules.get("family_lcb_selection_policy", "median_stage02_family_lcb"))
+    if policy != "median_stage02_family_lcb":
+        raise ValueError(
+            "Stage 01 selection_rules.family_lcb_selection_policy must be "
+            "'median_stage02_family_lcb'"
+        )
+    metric = "median_family_lcb_delta_macro_f1_vs_stratified_dummy"
     numeric_delta = pd.to_numeric(
         current["mean_delta_macro_f1_vs_stratified_dummy"], errors="coerce"
     )
     positive_tickers = pd.to_numeric(current["positive_ticker_count"], errors="coerce").fillna(0)
-    eligible = (numeric_delta > 0.0) & (positive_tickers >= min_positive_tickers)
+    positive_families = pd.to_numeric(
+        current["positive_stage02_family_count"], errors="coerce"
+    ).fillna(0)
+    eligible = (
+        (numeric_delta > 0.0)
+        & (positive_tickers >= min_positive_tickers)
+        & (positive_families >= min_positive_families)
+    )
     if not eligible.any():
         current.loc[:, "selected_for_stage02"] = False
         current.loc[current["selection_reason"].eq("screened_not_selected"), "selection_reason"] = (
@@ -1634,10 +1725,22 @@ def _select_candidates(summary: pd.DataFrame, config: Mapping[str, Any]) -> pd.D
 
     ranked = current.loc[eligible].copy()
     ranked["_rank_lcb"] = pd.to_numeric(ranked[metric], errors="coerce")
+    ranked["_rank_min_family_lcb"] = pd.to_numeric(
+        ranked["min_family_lcb_delta_macro_f1_vs_stratified_dummy"], errors="coerce"
+    )
+    ranked["_rank_best_family_lcb"] = pd.to_numeric(
+        ranked["best_family_lcb_delta_macro_f1_vs_stratified_dummy"], errors="coerce"
+    )
     ranked["_rank_mean_delta"] = numeric_delta.loc[eligible]
     ranked = ranked.sort_values(
-        ["_rank_lcb", "_rank_mean_delta", "n_samples_total"],
-        ascending=[False, False, False],
+        [
+            "_rank_lcb",
+            "_rank_min_family_lcb",
+            "_rank_best_family_lcb",
+            "_rank_mean_delta",
+            "n_samples_total",
+        ],
+        ascending=[False, False, False, False, False],
     )
     selected_ids = set(ranked.head(max_candidates)["candidate_id"])
     current["selected_for_stage02"] = current["candidate_id"].isin(selected_ids)
@@ -1659,6 +1762,7 @@ def _build_candidate_inputs(
     feature_sets: Mapping[str, Any],
 ) -> dict[str, Any]:
     handoff = _as_mapping(config["stage02_handoff"], "stage02_handoff")
+    rules = _as_mapping(config["selection_rules"], "selection_rules")
     selected = summary.loc[summary["selected_for_stage02"].astype(bool)].copy()
     candidate_inputs = []
     for row in selected.to_dict(orient="records"):
@@ -1671,12 +1775,25 @@ def _build_candidate_inputs(
                 "n_samples_total": int(row["n_samples_total"]),
                 "selection_reason": row["selection_reason"],
                 "best_screening_family": row.get("best_screening_family", ""),
+                "family_lcb_selection_policy": row.get(
+                    "family_lcb_selection_policy", "median_stage02_family_lcb"
+                ),
                 "mean_delta_macro_f1_vs_stratified_dummy": _json_number(
                     row["mean_delta_macro_f1_vs_stratified_dummy"]
                 ),
                 "lcb_delta_macro_f1_vs_stratified_dummy": _json_number(
                     row["lcb_delta_macro_f1_vs_stratified_dummy"]
                 ),
+                "median_family_lcb_delta_macro_f1_vs_stratified_dummy": _json_number(
+                    row["median_family_lcb_delta_macro_f1_vs_stratified_dummy"]
+                ),
+                "min_family_lcb_delta_macro_f1_vs_stratified_dummy": _json_number(
+                    row["min_family_lcb_delta_macro_f1_vs_stratified_dummy"]
+                ),
+                "best_family_lcb_delta_macro_f1_vs_stratified_dummy": _json_number(
+                    row["best_family_lcb_delta_macro_f1_vs_stratified_dummy"]
+                ),
+                "positive_stage02_family_count": int(row["positive_stage02_family_count"]),
                 "family_mean_delta_macro_f1": json.loads(
                     row.get("family_mean_delta_macro_f1_json", "{}") or "{}"
                 ),
@@ -1699,11 +1816,15 @@ def _build_candidate_inputs(
         "source_stage00_run_id": config["inputs"]["stage00_run_id"],
         "source_stage00_config_sha256": stage00_manifest.get("config_sha256"),
         "candidate_inputs": candidate_inputs,
+        "family_lcb_selection_policy": str(
+            rules.get("family_lcb_selection_policy", "median_stage02_family_lcb")
+        ),
         "approved_model_families_for_stage02": (
             list(handoff["recommended_model_families"]) if candidate_inputs else []
         ),
         "recommended_model_families_from_protocol": list(handoff["recommended_model_families"]),
         "control_models_for_stage02": list(handoff.get("control_models", [])),
+        "stage02_modeling_scope_axis": list(handoff.get("modeling_scope_axis", [])),
         "decision": decision,
         "no_final_model_selected": True,
         "holdout_test_contact": False,

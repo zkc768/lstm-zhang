@@ -148,8 +148,10 @@ budget:
 selection_rules:
   primary_metric: macro_f1
   baseline: stratified_dummy_train_prior
+  family_lcb_selection_policy: median_stage02_family_lcb
   require_mean_delta_macro_f1_vs_baseline_positive: true
   minimum_positive_ticker_count: 3
+  minimum_positive_stage02_family_count: 1
   max_candidate_inputs_for_stage02: 2
   no_final_model_selected: true
 
@@ -162,6 +164,12 @@ stage02_handoff:
   control_models:
     - last_step_lightgbm_control
   recurrent_controls_are_optional_fixed_controls: true
+  # D5: pooled vs stock-aware is an explicit Stage 02 modeling axis (Ian's
+  # stock-aware multi-scale DLinear direction). Stage 01 does not build per-ticker
+  # models; Stage 02 must treat this axis as part of its multiple-comparison budget.
+  modeling_scope_axis:
+    - pooled_five_ticker
+    - stock_aware_per_ticker_or_ticker_embedding
 
 forbidden:
   search_axes:

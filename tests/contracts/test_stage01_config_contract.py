@@ -91,6 +91,11 @@ def test_stage01_config_does_not_promote_recurrent_controls_to_hpo() -> None:
 def test_stage01_config_handoff_and_forbidden_axes() -> None:
     config = load_config()
     assert config["selection_rules"]["no_final_model_selected"] is True
+    assert (
+        config["selection_rules"]["family_lcb_selection_policy"]
+        == "median_stage02_family_lcb"
+    )
+    assert config["selection_rules"]["minimum_positive_stage02_family_count"] == 1
     assert config["selection_rules"]["max_candidate_inputs_for_stage02"] == 2
     assert config["stage02_handoff"]["recommended_model_families"] == [
         "lightgbm",

@@ -262,8 +262,10 @@ def stage01_config(tmp_path: Path, stage00_run_dir: Path, raw_dir: Path) -> dict
         "selection_rules": {
             "primary_metric": "macro_f1",
             "baseline": "stratified_dummy_train_prior",
+            "family_lcb_selection_policy": "median_stage02_family_lcb",
             "require_mean_delta_macro_f1_vs_baseline_positive": True,
             "minimum_positive_ticker_count": 1,
+            "minimum_positive_stage02_family_count": 1,
             "max_candidate_inputs_for_stage02": 2,
             "no_final_model_selected": True,
         },
@@ -365,6 +367,11 @@ def test_stage01_run_stage_writes_real_screening_artifacts(tmp_path: Path) -> No
     assert summary["n_samples_total"].gt(0).all()
     assert {
         "best_screening_family",
+        "family_lcb_selection_policy",
+        "median_family_lcb_delta_macro_f1_vs_stratified_dummy",
+        "min_family_lcb_delta_macro_f1_vs_stratified_dummy",
+        "best_family_lcb_delta_macro_f1_vs_stratified_dummy",
+        "positive_stage02_family_count",
         "family_mean_delta_macro_f1_json",
         "family_lcb_delta_macro_f1_json",
         "family_positive_ticker_count_json",
@@ -383,6 +390,7 @@ def test_stage01_run_stage_writes_real_screening_artifacts(tmp_path: Path) -> No
     ]
     assert candidates["no_final_model_selected"] is True
     assert candidates["holdout_test_contact"] is False
+    assert candidates["family_lcb_selection_policy"] == "median_stage02_family_lcb"
 
     folds = pd.read_csv(result.fold_manifest)
     assert folds["event_overlap_count"].eq(0).all()
@@ -407,6 +415,48 @@ def test_stage01_rejects_official_validation_selection(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="train-inner"):
         run_stage(config)
+
+
+def test_stage01_candidate_selection_uses_median_family_lcb_not_best() -> None:
+    summary = pd.DataFrame(
+        [
+            {
+                "candidate_id": "single_lucky_family",
+                "mean_delta_macro_f1_vs_stratified_dummy": 0.010,
+                "median_family_lcb_delta_macro_f1_vs_stratified_dummy": -0.010,
+                "min_family_lcb_delta_macro_f1_vs_stratified_dummy": -0.030,
+                "best_family_lcb_delta_macro_f1_vs_stratified_dummy": 0.200,
+                "positive_ticker_count": 3,
+                "positive_stage02_family_count": 1,
+                "n_samples_total": 1000,
+                "selection_reason": "screened_not_selected",
+            },
+            {
+                "candidate_id": "robust_median_family",
+                "mean_delta_macro_f1_vs_stratified_dummy": 0.012,
+                "median_family_lcb_delta_macro_f1_vs_stratified_dummy": 0.015,
+                "min_family_lcb_delta_macro_f1_vs_stratified_dummy": 0.005,
+                "best_family_lcb_delta_macro_f1_vs_stratified_dummy": 0.040,
+                "positive_ticker_count": 3,
+                "positive_stage02_family_count": 2,
+                "n_samples_total": 900,
+                "selection_reason": "screened_not_selected",
+            },
+        ]
+    )
+    config = {
+        "selection_rules": {
+            "family_lcb_selection_policy": "median_stage02_family_lcb",
+            "minimum_positive_ticker_count": 1,
+            "minimum_positive_stage02_family_count": 1,
+            "max_candidate_inputs_for_stage02": 1,
+        }
+    }
+
+    selected = feature_window_search._select_candidates(summary, config)
+
+    selected_ids = set(selected.loc[selected["selected_for_stage02"], "candidate_id"])
+    assert selected_ids == {"robust_median_family"}
 
 
 def test_stage01_materializes_windows_after_fold_caps(

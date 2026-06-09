@@ -148,6 +148,12 @@ Feature construction must preserve the Stage 00 sample-event contract. A row is
 screening-eligible only if its label is valid, its feature row is finite, and
 its window satisfies per-ticker, per-day, and per-split ownership rules.
 
+All normalized features, including `normalized_macd_hist` and its rolling scale,
+are computed per ticker per trading day and reset at each session open. No
+feature carries overnight-gap state across trading days, so every feature in the
+set is day-local and decision-time-safe in the same way (no single indicator
+silently mixes overnight information).
+
 ### 4.2 Window Sizes
 
 The preferred V2 Stage 01 window grid is:
@@ -335,10 +341,17 @@ Secondary stability metrics:
 
 ```text
 balanced_accuracy
+roc_auc
+mcc
 mean_delta_macro_f1_vs_stratified_dummy
 lcb_delta_macro_f1_vs_stratified_dummy
 positive_ticker_count
 best_screening_family
+family_lcb_selection_policy
+median_family_lcb_delta_macro_f1_vs_stratified_dummy
+min_family_lcb_delta_macro_f1_vs_stratified_dummy
+best_family_lcb_delta_macro_f1_vs_stratified_dummy
+positive_stage02_family_count
 family_mean_delta_macro_f1_json
 family_lcb_delta_macro_f1_json
 family_positive_ticker_count_json
@@ -349,18 +362,37 @@ fold_std_macro_f1
 The candidate-level LCB used for ranking must not pool heterogeneous model
 families as independent repeats. It must be computed per Stage 02 screening
 family, using train-inner `ticker x trading_day` block deltas where available.
-The summary may expose the best family LCB in the legacy
-`lcb_delta_macro_f1_vs_stratified_dummy` column for compatibility, but the
-per-family JSON columns are the audit trail.
+The Stage 01 selection score is the median Stage 02 screening-family LCB:
+`family_lcb_selection_policy=median_stage02_family_lcb`. This is a deliberate
+middle ground: it avoids `max-over-families` optimism from selecting on the
+single best probe family, while avoiding a hard minimum-family rule that would
+discard inputs only because one lightweight probe family is weak. The summary
+exposes `median`, `min`, and `best` family LCB columns plus the per-family JSON
+columns as the audit trail. `best_screening_family` is diagnostic and a
+tie-breaker only; it is not the primary ranking criterion.
+
+Because the V2 target is a weak, near-balanced directional signal, the ledger
+also records threshold-free `roc_auc` and `mcc` alongside `macro_f1` (and
+`mean_roc_auc`/`mean_mcc` in the summary). These are reported for transparency;
+the Stage 02-eligibility rule below still keys on
+`mean_delta_macro_f1_vs_stratified_dummy` and `positive_ticker_count`.
 
 A feature/window cell is Stage 02-eligible only if:
 
 ```text
 mean_delta_macro_f1_vs_stratified_dummy > 0
 positive_ticker_count >= 3
+positive_stage02_family_count >= 1
 sample_count_loss_flag != hard_fail
 no chronology/leakage guard failed
 ```
+
+Under the default `median_stage02_family_lcb` policy,
+`mean_delta_macro_f1_vs_stratified_dummy` and
+`lcb_delta_macro_f1_vs_stratified_dummy` are candidate-level median-family
+aggregates. The best-family values remain available in
+`best_family_lcb_delta_macro_f1_vs_stratified_dummy` and
+`family_mean_delta_macro_f1_json`.
 
 If no cell passes this screen, Stage 01 outputs `do_not_start_stage02` and a
 failure reason.
@@ -405,6 +437,17 @@ holdout winner
 proves MS-DLinear+TCN beats LightGBM
 official validation selected
 ```
+
+### 9.1 Modeling-Scope Axis (Pooled vs Stock-Aware)
+
+Stage 02 must treat pooled five-ticker training versus stock-aware modeling
+(per-ticker models or a ticker-embedding input) as an explicit modeling axis,
+counted in the Stage 02 multiple-comparison budget, following Ian's stock-aware
+multi-scale DLinear direction. Stage 01 does not build per-ticker models; it only
+records the axis in the handoff: `modeling_scope_axis` in the Stage 01 config and
+`stage02_modeling_scope_axis` in `01_candidate_inputs.json`. Pooling assumes the
+five tickers share one conditional distribution, which the stock-aware branch
+exists to test rather than assume.
 
 ## 10. Stage 02 HPO Starting Space
 
@@ -517,10 +560,17 @@ n_seeds
 n_probe_rows
 mean_macro_f1
 mean_balanced_accuracy
+mean_roc_auc
+mean_mcc
 mean_delta_macro_f1_vs_stratified_dummy
 lcb_delta_macro_f1_vs_stratified_dummy
 positive_ticker_count
 best_screening_family
+family_lcb_selection_policy
+median_family_lcb_delta_macro_f1_vs_stratified_dummy
+min_family_lcb_delta_macro_f1_vs_stratified_dummy
+best_family_lcb_delta_macro_f1_vs_stratified_dummy
+positive_stage02_family_count
 family_mean_delta_macro_f1_json
 family_lcb_delta_macro_f1_json
 family_positive_ticker_count_json
@@ -539,6 +589,8 @@ source_stage00_run_id
 candidate_inputs
 approved_model_families_for_stage02
 control_models_for_stage02
+stage02_modeling_scope_axis
+family_lcb_selection_policy
 decision
 no_final_model_selected
 holdout_test_contact
@@ -568,6 +620,8 @@ n_eval_samples
 macro_f1
 balanced_accuracy
 accuracy
+roc_auc
+mcc
 baseline_id
 baseline_macro_f1
 baseline_balanced_accuracy
