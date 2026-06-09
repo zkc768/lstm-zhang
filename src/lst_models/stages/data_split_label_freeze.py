@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
 
 import pandas as pd
 
-from lst_models.artifacts import write_artifact_inventory, write_json
-from lst_models.config import hash_file, hash_mapping, load_yaml
+from lst_models.artifacts import make_run_id, runtime_provenance, write_artifact_inventory, write_json
+from lst_models.config import hash_file, hash_mapping, hash_research_config, load_yaml
 from lst_models.data import read_raw_txt_file, resample_1min_to_5min
 from lst_models.labels import make_direction_labels, summarize_label_validity
 from lst_models.splits import add_split_column, keep_validation_only_rows, parse_split_boundaries
@@ -35,7 +34,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage00Result:
     boundaries = parse_split_boundaries(config["split"])
     label_policy = dict(config["label_policy"])
 
-    run_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    run_id = make_run_id()
     output_dir = Path(str(config["outputs"]["output_dir"])) / run_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -85,12 +84,18 @@ def run_stage(config: Mapping[str, Any]) -> Stage00Result:
     sample_events.to_csv(sample_out, index=False)
     label_summary.to_csv(summary_out, index=False)
 
+    provenance = runtime_provenance(config)
     manifest_payload = {
         "route": config["route"],
         "stage_name": config["stage_name"],
         "scope": config["scope"],
-        "config_sha256": hash_mapping(config),
+        "repo_url": provenance["repo_url"],
+        "git_commit": provenance["git_commit"],
+        "bootstrap_mode": provenance["bootstrap_mode"],
+        "config_sha256": hash_research_config(config),
+        "runtime_config_sha256": hash_mapping(config),
         "notebook_sha256": hash_file(notebook_path),
+        "runtime_provenance": provenance,
         "input_artifacts": [str(raw_manifest_path)],
         "output_artifacts": [
             "raw_data_manifest.json",

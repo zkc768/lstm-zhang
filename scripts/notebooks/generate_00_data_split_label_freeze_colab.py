@@ -322,6 +322,11 @@ def build_notebook() -> nbf.NotebookNode:
             stage_config["inputs"]["raw_data_manifest"] = str(RAW_DATA_MANIFEST_PATH)
             stage_config["inputs"]["notebook_path"] = str(NOTEBOOK_PATH)
             stage_config["inputs"]["raw_data_dir"] = str(RAW_DATA_DIR)
+            stage_config["provenance"] = {
+                "repo_url": PROJECT_REPO_URL,
+                "git_commit": PROJECT_REPO_COMMIT,
+                "bootstrap_mode": PROJECT_BOOTSTRAP_MODE,
+            }
 
             assert stage_config["stage_name"] == STAGE_NAME
             assert stage_config["scope"] == SCOPE

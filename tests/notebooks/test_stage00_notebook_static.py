@@ -37,6 +37,9 @@ def test_stage00_notebook_is_single_stage00_entrypoint() -> None:
     assert "clear_project_import_cache" in text
     assert "importlib.invalidate_caches()" in text
     assert "download_and_extract_project_zip_from_drive" in text
+    assert 'stage_config["provenance"]' in text
+    assert '"repo_url": PROJECT_REPO_URL' in text
+    assert '"git_commit": PROJECT_REPO_COMMIT' in text
 
 
 def test_stage00_notebook_forbidden_active_patterns_absent() -> None:

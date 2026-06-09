@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import json
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -85,10 +86,16 @@ def test_stage00_run_stage_writes_contract_artifacts(tmp_path: Path) -> None:
                 "constant_down",
             ]
         },
+        "provenance": {
+            "repo_url": "https://github.com/zkc768/lstm-zhang.git",
+            "git_commit": "testcommit",
+            "bootstrap_mode": "unit_test",
+        },
     }
 
     result = run_stage(config)
 
+    assert re.fullmatch(r"\d{8}_\d{6}_\d{6}", result.output_dir.name)
     assert result.run_manifest.exists()
     assert result.artifact_inventory.exists()
     assert result.sample_event_index.exists()
@@ -96,6 +103,12 @@ def test_stage00_run_stage_writes_contract_artifacts(tmp_path: Path) -> None:
     manifest = json.loads(result.run_manifest.read_text(encoding="utf-8"))
     assert isinstance(manifest["notebook_sha256"], str)
     assert len(manifest["notebook_sha256"]) == 64
+    assert len(manifest["config_sha256"]) == 64
+    assert len(manifest["runtime_config_sha256"]) == 64
+    assert manifest["repo_url"] == "https://github.com/zkc768/lstm-zhang.git"
+    assert manifest["git_commit"] == "testcommit"
+    assert manifest["bootstrap_mode"] == "unit_test"
+    assert manifest["runtime_provenance"]["dependency_versions"]["pandas"]
     assert manifest["holdout_test_contact"] is False
     inventory = pd.read_csv(result.artifact_inventory)
     assert "path" not in inventory.columns

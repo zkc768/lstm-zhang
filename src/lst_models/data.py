@@ -28,9 +28,9 @@ def read_raw_txt_file(path: str | Path, ticker: str, raw_config: Mapping[str, ob
     has_header = first_fields == expected
 
     if has_header:
-        frame = pd.read_csv(raw_path)
+        frame = pd.read_csv(raw_path, encoding="utf-8-sig")
     else:
-        frame = pd.read_csv(raw_path, header=None, names=expected)
+        frame = pd.read_csv(raw_path, header=None, names=expected, encoding="utf-8-sig")
     validate_raw_columns(frame.columns, expected, raw_path)
 
     timestamp_text = frame["Date"].astype(str).str.strip() + " " + frame["Time"].astype(str).str.strip()

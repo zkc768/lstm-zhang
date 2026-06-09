@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import json
+from collections.abc import Iterable, Mapping
+from datetime import UTC, datetime
 from pathlib import Path
-from collections.abc import Iterable
-from typing import Any, Mapping
+import platform
+import sys
+from typing import Any
 
 import pandas as pd
 
@@ -25,6 +29,38 @@ def hash_file(path: str | Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def make_run_id(now: datetime | None = None) -> str:
+    current = now or datetime.now(UTC)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=UTC)
+    current = current.astimezone(UTC)
+    return current.strftime("%Y%m%d_%H%M%S_%f")
+
+
+def package_versions(package_names: Iterable[str]) -> dict[str, str | None]:
+    versions: dict[str, str | None] = {}
+    for name in package_names:
+        try:
+            versions[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            versions[name] = None
+    return versions
+
+
+def runtime_provenance(config: Mapping[str, Any]) -> dict[str, Any]:
+    configured = config.get("provenance", {})
+    if not isinstance(configured, Mapping):
+        configured = {}
+    return {
+        "repo_url": configured.get("repo_url"),
+        "git_commit": configured.get("git_commit"),
+        "bootstrap_mode": configured.get("bootstrap_mode"),
+        "python_version": platform.python_version(),
+        "python_executable": sys.executable,
+        "dependency_versions": package_versions(["pandas", "numpy", "PyYAML"]),
+    }
 
 
 def write_artifact_inventory(output_dir: str | Path, artifact_paths: Mapping[str, Path]) -> Path:
