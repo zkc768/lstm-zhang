@@ -205,7 +205,7 @@ CELL_SPECS = [('markdown',
   'NOTEBOOK_PATH = PROJECT_ROOT / "notebooks" / "01_feature_window_search_colab.ipynb"\n'
   'STAGE_ENTRYPOINT_PATH = PROJECT_ROOT / "src" / "lst_models" / "stages" / '
   '"feature_window_search.py"\n'
-  'STAGE00_RUN_ID = "20260608_164408"\n'
+  'STAGE00_RUN_ID = "20260609_015034_927813"\n'
   'STAGE00_OUTPUT_DIR = Path("/content/lst_models_results/00_data_split_label_freeze") / '
   'STAGE00_RUN_ID\n'
   'STAGE00_DRIVE_PATH_PARTS = ["lst_models", "results", "00_data_split_label_freeze", '

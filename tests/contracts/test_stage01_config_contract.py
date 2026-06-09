@@ -25,21 +25,21 @@ def test_stage01_config_preserves_validation_only_scope() -> None:
 def test_stage01_config_points_to_exact_stage00_run_folder() -> None:
     config = load_config()
     inputs = config["inputs"]
-    assert inputs["stage00_run_id"] == "20260608_164408"
+    assert inputs["stage00_run_id"] == "20260609_015034_927813"
     assert inputs["stage00_runtime_run_dir"].endswith(
-        "/00_data_split_label_freeze/20260608_164408"
+        "/00_data_split_label_freeze/20260609_015034_927813"
     )
     assert inputs["stage00_drive_run_dir"].endswith(
-        "lst_models/results/00_data_split_label_freeze/20260608_164408"
+        "lst_models/results/00_data_split_label_freeze/20260609_015034_927813"
     )
     assert inputs["stage00_drive_path_parts"] == [
         "lst_models",
         "results",
         "00_data_split_label_freeze",
-        "20260608_164408",
+        "20260609_015034_927813",
     ]
     assert inputs["stage00_run_manifest"].endswith(
-        "/00_data_split_label_freeze/20260608_164408/run_manifest.json"
+        "/00_data_split_label_freeze/20260609_015034_927813/run_manifest.json"
     )
 
 

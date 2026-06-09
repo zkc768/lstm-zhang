@@ -36,7 +36,7 @@ def test_stage01_notebook_is_single_stage01_entrypoint() -> None:
     assert "RUN_STAGE01 = False" in text
     assert "RUN_ARTIFACT_DISPLAY = False" in text
     assert 'stage00_inputs["raw_data_dir"] = str(RAW_DATA_DIR)' in text
-    assert 'STAGE00_RUN_ID = "20260608_164408"' in text
+    assert 'STAGE00_RUN_ID = "20260609_015034_927813"' in text
     assert 'STAGE00_DRIVE_PATH_PARTS = ["lst_models", "results", "00_data_split_label_freeze", STAGE00_RUN_ID]' in text
     assert "EXPECTED_WINDOWS = [10, 20, 30]" in text
     assert "STAGE02_RECOMMENDED_FAMILIES" in text
