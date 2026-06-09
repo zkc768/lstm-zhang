@@ -1556,7 +1556,7 @@ def _summarize_candidate(
     row["best_screening_family"] = best_family
     row["mean_delta_macro_f1_vs_stratified_dummy"] = selection_stats["median_mean_delta"]
     row["lcb_delta_macro_f1_vs_stratified_dummy"] = selection_stats["median_lcb_delta"]
-    row["positive_ticker_count"] = int(best_stats["positive_ticker_count"])
+    row["positive_ticker_count"] = selection_stats["median_positive_ticker_count"]
     row["median_family_lcb_delta_macro_f1_vs_stratified_dummy"] = selection_stats[
         "median_lcb_delta"
     ]
@@ -1614,11 +1614,13 @@ def _best_family_stats(family_stats: Mapping[str, Mapping[str, Any]]) -> tuple[s
 def _family_selection_stats(family_stats: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     mean_values = _finite_family_values(family_stats, "mean_delta")
     lcb_values = _finite_family_values(family_stats, "lcb_delta")
+    positive_ticker_values = _finite_family_values(family_stats, "positive_ticker_count")
     positive_count = sum(1 for value in mean_values if value > 0.0)
     return {
         "median_mean_delta": _median_or_nan(mean_values),
         "median_lcb_delta": _median_or_nan(lcb_values),
         "min_lcb_delta": float(np.min(lcb_values)) if lcb_values else np.nan,
+        "median_positive_ticker_count": _median_count_floor(positive_ticker_values),
         "positive_family_count": int(positive_count),
     }
 
@@ -1636,6 +1638,10 @@ def _finite_family_values(
 
 def _median_or_nan(values: list[float]) -> float:
     return float(np.median(values)) if values else np.nan
+
+
+def _median_count_floor(values: list[float]) -> int:
+    return int(np.floor(np.median(values))) if values else 0
 
 
 def _to_float_or_nan(value: Any) -> float:

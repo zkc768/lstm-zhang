@@ -390,7 +390,10 @@ no chronology/leakage guard failed
 Under the default `median_stage02_family_lcb` policy,
 `mean_delta_macro_f1_vs_stratified_dummy` and
 `lcb_delta_macro_f1_vs_stratified_dummy` are candidate-level median-family
-aggregates. The best-family values remain available in
+aggregates. `positive_ticker_count` is the floor of the median
+`positive_ticker_count` across Stage 02 screening families, so the ticker
+support gate uses the same family-robustness policy as the ranking score. The
+best-family values remain available in
 `best_family_lcb_delta_macro_f1_vs_stratified_dummy` and
 `family_mean_delta_macro_f1_json`.
 

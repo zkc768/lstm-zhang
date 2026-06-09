@@ -459,6 +459,61 @@ def test_stage01_candidate_selection_uses_median_family_lcb_not_best() -> None:
     assert selected_ids == {"robust_median_family"}
 
 
+def test_stage01_summary_positive_ticker_count_uses_median_family_support() -> None:
+    dataset = feature_window_search.CandidateDataset(
+        metadata=pd.DataFrame({"ticker": ["AAA", "BBB", "CCC", "DDD"]}),
+        feature_blocks={},
+        feature_columns=("log_return",),
+        window_size=10,
+    )
+    rows = []
+    for family, (positive_tickers, delta) in {
+        "lightgbm": (4, 0.04),
+        "standard_dlinear": (1, 0.01),
+        "tcn": (1, 0.01),
+        "ms_dlinear_tcn": (0, 0.01),
+    }.items():
+        ticker_deltas = {
+            f"T{idx}": 0.01 if idx < positive_tickers else -0.01
+            for idx in range(4)
+        }
+        rows.append(
+            {
+                "probe_id": f"{family}_probe",
+                "model_family": family,
+                "fit_status": "completed",
+                "macro_f1": 0.55,
+                "balanced_accuracy": 0.55,
+                "roc_auc": 0.55,
+                "mcc": 0.10,
+                "delta_macro_f1_vs_baseline": delta,
+                "ticker_delta_macro_f1_json": json.dumps(ticker_deltas),
+                "block_delta_macro_f1_json": json.dumps({"block_0": delta}),
+                "seed": 101,
+                "fold_id": "fold_0",
+            }
+        )
+
+    summary = feature_window_search._summarize_candidate(
+        dataset=dataset,
+        ledger=pd.DataFrame(rows),
+        folds=pd.DataFrame({"fold_id": ["fold_0"]}),
+        seeds=(101,),
+        probe_ids=("lightgbm_small", "standard_dlinear_tiny", "tcn_tiny", "ms_dlinear_tcn_tiny"),
+        feature_set="price_action_core",
+        window_size=10,
+    )
+
+    assert summary["best_screening_family"] == "lightgbm"
+    assert summary["positive_ticker_count"] == 1
+    assert json.loads(summary["family_positive_ticker_count_json"]) == {
+        "lightgbm": 4,
+        "ms_dlinear_tcn": 0,
+        "standard_dlinear": 1,
+        "tcn": 1,
+    }
+
+
 def test_stage01_materializes_windows_after_fold_caps(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
