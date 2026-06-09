@@ -45,6 +45,9 @@ def test_stage02_notebook_is_single_stage02_entrypoint() -> None:
     assert "backup_stage02_results_to_drive" in text
     assert "drive_backup_manifest.json" in text
     assert "backup_manifest_path.write_text" in text
+    assert 'print("stage_run_id:", backup_manifest["stage_run_id"])' in text
+    assert 'print("drive_path:", backup_manifest["drive_path"])' in text
+    assert 'print("drive_folder_id:", backup_manifest["drive_folder_id"])' in text
     assert "ensure_stage02_result_drive_subpath" in text
     assert "relative_path = local_path.relative_to(run_dir)" in text
     assert "uploaded_relative_paths" in text
@@ -57,6 +60,17 @@ def test_stage02_notebook_is_single_stage02_entrypoint() -> None:
     assert "if RUN_STAGE02 or RUN_STAGE02_CHECKPOINT:" in text
     assert "sync_raw_data_from_drive" in text
     assert "STAGE00_DRIVE_PATH_PARTS" in text
+    assert 'stage_inputs["stage00_run_id"] = STAGE00_RUN_ID' in text
+    assert 'stage_inputs["stage00_runtime_run_dir"] = str(STAGE00_OUTPUT_DIR)' in text
+    assert 'stage_inputs["stage00_drive_path_parts"] = STAGE00_DRIVE_PATH_PARTS' in text
+    assert 'stage_inputs["stage00_run_manifest"] = str(STAGE00_OUTPUT_DIR / "run_manifest.json")' in text
+    assert 'stage_inputs["stage01_run_id"] = STAGE01_RUN_ID' in text
+    assert 'stage_inputs["stage01_runtime_run_dir"] = str(STAGE01_OUTPUT_DIR)' in text
+    assert 'stage_inputs["stage01_drive_path_parts"] = STAGE01_DRIVE_PATH_PARTS' in text
+    assert 'stage_inputs["stage01_candidate_inputs"] = str(STAGE01_OUTPUT_DIR / "01_candidate_inputs.json")' in text
+    assert 'stage_inputs["raw_data_dir"] = str(RAW_DATA_DIR)' in text
+    assert 'stage_outputs["output_dir"] = str(OUTPUT_DIR)' in text
+    assert 'stage_checkpointing["checkpoint_dir"] = str(CHECKPOINT_ROOT)' in text
     assert "required_stage00_artifacts = stage02_config" in text
     assert "datetime.now(timezone.utc)" in text
     assert '"sync_timestamp_utc": datetime.now(timezone.utc).isoformat()' in text

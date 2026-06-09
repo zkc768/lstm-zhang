@@ -397,6 +397,22 @@ def test_stage01_run_stage_writes_real_screening_artifacts(tmp_path: Path) -> No
     folds = pd.read_csv(result.fold_manifest)
     assert folds["event_overlap_count"].eq(0).all()
     assert len(folds) == 2
+    sample_events = pd.read_csv(stage00_run_dir / "sample_event_index.csv")
+    sample_events["target_timestamp"] = pd.to_datetime(sample_events["target_timestamp"])
+    sample_events["horizon_end_timestamp"] = pd.to_datetime(sample_events["horizon_end_timestamp"])
+    train_events = sample_events.loc[
+        sample_events["split"].eq("train") & sample_events["valid_label"].astype(bool)
+    ].copy()
+    for fold in folds.to_dict(orient="records"):
+        train_start = pd.Timestamp(fold["train_start"])
+        train_end = pd.Timestamp(fold["train_end_exclusive"])
+        eval_start = pd.Timestamp(fold["eval_start"])
+        fold_train_events = train_events.loc[
+            train_events["target_timestamp"].ge(train_start)
+            & train_events["target_timestamp"].lt(train_end)
+        ]
+        assert not fold_train_events.empty
+        assert fold_train_events["horizon_end_timestamp"].lt(eval_start).all()
 
 
 def test_ms_dlinear_tcn_keeps_trend_and_residual_heads_separate() -> None:

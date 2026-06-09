@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 import re
 import subprocess
@@ -255,6 +256,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage02Result:
             stage01_summary,
             config,
             run_id=run_id,
+            planned_hpo_rows=planned_rows,
         )
         hpo_summary = _build_hpo_summary(trial_ledger, baseline_summary)
         decision_bundle = _select_frozen_candidates(hpo_summary, trial_ledger, config)
@@ -357,6 +359,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage02Result:
         "random_seeds": [int(seed) for seed in config["train_inner"]["seeds"]],
         **_git_commit_fields(),
         "approved_model_families_for_stage02": list(approved_families),
+        "stage02_modeling_scope_axis": _stage02_modeling_scope_axis(stage01_handoff),
         "baseline_registry_names": _baseline_ids(config),
         "official_validation_for_selection": False,
         "no_final_model_selected": True,
@@ -718,6 +721,7 @@ def _run_hpo_trials(
     config: Mapping[str, Any],
     *,
     run_id: str,
+    planned_hpo_rows: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     seeds = tuple(int(seed) for seed in config["train_inner"]["seeds"])
     primary_baseline = str(config["selection_rules"]["baseline"])
@@ -798,6 +802,7 @@ def _run_hpo_trials(
                             run_id=run_id,
                             trial_rows=trial_rows,
                             baseline_rows=baseline_rows,
+                            planned_hpo_rows=planned_hpo_rows,
                         )
 
     return (
@@ -1336,6 +1341,19 @@ def _torch_defaults(config: Mapping[str, Any]) -> Mapping[str, Any]:
     )
 
 
+def _stage02_modeling_scope_axis(stage01_handoff: Mapping[str, Any]) -> list[str]:
+    axis = stage01_handoff.get(
+        "stage02_modeling_scope_axis", stage01_handoff.get("modeling_scope_axis", [])
+    )
+    if axis is None:
+        return []
+    if isinstance(axis, str):
+        return [axis]
+    if isinstance(axis, list):
+        return [str(item) for item in axis]
+    raise TypeError("stage02_modeling_scope_axis must be a list of strings")
+
+
 def _device_manifest_fields(config: Mapping[str, Any], trial_ledger: pd.DataFrame) -> dict[str, Any]:
     requested_device = str(_torch_defaults(config).get("device", "auto"))
     if trial_ledger.empty:
@@ -1365,14 +1383,36 @@ def _device_manifest_fields(config: Mapping[str, Any], trial_ledger: pd.DataFram
         )
         resolved_device = ",".join(resolved_values) if resolved_values else "not_resolved"
         fallback_reason = ",".join(fallback_values)
-    cuda_available = any(value.strip().startswith("cuda") for value in resolved_device.split(","))
+    cuda_resolved = any(value.strip().startswith("cuda") for value in resolved_device.split(","))
+    runtime_fields = (
+        _torch_runtime_device_fields()
+        if cuda_resolved
+        else {"cuda_available": False, "gpu_name_or_null": None}
+    )
+    cuda_available = bool(runtime_fields["cuda_available"] or cuda_resolved)
     return {
         "requested_device": requested_device,
         "resolved_device": resolved_device,
-        "cuda_available": bool(cuda_available),
-        "gpu_name_or_null": None,
+        "cuda_available": cuda_available,
+        "gpu_name_or_null": runtime_fields["gpu_name_or_null"] if cuda_available else None,
         "device_fallback_reason": fallback_reason,
     }
+
+
+def _torch_runtime_device_fields() -> dict[str, Any]:
+    try:
+        torch_module = importlib.import_module("torch")
+    except (ImportError, ModuleNotFoundError, OSError):
+        return {"cuda_available": False, "gpu_name_or_null": None}
+
+    cuda_available = bool(torch_module.cuda.is_available())
+    gpu_name: str | None = None
+    if cuda_available:
+        try:
+            gpu_name = str(torch_module.cuda.get_device_name(0))
+        except (AttributeError, RuntimeError, ValueError):
+            gpu_name = None
+    return {"cuda_available": cuda_available, "gpu_name_or_null": gpu_name}
 
 
 def _score_model_predictions(
@@ -1458,6 +1498,7 @@ def _maybe_write_incremental_checkpoint(
     run_id: str,
     trial_rows: list[Mapping[str, Any]],
     baseline_rows: list[Mapping[str, Any]],
+    planned_hpo_rows: int,
 ) -> None:
     checkpointing = config.get("checkpointing", {})
     if not isinstance(checkpointing, Mapping) or checkpointing.get("enabled") is not True:
@@ -1479,10 +1520,32 @@ def _maybe_write_incremental_checkpoint(
     manifest = {
         "stage_name": "02_model_hpo_train_inner",
         "run_id": run_id,
+        "status": "incomplete",
         "completed_or_attempted_trial_rows": len(trial_rows),
+        "planned_hpo_rows": int(planned_hpo_rows),
+        "completed_units": {
+            "trial_rows": len(trial_rows),
+            "baseline_rows": len(baseline_rows),
+            "last_trial_id": str(trial_rows[-1].get("trial_id", "")) if trial_rows else "",
+        },
+        "pending_units": {
+            "trial_rows": max(0, int(planned_hpo_rows) - len(trial_rows)),
+            "next_trial_index": len(trial_rows) + 1,
+        },
         "baseline_rows": len(baseline_rows),
         "holdout_test_contact": False,
         "official_validation_for_selection": False,
+        "resume_instructions": {
+            "resume_mode": "exact_run_checkpoint_only",
+            "required_run_id": run_id,
+            "required_checkpoint_dir": str(checkpoint_dir),
+            "required_files": [
+                "checkpoint_manifest.json",
+                "02_hpo_trial_ledger_partial.csv",
+                "02_baseline_control_summary_partial.csv",
+            ],
+            "latest_parent_scan_allowed": False,
+        },
         "checkpoint_timestamp_utc": datetime.now(timezone.utc).isoformat(),
     }
     write_json(checkpoint_dir / "checkpoint_manifest.json", manifest)
@@ -1845,6 +1908,7 @@ def _frozen_candidate_payload(
         ),
         "source_stage01_run_id": config["inputs"]["stage01_run_id"],
         "source_stage01_decision": stage01_handoff.get("decision"),
+        "stage02_modeling_scope_axis": _stage02_modeling_scope_axis(stage01_handoff),
         "ready_for_stage03": bool(decision_bundle["ready_for_stage03"]),
         "decision": decision_bundle["decision"],
         "block_reason": decision_bundle["block_reason"],
@@ -1933,6 +1997,7 @@ def _best_params_payload(
         "stage_name": config["stage_name"],
         "source_stage01_run_id": config["inputs"]["stage01_run_id"],
         "source_stage01_decision": stage01_handoff.get("decision"),
+        "stage02_modeling_scope_axis": _stage02_modeling_scope_axis(stage01_handoff),
         "approved_model_families_for_stage02": list(profiles_by_family),
         "decision": decision_bundle["decision"],
         "best_params_by_family": best_by_family,
@@ -1955,6 +2020,7 @@ def _stage03_handoff_payload(
         ),
         "source_stage01_run_id": config["inputs"]["stage01_run_id"],
         "source_stage01_decision": stage01_handoff.get("decision"),
+        "stage02_modeling_scope_axis": _stage02_modeling_scope_axis(stage01_handoff),
         "ready_for_stage03": bool(decision_bundle["ready_for_stage03"]),
         "decision": decision_bundle["decision"],
         "block_reason": decision_bundle["block_reason"],

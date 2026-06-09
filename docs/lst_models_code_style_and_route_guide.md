@@ -138,6 +138,7 @@ and update the guide before creating a new directory or abstraction.
 |---|---|---|
 | `AGENTS.md` | Agent rules, required reading, safety gates, GPU/Drive defaults | Stage-specific experiment logic or results |
 | `README.md` | Human overview, route summary, quick links | Long protocols, raw data IDs as the only manifest |
+| `docs/agent_capabilities_and_skill_routing.md` | Project-level skill, plugin, MCP, connector, and agent-workflow routing | Stage-specific experiment logic, metrics, or connector secrets |
 | `configs/lst_models_data.yaml` | Raw Drive file IDs, raw `.txt` schema, 1min-to-5min recipe, holdout boundary | Generated outputs, local Windows paths, Python expressions |
 | `configs/lst_models_pipeline.yaml` | Ordered stage registry: stage name, config, notebook, protocol, expected outputs | Hyperparameter search results or ad hoc notes |
 | `configs/stages/<nn>_<stage>.yaml` | Stage parameters frozen before execution | Code, metrics observed after validation, secrets |

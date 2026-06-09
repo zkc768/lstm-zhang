@@ -34,8 +34,15 @@ def test_stage01_notebook_is_single_stage01_entrypoint() -> None:
     assert "RUN_RAW_DOWNLOAD = False" in text
     assert "RUN_STAGE00_DRIVE_SYNC = True" in text
     assert "RUN_STAGE01 = False" in text
+    assert "RUN_STAGE01_DRIVE_BACKUP = True" in text
     assert "RUN_ARTIFACT_DISPLAY = False" in text
+    assert 'STAGE01_DRIVE_RESULT_PATH_PARTS = ["lst_models", "results", "01_feature_window_search"]' in text
+    assert 'stage00_inputs["stage00_run_id"] = STAGE00_RUN_ID' in text
+    assert 'stage00_inputs["stage00_runtime_run_dir"] = str(STAGE00_OUTPUT_DIR)' in text
+    assert 'stage00_inputs["stage00_drive_path_parts"] = STAGE00_DRIVE_PATH_PARTS' in text
+    assert 'stage00_inputs["stage00_run_manifest"] = str(STAGE00_OUTPUT_DIR / "run_manifest.json")' in text
     assert 'stage00_inputs["raw_data_dir"] = str(RAW_DATA_DIR)' in text
+    assert 'stage_outputs["output_dir"] = str(OUTPUT_DIR)' in text
     assert 'STAGE00_RUN_ID = "20260609_015034_927813"' in text
     assert 'STAGE00_DRIVE_PATH_PARTS = ["lst_models", "results", "00_data_split_label_freeze", STAGE00_RUN_ID]' in text
     assert "EXPECTED_WINDOWS = [10, 20, 30]" in text
@@ -55,6 +62,12 @@ def test_stage01_notebook_is_single_stage01_entrypoint() -> None:
     assert "download_raw_file_by_id" in text
     assert "RAW_DATA_DIR" in text
     assert "from lst_models.artifacts import require_artifacts" in text
+    assert "Stage 01 Drive Result Backup" in text
+    assert "backup_stage01_results_to_drive" in text
+    assert "drive_backup_manifest.json" in text
+    assert 'print("stage_run_id:", backup_manifest["stage_run_id"])' in text
+    assert 'print("drive_path:", backup_manifest["drive_path"])' in text
+    assert 'print("drive_folder_id:", backup_manifest["drive_folder_id"])' in text
 
 
 def test_stage01_notebook_forbidden_active_patterns_absent() -> None:
@@ -85,3 +98,15 @@ def test_stage01_notebook_guarded_stage_import() -> None:
     assert 'inventory_path = run_dir / "artifact_inventory.csv"' in code_text
     assert 'summary_path = run_dir / "01_feature_window_search_summary.csv"' in code_text
     assert 'summary_path = OUTPUT_DIR / "01_feature_window_search_summary.csv"' not in code_text
+
+
+def test_stage01_drive_backup_cell_follows_run_stage_cell() -> None:
+    notebook = nbformat.read(NOTEBOOK, as_version=4)
+    code_cells = [cell.source for cell in notebook.cells if cell.cell_type == "code"]
+    run_cell_index = next(
+        index for index, source in enumerate(code_cells) if "result = run_stage(stage01_config)" in source
+    )
+    backup_cell_index = next(
+        index for index, source in enumerate(code_cells) if "backup_stage01_results_to_drive" in source
+    )
+    assert backup_cell_index == run_cell_index + 1

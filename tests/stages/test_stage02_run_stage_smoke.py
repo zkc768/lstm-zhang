@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import hashlib
 import sys
+import types
 from pathlib import Path
 
 import numpy as np
@@ -209,6 +210,12 @@ def candidate_handoff() -> dict:
             }
         ],
         "approved_model_families_for_stage02": ["lightgbm", "standard_dlinear"],
+        "stage02_modeling_scope_axis": [
+            "feature_set",
+            "window_size",
+            "model_family",
+            "hpo_profile",
+        ],
         "decision": "selected_candidate_inputs_for_stage02_train_inner_hpo",
         "no_final_model_selected": True,
         "holdout_test_contact": False,
@@ -496,6 +503,69 @@ def test_lightgbm_hpo_trial_true_fit_uses_inner_train_tail_eval_set() -> None:
     assert np.isfinite(float(outcome["balanced_accuracy"]))
 
 
+def test_lightgbm_hpo_trial_passes_inner_tail_eval_set_to_fit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeLGBMClassifier:
+        def __init__(self, **kwargs: object) -> None:
+            self.best_iteration_ = 3
+
+        def fit(self, x_fit: np.ndarray, y_fit: np.ndarray, **kwargs: object) -> "FakeLGBMClassifier":
+            captured["x_fit"] = x_fit.copy()
+            captured["y_fit"] = y_fit.copy()
+            captured["fit_kwargs"] = kwargs
+            return self
+
+        def predict(self, x_eval: np.ndarray) -> np.ndarray:
+            return np.asarray([index % 2 for index in range(len(x_eval))], dtype=int)
+
+        def predict_proba(self, x_eval: np.ndarray) -> np.ndarray:
+            scores = np.linspace(0.2, 0.8, num=len(x_eval), dtype=float)
+            return np.column_stack([1.0 - scores, scores])
+
+    fake_lightgbm = types.SimpleNamespace(
+        LGBMClassifier=FakeLGBMClassifier,
+        early_stopping=lambda rounds, verbose=False: ("early_stopping", rounds, verbose),
+        log_evaluation=lambda period=0: ("log_evaluation", period),
+    )
+    monkeypatch.setitem(sys.modules, "lightgbm", fake_lightgbm)
+
+    train_meta = pd.DataFrame([_sample(f"s{index}", "AAA", f"2026-01-0{index}", index % 2) for index in range(1, 9)])
+    x_train = np.arange(16, dtype=np.float32).reshape(8, 2)
+    eval_meta = pd.DataFrame([_sample(f"e{index}", "BBB", f"2026-01-1{index}", index % 2) for index in range(1, 5)])
+    x_eval = np.arange(8, dtype=np.float32).reshape(4, 2)
+
+    outcome = stage02._fit_lightgbm_hpo_trial(
+        profile={"profile_id": "fake_lgbm", "n_estimators": 5},
+        x_train=x_train,
+        y_train=train_meta["label"].to_numpy(dtype=int),
+        train_meta=train_meta,
+        x_eval=x_eval,
+        y_eval=eval_meta["label"].to_numpy(dtype=int),
+        eval_meta=eval_meta,
+        seed=101,
+        baseline_predictions=np.zeros(len(eval_meta), dtype=int),
+        config={
+            "lightgbm_training_defaults": {
+                "eval_metric": "binary_logloss",
+                "early_stopping_rounds": 2,
+                "early_stopping_validation_fraction": 0.25,
+                "minimum_early_stopping_train_samples": 4,
+                "minimum_early_stopping_validation_samples": 2,
+            }
+        },
+    )
+
+    fit_kwargs = captured["fit_kwargs"]
+    assert outcome["fit_status"] == "completed"
+    assert np.array_equal(captured["x_fit"], x_train[:6])
+    assert np.array_equal(captured["y_fit"], train_meta["label"].to_numpy(dtype=int)[:6])
+    assert np.array_equal(fit_kwargs["eval_set"][0][0], x_train[6:])
+    assert np.array_equal(fit_kwargs["eval_set"][0][1], train_meta["label"].to_numpy(dtype=int)[6:])
+
+
 def test_torch_early_stopping_split_uses_inner_train_tail_only() -> None:
     train_meta = pd.DataFrame(
         [
@@ -643,6 +713,12 @@ def test_stage02_runs_formal_hpo_rows_for_stage01_candidates(
     assert manifest["source_stage01_feature_rebuild_code_sha256"] is None
     assert manifest["feature_rebuild_code_match"] is None
     assert manifest["feature_rebuild_code_match_reason"] == "stage01_manifest_field_missing_legacy_run"
+    assert manifest["stage02_modeling_scope_axis"] == [
+        "feature_set",
+        "window_size",
+        "model_family",
+        "hpo_profile",
+    ]
 
     ledger = pd.read_csv(result.hpo_trial_ledger)
     assert len(ledger) == 8
@@ -670,6 +746,18 @@ def test_stage02_runs_formal_hpo_rows_for_stage01_candidates(
         "constant_down",
     }
     assert baseline_summary["sample_id_hash"].equals(baseline_summary["eval_sample_id_hash"])
+    baseline_summary["seed"] = baseline_summary["seed"].astype(int)
+    baseline_hashes = baseline_summary.set_index(
+        ["candidate_id", "fold_id", "seed", "baseline_id"]
+    )["eval_sample_id_hash"].to_dict()
+    for _, row in ledger.iterrows():
+        baseline_key = (
+            row["candidate_id"],
+            row["fold_id"],
+            int(row["seed"]),
+            row["baseline_id"],
+        )
+        assert row["eval_sample_id_hash"] == baseline_hashes[baseline_key]
 
     hpo_summary = pd.read_csv(result.hpo_summary)
     assert len(hpo_summary) == 4
@@ -687,11 +775,79 @@ def test_stage02_runs_formal_hpo_rows_for_stage01_candidates(
     assert frozen_candidate["preprocessing_contract"]["fit_scope"] == "inner_train_rows_only"
     assert frozen_candidate["seed_policy"]["train_inner_seeds"] == [101]
     assert frozen_candidate["device_provenance"]["requested_device"] == "cpu"
+    assert frozen_candidate["stage02_modeling_scope_axis"] == manifest["stage02_modeling_scope_axis"]
     assert frozen_candidate["artifact_references"]["hpo_trial_ledger"] == "02_hpo_trial_ledger.csv"
 
     handoff = json.loads(result.stage03_handoff.read_text(encoding="utf-8"))
     assert handoff["ready_for_stage03"] is True
     assert handoff["holdout_test_contact"] is False
+    assert handoff["stage02_modeling_scope_axis"] == manifest["stage02_modeling_scope_axis"]
+
+
+def test_stage02_device_manifest_records_runtime_gpu_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        stage02,
+        "_torch_runtime_device_fields",
+        lambda: {"cuda_available": True, "gpu_name_or_null": "Fake CUDA GPU"},
+    )
+    trial_ledger = pd.DataFrame(
+        [
+            {
+                "model_family": "standard_dlinear",
+                "fit_status": "completed",
+                "resolved_device": "cuda",
+                "device_fallback_reason": "",
+            }
+        ]
+    )
+
+    fields = stage02._device_manifest_fields(
+        {"probe_training_defaults": {"torch": {"device": "auto"}}}, trial_ledger
+    )
+
+    assert fields["requested_device"] == "auto"
+    assert fields["resolved_device"] == "cuda"
+    assert fields["cuda_available"] is True
+    assert fields["gpu_name_or_null"] == "Fake CUDA GPU"
+
+
+def test_stage02_incremental_checkpoint_manifest_has_resume_contract(tmp_path: Path) -> None:
+    config = {
+        "checkpointing": {
+            "enabled": True,
+            "checkpoint_every_trials": 2,
+            "checkpoint_dir": str(tmp_path / "checkpoints"),
+        }
+    }
+    trial_rows = [
+        {column: pd.NA for column in stage02.HPO_TRIAL_LEDGER_COLUMNS},
+        {column: pd.NA for column in stage02.HPO_TRIAL_LEDGER_COLUMNS},
+    ]
+    trial_rows[0]["trial_id"] = "trial_001"
+    trial_rows[1]["trial_id"] = "trial_002"
+    baseline_rows = [{column: pd.NA for column in stage02.BASELINE_CONTROL_COLUMNS}]
+
+    stage02._maybe_write_incremental_checkpoint(
+        config=config,
+        run_id="stage02_test_run",
+        trial_rows=trial_rows,
+        baseline_rows=baseline_rows,
+        planned_hpo_rows=5,
+    )
+
+    checkpoint_dir = tmp_path / "checkpoints" / "stage02_test_run"
+    manifest = json.loads((checkpoint_dir / "checkpoint_manifest.json").read_text(encoding="utf-8"))
+    assert (checkpoint_dir / "02_hpo_trial_ledger_partial.csv").exists()
+    assert (checkpoint_dir / "02_baseline_control_summary_partial.csv").exists()
+    assert manifest["status"] == "incomplete"
+    assert manifest["planned_hpo_rows"] == 5
+    assert manifest["completed_units"]["trial_rows"] == 2
+    assert manifest["completed_units"]["last_trial_id"] == "trial_002"
+    assert manifest["pending_units"]["trial_rows"] == 3
+    assert manifest["resume_instructions"]["required_run_id"] == "stage02_test_run"
+    assert manifest["resume_instructions"]["latest_parent_scan_allowed"] is False
 
 
 def test_stage02_run_ids_do_not_merge_fast_repeated_runs(

@@ -81,11 +81,13 @@ def build_notebook() -> nbf.NotebookNode:
 
             RUN_DOWNLOAD = False
             RUN_STAGE00 = False
+            RUN_STAGE00_DRIVE_BACKUP = True
 
             STAGE_NAME = "00_data_split_label_freeze"
             SCOPE = "validation_only"
             HOLDOUT_TEST_CONTACT = False
             RAW_DATA_DIR = Path("/content/lst_models_raw_stock_data")
+            STAGE00_DRIVE_RESULT_PATH_PARTS = ["lst_models", "results", "00_data_split_label_freeze"]
 
 
             def run_cmd(args, cwd=None):
@@ -246,9 +248,11 @@ def build_notebook() -> nbf.NotebookNode:
             print("PROTOCOL_PATH:", PROTOCOL_PATH)
             print("NOTEBOOK_PATH:", NOTEBOOK_PATH)
             print("RAW_DATA_DIR:", RAW_DATA_DIR)
+            print("STAGE00_DRIVE_RESULT_PATH_PARTS:", STAGE00_DRIVE_RESULT_PATH_PARTS)
             print("RUN_PROJECT_BOOTSTRAP:", RUN_PROJECT_BOOTSTRAP)
             print("RUN_DOWNLOAD:", RUN_DOWNLOAD)
             print("RUN_STAGE00:", RUN_STAGE00)
+            print("RUN_STAGE00_DRIVE_BACKUP:", RUN_STAGE00_DRIVE_BACKUP)
             """
         ),
         markdown(
@@ -344,6 +348,161 @@ def build_notebook() -> nbf.NotebookNode:
             else:
                 result = None
                 print("RUN_STAGE00=False; Stage 00 was not executed in this committed notebook.")
+            """
+        ),
+        code(
+            """
+            # Stage 00 Drive Result Backup
+            def get_drive_service_for_stage00_result_backup():
+                try:
+                    from google.colab import auth
+                    from googleapiclient.discovery import build
+                except ImportError as exc:
+                    raise RuntimeError(
+                        "RUN_STAGE00_DRIVE_BACKUP=True only works inside Colab with Google API dependencies."
+                    ) from exc
+                auth.authenticate_user()
+                return build("drive", "v3")
+
+
+            def quote_drive_query_value(value):
+                return str(value).replace("\\\\", "\\\\\\\\").replace("'", "\\\\'")
+
+
+            def find_stage00_result_drive_child(service, parent_id, name, mime_type=None):
+                escaped_name = quote_drive_query_value(name)
+                query_parts = [f"name = '{escaped_name}'", f"'{parent_id}' in parents", "trashed = false"]
+                if mime_type:
+                    query_parts.append(f"mimeType = '{mime_type}'")
+                response = service.files().list(
+                    q=" and ".join(query_parts),
+                    fields="files(id, name, mimeType, size, webViewLink)",
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                    pageSize=10,
+                ).execute()
+                return response.get("files", [])
+
+
+            def ensure_stage00_result_drive_folder(service, parent_id, name):
+                folder_mime = "application/vnd.google-apps.folder"
+                matches = find_stage00_result_drive_child(service, parent_id, name, folder_mime)
+                if len(matches) == 1:
+                    return matches[0]["id"]
+                if len(matches) > 1:
+                    raise RuntimeError(f"Duplicate Drive folders named {name!r} under parent {parent_id}")
+                created = service.files().create(
+                    body={"name": name, "mimeType": folder_mime, "parents": [parent_id]},
+                    fields="id, name, webViewLink",
+                    supportsAllDrives=True,
+                ).execute()
+                print("Created Drive folder:", name, created.get("webViewLink"))
+                return created["id"]
+
+
+            def ensure_stage00_result_drive_path(service, path_parts):
+                folder_id = "root"
+                for part in path_parts:
+                    folder_id = ensure_stage00_result_drive_folder(service, folder_id, part)
+                return folder_id
+
+
+            def upload_or_update_stage00_result_file(service, drive_folder_id, run_dir, local_path):
+                from googleapiclient.http import MediaFileUpload
+
+                relative_path = local_path.relative_to(run_dir)
+                matches = find_stage00_result_drive_child(service, drive_folder_id, relative_path.name)
+                media = MediaFileUpload(str(local_path), resumable=True)
+                if len(matches) == 0:
+                    uploaded = service.files().create(
+                        body={"name": relative_path.name, "parents": [drive_folder_id]},
+                        media_body=media,
+                        fields="id, name, size, webViewLink",
+                        supportsAllDrives=True,
+                    ).execute()
+                    action = "uploaded"
+                elif len(matches) == 1:
+                    uploaded = service.files().update(
+                        fileId=matches[0]["id"],
+                        media_body=media,
+                        fields="id, name, size, webViewLink",
+                        supportsAllDrives=True,
+                    ).execute()
+                    action = "updated"
+                else:
+                    raise RuntimeError(f"Duplicate Drive files named {relative_path.name!r} under parent {drive_folder_id}")
+                uploaded = dict(uploaded)
+                uploaded["relative_path"] = relative_path.as_posix()
+                uploaded["uploaded_byte_size"] = int(local_path.stat().st_size)
+                print(f"{action}: {relative_path.as_posix()}")
+                return uploaded
+
+
+            def backup_stage00_results_to_drive(output_run_dir):
+                from datetime import datetime, timezone
+                import json
+
+                run_dir = Path(output_run_dir)
+                if not run_dir.exists():
+                    raise FileNotFoundError(f"Stage 00 output folder not found: {run_dir}")
+                required_stage00_files = [
+                    stage_config["outputs"]["manifest"],
+                    stage_config["outputs"]["artifact_inventory"],
+                    stage_config["outputs"]["raw_data_manifest"],
+                    stage_config["outputs"]["split_freeze"],
+                    stage_config["outputs"]["label_policy"],
+                    stage_config["outputs"]["baseline_registry"],
+                    stage_config["outputs"]["label_validity_summary"],
+                    stage_config["outputs"]["sample_event_index"],
+                ]
+                missing = [name for name in required_stage00_files if not (run_dir / name).exists()]
+                if missing:
+                    raise FileNotFoundError(f"Missing required Stage 00 artifacts before Drive backup: {missing}")
+                run_manifest_path = run_dir / stage_config["outputs"]["manifest"]
+                run_manifest = json.loads(run_manifest_path.read_text(encoding="utf-8"))
+                if run_manifest.get("holdout_test_contact") is not False:
+                    raise ValueError(f"Stage 00 result backup requires holdout_test_contact=false: {run_manifest_path}")
+                service = get_drive_service_for_stage00_result_backup()
+                drive_path_parts = STAGE00_DRIVE_RESULT_PATH_PARTS + [run_dir.name]
+                drive_folder_id = ensure_stage00_result_drive_path(service, drive_path_parts)
+                backup_manifest_path = run_dir / "drive_backup_manifest.json"
+                local_files = sorted(path for path in run_dir.rglob("*") if path.is_file() and path.name != backup_manifest_path.name)
+                uploads = [upload_or_update_stage00_result_file(service, drive_folder_id, run_dir, path) for path in local_files]
+                backup_manifest = {
+                    "stage_name": STAGE_NAME,
+                    "run_id": run_dir.name,
+                    "stage_run_id": run_dir.name,
+                    "local_output_dir": str(run_dir),
+                    "drive_path": "My Drive/" + "/".join(drive_path_parts),
+                    "drive_path_parts": drive_path_parts,
+                    "drive_folder_id": drive_folder_id,
+                    "uploaded_file_names": [upload["name"] for upload in uploads],
+                    "uploaded_file_ids": [upload["id"] for upload in uploads],
+                    "uploaded_byte_sizes": [upload["uploaded_byte_size"] for upload in uploads],
+                    "uploaded_files": uploads,
+                    "sync_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                    "holdout_test_contact": run_manifest.get("holdout_test_contact"),
+                }
+                backup_manifest_path.write_text(json.dumps(backup_manifest, indent=2), encoding="utf-8")
+                manifest_upload = upload_or_update_stage00_result_file(service, drive_folder_id, run_dir, backup_manifest_path)
+                backup_manifest["uploaded_files"].append(manifest_upload)
+                backup_manifest["uploaded_file_names"].append(manifest_upload["name"])
+                backup_manifest["uploaded_file_ids"].append(manifest_upload["id"])
+                backup_manifest["uploaded_byte_sizes"].append(manifest_upload["uploaded_byte_size"])
+                backup_manifest_path.write_text(json.dumps(backup_manifest, indent=2), encoding="utf-8")
+                upload_or_update_stage00_result_file(service, drive_folder_id, run_dir, backup_manifest_path)
+                print("stage_run_id:", backup_manifest["stage_run_id"])
+                print("drive_path:", backup_manifest["drive_path"])
+                print("drive_folder_id:", backup_manifest["drive_folder_id"])
+                return backup_manifest
+
+
+            if RUN_STAGE00_DRIVE_BACKUP and RUN_STAGE00:
+                if result is None:
+                    raise RuntimeError("RUN_STAGE00_DRIVE_BACKUP=True requires a successful Stage 00 run.")
+                stage00_drive_backup_manifest = backup_stage00_results_to_drive(result.output_dir)
+            else:
+                print("RUN_STAGE00_DRIVE_BACKUP is disabled or RUN_STAGE00=False; no Stage 00 result backup uploaded.")
             """
         ),
         markdown(
