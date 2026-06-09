@@ -1,5 +1,5 @@
 # AGENTS.md - lst_models V2 route
-<!-- AGENTS_VERSION: v1.6-runtime-config-and-device-provenance -->
+<!-- AGENTS_VERSION: v1.7-stage-result-save-and-checkpoints -->
 
 This is a compact Colab-first research project for the V2 `lst_models` route.
 It is not a backend project, not a general ML framework, and not a place to
@@ -128,6 +128,31 @@ The short version:
   `file_name` and `relative_path` as locators, keep `original_runtime_path` as
   provenance only, and do not require downstream stages to read a stale
   `/content/...` absolute path.
+- Every executable stage notebook must include a durable result-save cell
+  immediately after the cell that successfully creates `result` from
+  `run_stage(config)`. The cell must save required stage artifacts to:
+
+```text
+My Drive/lst_models/results/<stage_name>/<run_id>/
+```
+
+  The run id must come from the local output folder name or manifest, not from
+  a manually typed value. The save cell must print `stage_run_id`,
+  `drive_path`, and `drive_folder_id`.
+- The durable result-save cell must validate the stage required artifact list
+  before uploading. Missing required files must raise `FileNotFoundError` with
+  exact names and the local output folder.
+- Prefer the Google Drive API for durable uploads: authenticate with
+  `google.colab.auth`, create folders with `files.create()` and MIME type
+  `application/vnd.google-apps.folder`, and upload/update files with
+  `MediaFileUpload(resumable=True)`. Do not rely on dragging files in the UI or
+  on copying a whole folder through mounted Drive as the only save path.
+- Final result sync must create or update a `drive_backup_manifest.json` that
+  records `stage_name`, `run_id`, local output dir, Drive path parts, Drive
+  folder id, uploaded file names, Drive file ids, uploaded byte sizes, and sync
+  timestamp. Upload that manifest with the other required artifacts.
+- Drive folder/file duplicates under the exact target parent are a hard error.
+  Do not silently pick one duplicate or infer the latest run.
 - Downstream stages must point to exact upstream run folders by run id and
   required artifact names. They must not infer the latest run from a parent
   folder, and they must not use a copied `artifact_inventory.csv`
@@ -143,6 +168,24 @@ The short version:
   runtime-specific Colab paths such as `raw_data_dir`.
 - Static notebook gates and config-contract tests must verify required runtime
   path injection for every package-backed notebook that uses runtime paths.
+- Long-running stages, including HPO, fold loops, model-family probes, and
+  diagnostics over many candidates, must create recovery checkpoints while the
+  run is in progress. Checkpoints go to:
+
+```text
+My Drive/lst_models/checkpoints/<stage_name>/<run_id>/
+```
+
+  Checkpoints must include a `checkpoint_manifest.json` with
+  `stage_name`, `run_id`, `status=incomplete`, completed units, pending units,
+  timestamp, and resume instructions. They are recovery state only and are not
+  final evidence artifacts.
+- Long-running stage code should write checkpoint files locally first, then
+  mirror compact checkpoint files to Drive after each natural unit such as
+  ticker, fold, window size, feature set, model family, or at a documented time
+  interval. Avoid frequent small reads/writes directly against mounted Drive.
+- Resume logic must require an exact `run_id` and checkpoint folder. It must not
+  resume from the latest checkpoint folder by parent directory scan.
 - Put research question, protocol summary, scope, and config near the top.
 - Use `RUN_FULL = False` or equivalent guards for heavy cells by default.
 - Keep committed outputs empty unless the notebook is explicitly a run-copy.
@@ -208,6 +251,12 @@ The implementation MUST preserve:
 - train-only preprocessing
 - dummy baseline comparison where model metrics are reported
 - run manifest with holdout_test_contact=false
+- durable Drive result-save cell immediately after successful `run_stage(config)`
+- final artifacts saved to
+  `My Drive/lst_models/results/<stage_name>/<run_id>/`
+- `drive_backup_manifest.json` written and uploaded with final artifacts
+- checkpoint plan for long-running stages under
+  `My Drive/lst_models/checkpoints/<stage_name>/<run_id>/`
 - runtime paths computed by a notebook injected into the stage config before
   `run_stage(config)` and before config contract assertions
 - GPU/CUDA device provenance recorded when Torch/LightGBM GPU paths are used or
@@ -230,6 +279,8 @@ Do not delete all tests. Keep a small GitHub-visible safety suite:
 - run-manifest tests
 - notebook static gates
 - artifact contract tests
+- durable Drive result-save cell static gates for executable notebooks
+- checkpoint contract tests for long-running stages
 - forbidden holdout/test string checks for validation-only notebooks
 
 Slow GPU training, full HPO, full notebook execution, large real-data
@@ -324,6 +375,13 @@ note. Classify it and either fix it in the same task or report it as pending.
 - A runtime `KeyError` such as missing `raw_data_dir` in a stage config is a
   notebook/config contract failure. Fix the notebook injection point and add a
   static or contract test; do not only patch the YAML or only explain the error.
+- A stage notebook that produces `result` but has no immediate durable
+  result-save cell is a notebook contract failure. Add the save cell, update
+  notebook static gates, and require the canonical Drive path before asking the
+  user to rerun the stage.
+- A long-running stage without checkpoint writing and exact-run resume rules is
+  a recovery contract failure. Add a checkpoint plan before running expensive
+  work.
 - A Colab bootstrap failure caused by missing `configs/`, `src/lst_models/`,
   `docs/protocols/`, or target notebooks in the pinned commit is an exact-commit
   bundle failure. Push or pin a full-bundle commit and verify the pinned tree.
