@@ -1,5 +1,5 @@
 # AGENTS.md - lst_models V2 route
-<!-- AGENTS_VERSION: v1.5-exact-upstream-run-inputs -->
+<!-- AGENTS_VERSION: v1.6-runtime-config-and-device-provenance -->
 
 This is a compact Colab-first research project for the V2 `lst_models` route.
 It is not a backend project, not a general ML framework, and not a place to
@@ -134,6 +134,15 @@ The short version:
   `original_runtime_path` as the active input locator. If a Colab runtime lacks
   the frozen upstream run folder, the notebook may fetch the required upstream
   artifacts from Drive by exact path parts before execution.
+- Runtime paths computed by a notebook are part of the executable contract, not
+  display-only variables. If a notebook computes `RAW_DATA_DIR`,
+  `STAGE00_OUTPUT_DIR`, `OUTPUT_DIR`, an exact upstream run folder, or similar
+  Colab/Drive path values, it must inject or normalize those values into the
+  loaded stage config before calling `run_stage(config)` and before config
+  contract assertions. Do not assume the YAML sidecar already contains
+  runtime-specific Colab paths such as `raw_data_dir`.
+- Static notebook gates and config-contract tests must verify required runtime
+  path injection for every package-backed notebook that uses runtime paths.
 - Put research question, protocol summary, scope, and config near the top.
 - Use `RUN_FULL = False` or equivalent guards for heavy cells by default.
 - Keep committed outputs empty unless the notebook is explicitly a run-copy.
@@ -142,6 +151,13 @@ The short version:
 - Prefer compact tables and a small number of useful plots over long logs.
 - Do not ask the user to run a separate generator just to obtain the required
   protocol, config, or tests; agents maintain those files with the notebook.
+- When publishing package-backed Colab notebooks to GitHub with
+  `PROJECT_REPO_COMMIT`, use a two-step exact-commit pin when needed: first
+  create a full-bundle commit containing the required notebook, config,
+  protocol, `src/lst_models/`, and tests; then create the final notebook commit
+  that pins `PROJECT_REPO_COMMIT` to that full-bundle commit. Before reporting
+  success, verify the pinned commit contains required sidecars with `git ls-tree`
+  or equivalent. Do not pin to a notebook-only or scaffold-only commit.
 
 ## 6. Research Safety Rules
 
@@ -192,6 +208,12 @@ The implementation MUST preserve:
 - train-only preprocessing
 - dummy baseline comparison where model metrics are reported
 - run manifest with holdout_test_contact=false
+- runtime paths computed by a notebook injected into the stage config before
+  `run_stage(config)` and before config contract assertions
+- GPU/CUDA device provenance recorded when Torch/LightGBM GPU paths are used or
+  resolved
+- exact-commit Colab bootstrap verified against a commit that contains required
+  sidecars, not only the notebook
 - notebook static-gate compatibility
 ```
 
@@ -257,6 +279,16 @@ This is a runtime acceleration rule, not a research-selection axis.
   candidates, model-family decisions, or thesis wording.
 - Every training manifest must record `requested_device`, `resolved_device`,
   `cuda_available`, `gpu_name_or_null`, and `device_fallback_reason`.
+- Any stage that calls `resolve_torch_device`, checks `torch.cuda.is_available`,
+  moves tensors/models with `.to(device)`, or requests LightGBM GPU/CUDA must
+  write device provenance to `run_manifest.json`. If per-model or per-probe
+  ledgers are produced, include at least `requested_device`, `resolved_device`,
+  and `device_fallback_reason` there as well.
+- Fast manifest/schema tests or tiny smoke tests must assert the device
+  provenance fields exist. These tests must pass on CPU-only machines.
+- If CUDA-capable code exists but the manifest or ledgers omit required device
+  provenance, report the stage as `non_compliant_pending_fix`. Do not claim the
+  stage follows the GPU/CUDA rules until the code and tests are fixed.
 - Fast tests, notebook static gates, and artifact-contract tests must not
   require GPU.
 - Slow GPU checks may be local-only or marked as slow CI.
@@ -279,7 +311,28 @@ def resolve_torch_device(requested_device="auto", require_gpu=False):
     return torch.device(requested_device), None
 ```
 
-## 11. Environment And Git
+## 11. Compliance Failure Handling
+
+When a task reveals an `AGENTS.md` compliance gap, do not treat it as a casual
+note. Classify it and either fix it in the same task or report it as pending.
+
+- If the user authorized edits for this task, fix code, notebook, config,
+  tests, and docs together when the gap is in scope.
+- If the user requested design-only or read-only work, do not edit files. Report
+  `non_compliant_pending_fix` with exact paths and the smallest safe patch
+  target.
+- A runtime `KeyError` such as missing `raw_data_dir` in a stage config is a
+  notebook/config contract failure. Fix the notebook injection point and add a
+  static or contract test; do not only patch the YAML or only explain the error.
+- A Colab bootstrap failure caused by missing `configs/`, `src/lst_models/`,
+  `docs/protocols/`, or target notebooks in the pinned commit is an exact-commit
+  bundle failure. Push or pin a full-bundle commit and verify the pinned tree.
+- CUDA-capable code without manifest device provenance is a compliance failure,
+  even if GPU execution itself works.
+- Notebook static gates must be strong enough to catch the contract failures
+  discovered in prior work; when a new failure class appears, update the gate.
+
+## 12. Environment And Git
 
 - Use the project-specified Python executable when one is documented.
 - Do not use bare `python` or bare `pytest` when a project Python path exists.
@@ -290,7 +343,7 @@ def resolve_torch_device(requested_device="auto", require_gpu=False):
 - Start and end scoped code-editing work by reporting `git status --short` and
   `git diff --stat` when a git repository exists.
 
-## 12. End-of-Task Report
+## 13. End-of-Task Report
 
 At the end of each task, report:
 
@@ -299,3 +352,5 @@ At the end of each task, report:
 - commands run
 - validation results
 - unresolved issues
+- compliance gaps found, and whether each one is fixed or
+  `non_compliant_pending_fix`
