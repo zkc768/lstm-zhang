@@ -13,6 +13,10 @@ import pandas as pd
 from lst_models.artifacts import require_artifacts, write_artifact_inventory, write_json
 from lst_models.config import hash_file, hash_mapping
 from lst_models.data import read_raw_txt_file, resample_1min_to_5min
+from lst_models.device import (
+    device_manifest_fields as build_device_manifest_fields,
+    resolve_torch_device as resolve_project_torch_device,
+)
 from lst_models.splits import add_split_column, parse_split_boundaries
 
 
@@ -30,6 +34,10 @@ SUMMARY_COLUMNS = [
     "mean_delta_macro_f1_vs_stratified_dummy",
     "lcb_delta_macro_f1_vs_stratified_dummy",
     "positive_ticker_count",
+    "best_screening_family",
+    "family_mean_delta_macro_f1_json",
+    "family_lcb_delta_macro_f1_json",
+    "family_positive_ticker_count_json",
     "seed_std_macro_f1",
     "fold_std_macro_f1",
     "selected_for_stage02",
@@ -38,6 +46,7 @@ SUMMARY_COLUMNS = [
 
 LEDGER_COLUMNS = [
     "probe_id",
+    "model_family",
     "candidate_id",
     "feature_set",
     "window_size",
@@ -58,6 +67,10 @@ LEDGER_COLUMNS = [
     "error_message",
     "positive_ticker_count",
     "ticker_delta_macro_f1_json",
+    "block_delta_macro_f1_json",
+    "requested_device",
+    "resolved_device",
+    "device_fallback_reason",
 ]
 
 FOLD_COLUMNS = [
@@ -80,6 +93,17 @@ IMPLEMENTED_PROBES = {
     "tcn_tiny",
     "ms_dlinear_tcn_tiny",
 }
+PROBE_MODEL_FAMILY = {
+    "stratified_dummy_train_prior": "mandatory_baseline",
+    "majority_train_prior": "mandatory_baseline",
+    "logreg_flat_control": "linear_control",
+    "lightgbm_small": "lightgbm",
+    "standard_dlinear_tiny": "standard_dlinear",
+    "tcn_tiny": "tcn",
+    "ms_dlinear_tcn_tiny": "ms_dlinear_tcn",
+}
+STAGE02_SCREENING_FAMILIES = {"lightgbm", "standard_dlinear", "tcn", "ms_dlinear_tcn"}
+BAND_DIAGNOSTIC_BPS = (3.0, 10.0, 20.0, 30.0, 50.0)
 _TORCH_IMPORT_ERROR: str | None = None
 
 
@@ -92,14 +116,25 @@ class Stage01Result:
     candidate_inputs: Path
     probe_ledger: Path
     fold_manifest: Path
+    band_diagnostic: Path
 
 
 @dataclass(frozen=True)
 class CandidateDataset:
     metadata: pd.DataFrame
-    features: np.ndarray
+    feature_blocks: Mapping[tuple[str, str], np.ndarray]
     feature_columns: tuple[str, ...]
     window_size: int
+
+
+@dataclass(frozen=True)
+class ProbeFitResult:
+    predictions: np.ndarray
+    requested_device: str
+    resolved_device: str
+    cuda_available: bool | None
+    gpu_name_or_null: str | None
+    device_fallback_reason: str
 
 
 def run_stage(config: Mapping[str, Any]) -> Stage01Result:
@@ -117,11 +152,13 @@ def run_stage(config: Mapping[str, Any]) -> Stage01Result:
 
     raw_manifest = _load_json(stage00_paths["raw_data_manifest.json"])
     split_freeze = _load_json(stage00_paths["split_freeze.json"])
+    label_policy = _load_json(stage00_paths["label_policy.json"])
     sample_events = _load_sample_event_index(stage00_paths["sample_event_index.csv"])
     train_events = _train_valid_events(sample_events)
     train_bars = _load_train_bars(raw_manifest, split_freeze, inputs)
     feature_frame = _build_feature_frame(train_bars)
     folds = _build_train_inner_folds(train_events, int(config["train_inner"]["n_folds"]))
+    band_diagnostic = _build_train_band_diagnostic(train_bars, label_policy)
 
     feature_sets = _as_mapping(config["feature_sets"], "feature_sets")
     window_sizes = tuple(int(value) for value in config["window_sizes"])
@@ -176,9 +213,11 @@ def run_stage(config: Mapping[str, Any]) -> Stage01Result:
     candidate_path = write_json(output_dir / str(outputs["candidate_inputs"]), candidate_inputs)
     ledger_path = output_dir / str(outputs["probe_ledger"])
     fold_path = output_dir / str(outputs["fold_manifest"])
+    band_path = output_dir / str(outputs["label_band_diagnostic"])
     summary.to_csv(summary_path, index=False)
     ledger.to_csv(ledger_path, index=False)
     folds.to_csv(fold_path, index=False)
+    band_diagnostic.to_csv(band_path, index=False)
 
     notebook_path = _resolve_repo_path(inputs["notebook_path"])
     manifest_payload = {
@@ -194,6 +233,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage01Result:
             str(outputs["candidate_inputs"]),
             str(outputs["probe_ledger"]),
             str(outputs["fold_manifest"]),
+            str(outputs["label_band_diagnostic"]),
         ],
         "stage01_execution_mode": "feature_window_probe_screening_v1",
         "implemented_probe_ids": sorted(IMPLEMENTED_PROBES.intersection(probe_ids)),
@@ -202,6 +242,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage01Result:
         "no_final_model_selected": True,
         "holdout_test_contact": False,
     }
+    manifest_payload.update(_device_manifest_fields(config, ledger))
     manifest_path = write_json(output_dir / str(outputs["manifest"]), manifest_payload)
     inventory_path = write_artifact_inventory(
         output_dir,
@@ -211,6 +252,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage01Result:
             "candidate_inputs": candidate_path,
             "probe_ledger": ledger_path,
             "fold_manifest": fold_path,
+            "label_band_diagnostic": band_path,
         },
     )
 
@@ -222,6 +264,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage01Result:
         candidate_inputs=candidate_path,
         probe_ledger=ledger_path,
         fold_manifest=fold_path,
+        band_diagnostic=band_path,
     )
 
 
@@ -350,6 +393,102 @@ def _load_train_bars(
         raise ValueError("Stage 01 found no train bars after Stage 00 split filtering")
     bars["trading_day"] = bars["timestamp"].dt.strftime("%Y-%m-%d")
     return bars.reset_index(drop=True)
+
+
+def _build_train_band_diagnostic(
+    train_bars: pd.DataFrame, label_policy: Mapping[str, Any]
+) -> pd.DataFrame:
+    horizon_k = int(label_policy["horizon_k"])
+    expected_horizon = pd.Timedelta(minutes=5 * horizon_k)
+    parts = []
+    for ticker, ticker_frame in train_bars.groupby("ticker", sort=True):
+        part = ticker_frame.sort_values("timestamp").copy()
+        close = part["close"].astype(float)
+        future_timestamp = part["timestamp"].shift(-horizon_k)
+        future_return = close.shift(-horizon_k) / close - 1.0
+        same_day = pd.Series(True, index=part.index)
+        current_day = part["timestamp"].dt.date
+        for offset in range(1, horizon_k + 1):
+            same_day &= current_day.shift(-offset).eq(current_day)
+        actual_horizon = future_timestamp - part["timestamp"]
+        valid_base = future_return.notna() & same_day & actual_horizon.eq(expected_horizon)
+        parts.append(
+            pd.DataFrame(
+                {
+                    "ticker": str(ticker),
+                    "trading_day": part["trading_day"].astype(str),
+                    "future_return": future_return,
+                    "valid_before_band": valid_base,
+                }
+            )
+        )
+    if not parts:
+        return pd.DataFrame(columns=_band_diagnostic_columns())
+
+    frame = pd.concat(parts, ignore_index=True)
+    eligible = frame.loc[frame["valid_before_band"]].copy()
+    rows = [_band_diagnostic_row("overall", eligible, band) for band in BAND_DIAGNOSTIC_BPS]
+    for ticker, group in eligible.groupby("ticker", sort=True):
+        rows.extend(_band_diagnostic_row(str(ticker), group, band) for band in BAND_DIAGNOSTIC_BPS)
+    return pd.DataFrame(rows, columns=_band_diagnostic_columns())
+
+
+def _band_diagnostic_columns() -> list[str]:
+    return [
+        "scope",
+        "band_bps",
+        "n_train_base_rows",
+        "valid_rows",
+        "up_rows",
+        "down_rows",
+        "no_trade_rows",
+        "valid_pct",
+        "up_pct",
+        "down_pct",
+        "no_trade_pct",
+        "abs_return_p50_bps",
+        "abs_return_p75_bps",
+        "abs_return_p90_bps",
+        "abs_return_p95_bps",
+        "abs_return_p99_bps",
+    ]
+
+
+def _band_diagnostic_row(scope: str, frame: pd.DataFrame, band_bps: float) -> dict[str, Any]:
+    returns = frame["future_return"].astype(float)
+    threshold = band_bps / 10000.0
+    no_trade = returns.abs().le(threshold)
+    up = returns.gt(threshold)
+    down = returns.lt(-threshold)
+    total = int(len(returns))
+    abs_bps = returns.abs() * 10000.0
+    quantiles = abs_bps.quantile([0.50, 0.75, 0.90, 0.95, 0.99]) if total else pd.Series(dtype=float)
+    return {
+        "scope": scope,
+        "band_bps": float(band_bps),
+        "n_train_base_rows": total,
+        "valid_rows": int((~no_trade).sum()),
+        "up_rows": int(up.sum()),
+        "down_rows": int(down.sum()),
+        "no_trade_rows": int(no_trade.sum()),
+        "valid_pct": _safe_ratio((~no_trade).sum(), total),
+        "up_pct": _safe_ratio(up.sum(), total),
+        "down_pct": _safe_ratio(down.sum(), total),
+        "no_trade_pct": _safe_ratio(no_trade.sum(), total),
+        "abs_return_p50_bps": _quantile_value(quantiles, 0.50),
+        "abs_return_p75_bps": _quantile_value(quantiles, 0.75),
+        "abs_return_p90_bps": _quantile_value(quantiles, 0.90),
+        "abs_return_p95_bps": _quantile_value(quantiles, 0.95),
+        "abs_return_p99_bps": _quantile_value(quantiles, 0.99),
+    }
+
+
+def _safe_ratio(numerator: Any, denominator: int) -> float:
+    return float(numerator) / float(denominator) if denominator else np.nan
+
+
+def _quantile_value(quantiles: pd.Series, key: float) -> float:
+    return float(quantiles.loc[key]) if key in quantiles.index else np.nan
 
 
 def _build_feature_frame(train_bars: pd.DataFrame) -> pd.DataFrame:
@@ -507,7 +646,7 @@ def _build_window_dataset(
     window_size: int,
 ) -> CandidateDataset:
     rows: list[dict[str, Any]] = []
-    vectors: list[np.ndarray] = []
+    feature_blocks: dict[tuple[str, str], np.ndarray] = {}
     events_by_group = {
         key: group.sort_values("target_timestamp")
         for key, group in train_events.groupby(["ticker", "trading_day"], sort=False)
@@ -515,8 +654,10 @@ def _build_window_dataset(
     for key, bars in feature_frame.groupby(["ticker", "trading_day"], sort=False):
         if key not in events_by_group:
             continue
+        typed_key = (str(key[0]), str(key[1]))
         bar_part = bars.sort_values("timestamp").reset_index(drop=True)
         values = bar_part.loc[:, feature_columns].to_numpy(dtype=np.float32)
+        feature_blocks[typed_key] = values
         finite_row = np.isfinite(values).all(axis=1)
         position_by_timestamp = {
             pd.Timestamp(timestamp): position
@@ -530,7 +671,6 @@ def _build_window_dataset(
             end = position + 1
             if not bool(finite_row[start:end].all()):
                 continue
-            window = values[start:end]
             rows.append(
                 {
                     "sample_id": event["sample_id"],
@@ -538,25 +678,18 @@ def _build_window_dataset(
                     "target_timestamp": pd.Timestamp(event["target_timestamp"]),
                     "trading_day": event["trading_day"],
                     "label": int(event["label"]),
+                    "window_start_position": int(start),
+                    "window_end_position_exclusive": int(end),
                     "candidate_id": f"{feature_set}_w{window_size}",
                     "feature_set": feature_set,
                     "window_size": int(window_size),
                 }
             )
-            vectors.append(window.reshape(-1))
 
     metadata = pd.DataFrame(rows)
-    if not vectors:
-        width = len(feature_columns) * window_size
-        return CandidateDataset(
-            metadata=metadata,
-            features=np.empty((0, width), dtype=np.float32),
-            feature_columns=feature_columns,
-            window_size=window_size,
-        )
     return CandidateDataset(
         metadata=metadata.reset_index(drop=True),
-        features=np.vstack(vectors).astype(np.float32, copy=False),
+        feature_blocks=feature_blocks,
         feature_columns=feature_columns,
         window_size=window_size,
     )
@@ -587,9 +720,18 @@ def _run_candidate_probes(
         train_idx = _cap_indices(dataset.metadata, train_idx, max_train)
         eval_idx = _cap_indices(dataset.metadata, eval_idx, max_eval)
         sample_hash = _sample_id_hash(dataset.metadata.iloc[eval_idx]["sample_id"].tolist())
+        train_meta = dataset.metadata.iloc[train_idx]
+        eval_meta = dataset.metadata.iloc[eval_idx]
+        if len(train_idx) and len(eval_idx):
+            x_train = _materialize_window_matrix(dataset, train_idx)
+            x_eval = _materialize_window_matrix(dataset, eval_idx)
+        else:
+            width = dataset.window_size * len(dataset.feature_columns)
+            x_train = np.empty((0, width), dtype=np.float32)
+            x_eval = np.empty((0, width), dtype=np.float32)
         for seed in seeds:
-            y_train = dataset.metadata.iloc[train_idx]["label"].to_numpy(dtype=int)
-            y_eval = dataset.metadata.iloc[eval_idx]["label"].to_numpy(dtype=int)
+            y_train = train_meta["label"].to_numpy(dtype=int)
+            y_eval = eval_meta["label"].to_numpy(dtype=int)
             baseline_scores: dict[str, dict[str, Any]] = {}
             for current_baseline_id in mandatory_baselines:
                 baseline_scores[current_baseline_id] = _score_train_prior_baseline(
@@ -635,10 +777,10 @@ def _run_candidate_probes(
                 else:
                     outcome = _fit_probe(
                         probe_id,
-                        dataset.features[train_idx],
-                        dataset.metadata.iloc[train_idx],
-                        dataset.features[eval_idx],
-                        dataset.metadata.iloc[eval_idx],
+                        x_train,
+                        train_meta,
+                        x_eval,
+                        eval_meta,
                         config,
                         seed,
                         dataset.window_size,
@@ -655,6 +797,25 @@ def _run_candidate_probes(
                         )
                 rows.append(row)
     return pd.DataFrame(rows, columns=LEDGER_COLUMNS)
+
+
+def _materialize_window_matrix(dataset: CandidateDataset, indices: np.ndarray) -> np.ndarray:
+    width = dataset.window_size * len(dataset.feature_columns)
+    if len(indices) == 0:
+        return np.empty((0, width), dtype=np.float32)
+    rows = []
+    for record in dataset.metadata.iloc[indices].to_dict(orient="records"):
+        key = (str(record["ticker"]), str(record["trading_day"]))
+        block = dataset.feature_blocks[key]
+        start = int(record["window_start_position"])
+        end = int(record["window_end_position_exclusive"])
+        window = block[start:end]
+        if len(window) != dataset.window_size:
+            raise ValueError(
+                f"materialized window has {len(window)} rows, expected {dataset.window_size}"
+            )
+        rows.append(window.reshape(-1))
+    return np.vstack(rows).astype(np.float32, copy=False)
 
 
 def _fold_indices(metadata: pd.DataFrame, fold: Mapping[str, Any]) -> tuple[np.ndarray, np.ndarray]:
@@ -706,6 +867,7 @@ def _empty_ledger_row(
 ) -> dict[str, Any]:
     return {
         "probe_id": probe_id,
+        "model_family": PROBE_MODEL_FAMILY.get(probe_id, "unknown"),
         "candidate_id": candidate_id,
         "feature_set": feature_set,
         "window_size": int(window_size),
@@ -726,6 +888,10 @@ def _empty_ledger_row(
         "error_message": "",
         "positive_ticker_count": 0,
         "ticker_delta_macro_f1_json": "{}",
+        "block_delta_macro_f1_json": "{}",
+        "requested_device": "cpu",
+        "resolved_device": "cpu",
+        "device_fallback_reason": "",
     }
 
 
@@ -828,10 +994,12 @@ def _fit_probe(
     try:
         if probe_id == "logreg_flat_control":
             predictions = _fit_logreg_probe(x_train, y_train, x_eval, config, seed)
+            device_info = _non_gpu_device_info()
         elif probe_id == "lightgbm_small":
             predictions = _fit_lightgbm_probe(x_train, y_train, x_eval, config, seed)
+            device_info = _non_gpu_device_info()
         elif probe_id in {"standard_dlinear_tiny", "tcn_tiny", "ms_dlinear_tcn_tiny"}:
-            predictions = _fit_torch_sequence_probe(
+            torch_result = _fit_torch_sequence_probe(
                 probe_id,
                 x_train,
                 y_train,
@@ -841,17 +1009,26 @@ def _fit_probe(
                 window_size,
                 n_features,
             )
+            predictions = torch_result.predictions
+            device_info = {
+                "requested_device": torch_result.requested_device,
+                "resolved_device": torch_result.resolved_device,
+                "device_fallback_reason": torch_result.device_fallback_reason,
+            }
         else:
             return {"fit_status": "skipped_unknown_probe", "error_message": f"{probe_id} not implemented"}
     except ModuleNotFoundError as exc:
         return {"fit_status": "failed_dependency_missing", "error_message": str(exc)}
-    except Exception as exc:
+    except (ValueError, RuntimeError, FloatingPointError) as exc:
+        if "GPU required" in str(exc) or "CUDA requested" in str(exc):
+            raise
         return {"fit_status": "failed_exception", "error_message": f"{type(exc).__name__}: {exc}"}
 
     metrics = _classification_metrics(y_eval, predictions)
     ticker_deltas, positive_ticker_count = _ticker_delta_macro_f1(
         eval_meta, predictions, baseline_predictions
     )
+    block_deltas = _block_delta_macro_f1(eval_meta, predictions, baseline_predictions)
     return {
         "fit_status": "completed",
         "macro_f1": metrics["macro_f1"],
@@ -860,6 +1037,8 @@ def _fit_probe(
         "error_message": "",
         "positive_ticker_count": int(positive_ticker_count),
         "ticker_delta_macro_f1_json": json.dumps(ticker_deltas, sort_keys=True),
+        "block_delta_macro_f1_json": json.dumps(block_deltas, sort_keys=True),
+        **device_info,
     }
 
 
@@ -902,6 +1081,7 @@ def _fit_lightgbm_probe(
     defaults.setdefault("max_depth", 6)
     defaults.setdefault("num_leaves", 31)
     defaults.setdefault("subsample", 0.9)
+    defaults.setdefault("subsample_freq", 1)
     defaults.setdefault("colsample_bytree", 0.9)
     defaults.setdefault("class_weight", "balanced")
     model = LGBMClassifier(**defaults, random_state=seed, verbosity=-1)
@@ -918,7 +1098,7 @@ def _fit_torch_sequence_probe(
     seed: int,
     window_size: int,
     n_features: int,
-) -> np.ndarray:
+) -> ProbeFitResult:
     global _TORCH_IMPORT_ERROR
     if _TORCH_IMPORT_ERROR is not None:
         raise ModuleNotFoundError(_TORCH_IMPORT_ERROR)
@@ -948,7 +1128,7 @@ def _fit_torch_sequence_probe(
     probe_defaults = _probe_defaults(config, probe_id)
     requested_device = str(torch_defaults.get("device", "auto"))
     require_gpu = bool(torch_defaults.get("require_gpu", False))
-    device, _ = _resolve_torch_device(torch, requested_device, require_gpu)
+    device, fallback_reason = resolve_project_torch_device(torch, requested_device, require_gpu)
 
     if probe_id == "standard_dlinear_tiny":
         model = _StandardDLinearTiny(window_size, n_features, probe_defaults)
@@ -999,20 +1179,82 @@ def _fit_torch_sequence_probe(
     with torch.no_grad():
         logits = model(torch.as_tensor(eval_3d, dtype=torch.float32, device=device))
         predictions = logits.argmax(dim=1).cpu().numpy().astype(int)
-    return predictions
+    device_fields = build_device_manifest_fields(torch, requested_device, device, fallback_reason)
+    return ProbeFitResult(
+        predictions=predictions,
+        requested_device=str(device_fields["requested_device"]),
+        resolved_device=str(device_fields["resolved_device"]),
+        cuda_available=bool(device_fields["cuda_available"]),
+        gpu_name_or_null=device_fields["gpu_name_or_null"],
+        device_fallback_reason=str(device_fields["device_fallback_reason"] or ""),
+    )
 
 
-def _resolve_torch_device(torch_module: Any, requested_device: str, require_gpu: bool) -> tuple[Any, str | None]:
-    cuda_available = bool(torch_module.cuda.is_available())
-    if requested_device == "auto":
-        if cuda_available:
-            return torch_module.device("cuda"), None
-        if require_gpu:
-            raise RuntimeError("GPU required, but torch.cuda.is_available() is False")
-        return torch_module.device("cpu"), "cuda_unavailable"
-    if requested_device.startswith("cuda") and not cuda_available:
-        raise RuntimeError("CUDA requested, but torch.cuda.is_available() is False")
-    return torch_module.device(requested_device), None
+def _torch_gpu_name_or_null(torch_module: Any) -> str | None:
+    if not bool(torch_module.cuda.is_available()):
+        return None
+    try:
+        return str(torch_module.cuda.get_device_name(0))
+    except Exception:
+        return None
+
+
+def _non_gpu_device_info() -> dict[str, str]:
+    return {
+        "requested_device": "cpu",
+        "resolved_device": "cpu",
+        "device_fallback_reason": "not_gpu_capable_probe",
+    }
+
+
+def _device_manifest_fields(config: Mapping[str, Any], ledger: pd.DataFrame) -> dict[str, Any]:
+    torch_defaults = _as_mapping(
+        _as_mapping(config.get("probe_training_defaults", {}), "probe_training_defaults").get(
+            "torch", {}
+        ),
+        "probe_training_defaults.torch",
+    )
+    requested_device = str(torch_defaults.get("device", "auto"))
+    cuda_available, gpu_name, import_error = _detect_torch_runtime()
+    torch_rows = ledger.loc[ledger["model_family"].isin(STAGE02_SCREENING_FAMILIES)]
+    torch_rows = torch_rows.loc[
+        torch_rows["probe_id"].isin(
+            ["standard_dlinear_tiny", "tcn_tiny", "ms_dlinear_tcn_tiny"]
+        )
+    ]
+    completed = torch_rows.loc[torch_rows["fit_status"].eq("completed")]
+    if completed.empty:
+        resolved_device = "not_resolved"
+        fallback_reason = import_error or "torch_probe_not_completed"
+    else:
+        resolved_values = sorted(
+            str(value) for value in completed["resolved_device"].dropna().unique() if str(value)
+        )
+        resolved_device = ",".join(resolved_values) if resolved_values else "not_resolved"
+        fallback_values = sorted(
+            str(value)
+            for value in completed["device_fallback_reason"].dropna().unique()
+            if str(value)
+        )
+        fallback_reason = ",".join(fallback_values)
+    return {
+        "requested_device": requested_device,
+        "resolved_device": resolved_device,
+        "cuda_available": cuda_available,
+        "gpu_name_or_null": gpu_name,
+        "device_fallback_reason": fallback_reason,
+    }
+
+
+def _detect_torch_runtime() -> tuple[bool, str | None, str]:
+    if _TORCH_IMPORT_ERROR:
+        return False, None, _TORCH_IMPORT_ERROR
+    try:
+        import torch
+    except ModuleNotFoundError as exc:
+        return False, None, f"torch import failed: {exc}"
+    cuda_available = bool(torch.cuda.is_available())
+    return cuda_available, _torch_gpu_name_or_null(torch), "" if cuda_available else "cuda_unavailable"
 
 
 class _StandardDLinearTiny:
@@ -1116,17 +1358,23 @@ class _MSDLinearTCNTiny:
                 super().__init__()
                 self.kernels = kernels
                 width = window_size * n_features
-                self.scale_heads = nn.ModuleList([nn.Linear(width, 2) for _ in kernels])
+                self.trend_heads = nn.ModuleList([nn.Linear(width, 2) for _ in kernels])
+                self.residual_heads = nn.ModuleList([nn.Linear(width, 2) for _ in kernels])
                 self.tcn = _TCNTiny(n_features, tcn_defaults)
                 self.dropout = nn.Dropout(dropout)
                 self.mix = nn.Linear(4, 2)
 
             def forward(self, x: Any) -> Any:
                 scale_logits = []
-                for kernel, head in zip(self.kernels, self.scale_heads):
+                for kernel, trend_head, residual_head in zip(
+                    self.kernels, self.trend_heads, self.residual_heads
+                ):
                     trend = _moving_average_same(x, kernel)
                     residual = x - trend
-                    scale_logits.append(head(self.dropout((trend + residual).flatten(1))))
+                    scale_logits.append(
+                        trend_head(self.dropout(trend.flatten(1)))
+                        + residual_head(self.dropout(residual.flatten(1)))
+                    )
                 dlinear_logits = torch.stack(scale_logits, dim=0).mean(dim=0)
                 tcn_logits = self.tcn(x)
                 return self.mix(torch.cat([dlinear_logits, tcn_logits], dim=1))
@@ -1157,26 +1405,18 @@ def _probe_defaults(config: Mapping[str, Any], probe_id: str) -> Mapping[str, An
 
 
 def _classification_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
-    labels = [0, 1]
-    f1_scores = []
-    recalls = []
-    for label in labels:
-        true_positive = int(((y_true == label) & (y_pred == label)).sum())
-        false_positive = int(((y_true != label) & (y_pred == label)).sum())
-        false_negative = int(((y_true == label) & (y_pred != label)).sum())
-        support = int((y_true == label).sum())
-        precision_denominator = true_positive + false_positive
-        recall_denominator = true_positive + false_negative
-        precision = true_positive / precision_denominator if precision_denominator else 0.0
-        recall = true_positive / recall_denominator if recall_denominator else 0.0
-        f1 = 2.0 * precision * recall / (precision + recall) if precision + recall else 0.0
-        f1_scores.append(f1)
-        if support:
-            recalls.append(recall)
+    from sklearn.metrics import balanced_accuracy_score, f1_score
+
     accuracy = float((y_true == y_pred).mean()) if len(y_true) else np.nan
     return {
-        "macro_f1": float(np.mean(f1_scores)),
-        "balanced_accuracy": float(np.mean(recalls)) if recalls else np.nan,
+        "macro_f1": float(
+            f1_score(y_true, y_pred, labels=[0, 1], average="macro", zero_division=0)
+        )
+        if len(y_true)
+        else np.nan,
+        "balanced_accuracy": float(balanced_accuracy_score(y_true, y_pred))
+        if len(y_true)
+        else np.nan,
         "accuracy": accuracy,
     }
 
@@ -1195,6 +1435,22 @@ def _ticker_delta_macro_f1(
         deltas[str(ticker)] = float(model_score - baseline_score)
     positive = sum(1 for value in deltas.values() if value > 0)
     return deltas, positive
+
+
+def _block_delta_macro_f1(
+    eval_meta: pd.DataFrame, predictions: np.ndarray, baseline_predictions: np.ndarray
+) -> dict[str, float]:
+    y_eval = eval_meta["label"].to_numpy(dtype=int)
+    deltas: dict[str, float] = {}
+    indexed = eval_meta.assign(_position=np.arange(len(eval_meta)))
+    for (ticker, trading_day), group in indexed.groupby(["ticker", "trading_day"], sort=True):
+        positions = group["_position"].to_numpy(dtype=int)
+        model_score = _classification_metrics(y_eval[positions], predictions[positions])["macro_f1"]
+        baseline_score = _classification_metrics(
+            y_eval[positions], baseline_predictions[positions]
+        )["macro_f1"]
+        deltas[f"{ticker}|{trading_day}"] = float(model_score - baseline_score)
+    return deltas
 
 
 def _binary_probabilities(labels: np.ndarray) -> np.ndarray:
@@ -1222,6 +1478,9 @@ def _summarize_candidate(
             for ticker, count in dataset.metadata.groupby("ticker").size().to_dict().items()
         }
     completed = ledger.loc[ledger["fit_status"] == "completed"].copy()
+    screening_completed = completed.loc[
+        completed["model_family"].isin(STAGE02_SCREENING_FAMILIES)
+    ].copy()
     row: dict[str, Any] = {
         "candidate_id": candidate_id,
         "feature_set": feature_set,
@@ -1236,6 +1495,10 @@ def _summarize_candidate(
         "mean_delta_macro_f1_vs_stratified_dummy": pd.NA,
         "lcb_delta_macro_f1_vs_stratified_dummy": pd.NA,
         "positive_ticker_count": 0,
+        "best_screening_family": "",
+        "family_mean_delta_macro_f1_json": "{}",
+        "family_lcb_delta_macro_f1_json": "{}",
+        "family_positive_ticker_count_json": "{}",
         "seed_std_macro_f1": pd.NA,
         "fold_std_macro_f1": pd.NA,
         "selected_for_stage02": False,
@@ -1246,26 +1509,91 @@ def _summarize_candidate(
             row["selection_reason"] = "no_eligible_windows"
         return row
 
-    row["mean_macro_f1"] = float(completed["macro_f1"].astype(float).mean())
-    row["mean_balanced_accuracy"] = float(completed["balanced_accuracy"].astype(float).mean())
-    deltas = completed["delta_macro_f1_vs_baseline"].astype(float)
-    row["mean_delta_macro_f1_vs_stratified_dummy"] = float(deltas.mean())
-    row["lcb_delta_macro_f1_vs_stratified_dummy"] = _lower_confidence_bound(deltas)
-    ticker_deltas = _aggregate_ticker_deltas(completed["ticker_delta_macro_f1_json"].tolist())
-    row["positive_ticker_count"] = int(sum(1 for value in ticker_deltas.values() if value > 0))
-    row["seed_std_macro_f1"] = _group_std(completed, "seed", "macro_f1")
-    row["fold_std_macro_f1"] = _group_std(completed, "fold_id", "macro_f1")
+    if screening_completed.empty:
+        row["selection_reason"] = "no_completed_stage02_family_probe_rows"
+        return row
+
+    row["mean_macro_f1"] = float(screening_completed["macro_f1"].astype(float).mean())
+    row["mean_balanced_accuracy"] = float(
+        screening_completed["balanced_accuracy"].astype(float).mean()
+    )
+    family_stats = _family_screening_stats(screening_completed)
+    best_family, best_stats = _best_family_stats(family_stats)
+    row["best_screening_family"] = best_family
+    row["mean_delta_macro_f1_vs_stratified_dummy"] = best_stats["mean_delta"]
+    row["lcb_delta_macro_f1_vs_stratified_dummy"] = best_stats["lcb_delta"]
+    row["positive_ticker_count"] = int(best_stats["positive_ticker_count"])
+    row["family_mean_delta_macro_f1_json"] = json.dumps(
+        {family: stats["mean_delta"] for family, stats in family_stats.items()},
+        sort_keys=True,
+    )
+    row["family_lcb_delta_macro_f1_json"] = json.dumps(
+        {family: stats["lcb_delta"] for family, stats in family_stats.items()},
+        sort_keys=True,
+    )
+    row["family_positive_ticker_count_json"] = json.dumps(
+        {family: stats["positive_ticker_count"] for family, stats in family_stats.items()},
+        sort_keys=True,
+    )
+    row["seed_std_macro_f1"] = _group_std(screening_completed, "seed", "macro_f1")
+    row["fold_std_macro_f1"] = _group_std(screening_completed, "fold_id", "macro_f1")
     row["selection_reason"] = "screened_not_selected"
     return row
 
 
-def _lower_confidence_bound(values: pd.Series) -> float:
-    current = values.dropna().astype(float)
-    if current.empty:
+def _family_screening_stats(completed: pd.DataFrame) -> dict[str, dict[str, Any]]:
+    stats: dict[str, dict[str, Any]] = {}
+    for family, group in completed.groupby("model_family", sort=True):
+        deltas = group["delta_macro_f1_vs_baseline"].dropna().astype(float)
+        ticker_deltas = _aggregate_ticker_deltas(group["ticker_delta_macro_f1_json"].tolist())
+        stats[str(family)] = {
+            "mean_delta": float(deltas.mean()) if not deltas.empty else np.nan,
+            "lcb_delta": _block_bootstrap_lcb(group["block_delta_macro_f1_json"].tolist()),
+            "positive_ticker_count": int(sum(1 for value in ticker_deltas.values() if value > 0)),
+        }
+    return stats
+
+
+def _best_family_stats(family_stats: Mapping[str, Mapping[str, Any]]) -> tuple[str, Mapping[str, Any]]:
+    if not family_stats:
+        return "", {"mean_delta": np.nan, "lcb_delta": np.nan, "positive_ticker_count": 0}
+    ordered = sorted(
+        family_stats.items(),
+        key=lambda item: (
+            _nan_to_rank_value(item[1]["lcb_delta"]),
+            _nan_to_rank_value(item[1]["mean_delta"]),
+            str(item[0]),
+        ),
+        reverse=True,
+    )
+    return str(ordered[0][0]), ordered[0][1]
+
+
+def _nan_to_rank_value(value: Any) -> float:
+    try:
+        current = float(value)
+    except (TypeError, ValueError):
+        return float("-inf")
+    return current if np.isfinite(current) else float("-inf")
+
+
+def _block_bootstrap_lcb(encoded_rows: list[str], *, iterations: int = 1000) -> float:
+    buckets: dict[str, list[float]] = {}
+    for encoded in encoded_rows:
+        if not encoded or encoded == "{}":
+            continue
+        decoded = json.loads(encoded)
+        for block_id, value in decoded.items():
+            buckets.setdefault(str(block_id), []).append(float(value))
+    block_means = np.array([np.mean(values) for values in buckets.values()], dtype=float)
+    block_means = block_means[np.isfinite(block_means)]
+    if len(block_means) == 0:
         return np.nan
-    if len(current) == 1:
-        return float(current.iloc[0])
-    return float(current.mean() - 1.96 * current.std(ddof=1) / np.sqrt(len(current)))
+    if len(block_means) == 1:
+        return float(block_means[0])
+    rng = np.random.default_rng(20260608)
+    draws = rng.choice(block_means, size=(iterations, len(block_means)), replace=True)
+    return float(np.quantile(draws.mean(axis=1), 0.025))
 
 
 def _aggregate_ticker_deltas(encoded_rows: list[str]) -> dict[str, float]:
@@ -1342,11 +1670,21 @@ def _build_candidate_inputs(
                 "feature_columns": list(feature_sets[row["feature_set"]]),
                 "n_samples_total": int(row["n_samples_total"]),
                 "selection_reason": row["selection_reason"],
+                "best_screening_family": row.get("best_screening_family", ""),
                 "mean_delta_macro_f1_vs_stratified_dummy": _json_number(
                     row["mean_delta_macro_f1_vs_stratified_dummy"]
                 ),
                 "lcb_delta_macro_f1_vs_stratified_dummy": _json_number(
                     row["lcb_delta_macro_f1_vs_stratified_dummy"]
+                ),
+                "family_mean_delta_macro_f1": json.loads(
+                    row.get("family_mean_delta_macro_f1_json", "{}") or "{}"
+                ),
+                "family_lcb_delta_macro_f1": json.loads(
+                    row.get("family_lcb_delta_macro_f1_json", "{}") or "{}"
+                ),
+                "family_positive_ticker_count": json.loads(
+                    row.get("family_positive_ticker_count_json", "{}") or "{}"
                 ),
             }
         )

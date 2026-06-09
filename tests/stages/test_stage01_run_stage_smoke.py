@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 import sys
 from pathlib import Path
 
@@ -84,7 +85,17 @@ def write_stage00_artifacts(
         json.dumps(raw_manifest), encoding="utf-8"
     )
     (run_dir / "split_freeze.json").write_text(json.dumps(split_freeze), encoding="utf-8")
-    (run_dir / "label_policy.json").write_text("{}", encoding="utf-8")
+    (run_dir / "label_policy.json").write_text(
+        json.dumps(
+            {
+                "label_config_id": "h09_bps3p0",
+                "operator": "endpoint_cumulative_return",
+                "horizon_k": 9,
+                "no_trade_band_bps": 3.0,
+            }
+        ),
+        encoding="utf-8",
+    )
     (run_dir / "baseline_registry.json").write_text("{}", encoding="utf-8")
     (run_dir / "run_manifest.json").write_text(
         json.dumps({"holdout_test_contact": holdout_contact, "config_sha256": "stage00hash"}),
@@ -172,6 +183,7 @@ def stage01_config(tmp_path: Path, stage00_run_dir: Path, raw_dir: Path) -> dict
             "candidate_inputs": "01_candidate_inputs.json",
             "probe_ledger": "01_train_inner_probe_ledger.csv",
             "fold_manifest": "01_train_inner_fold_manifest.csv",
+            "label_band_diagnostic": "01_train_label_band_diagnostic.csv",
         },
         "feature_sets": {"price_action_core": ["log_return"]},
         "window_sizes": [10, 20, 30],
@@ -204,6 +216,7 @@ def stage01_config(tmp_path: Path, stage00_run_dir: Path, raw_dir: Path) -> dict
                     "max_depth": 3,
                     "num_leaves": 7,
                     "subsample": 0.9,
+                    "subsample_freq": 1,
                     "colsample_bytree": 0.9,
                     "class_weight": "balanced",
                 },
@@ -279,11 +292,17 @@ def test_stage01_run_stage_writes_real_screening_artifacts(tmp_path: Path) -> No
     assert result.candidate_inputs.exists()
     assert result.probe_ledger.exists()
     assert result.fold_manifest.exists()
+    assert result.band_diagnostic.exists()
 
     manifest = json.loads(result.run_manifest.read_text(encoding="utf-8"))
     assert manifest["holdout_test_contact"] is False
     assert manifest["no_final_model_selected"] is True
     assert manifest["stage01_execution_mode"] == "feature_window_probe_screening_v1"
+    assert manifest["requested_device"] == "cpu"
+    assert manifest["resolved_device"] in {"not_resolved", "cpu"}
+    assert isinstance(manifest["cuda_available"], bool)
+    assert "gpu_name_or_null" in manifest
+    assert "device_fallback_reason" in manifest
     assert set(manifest["implemented_probe_ids"]) == {
         "logreg_flat_control",
         "lightgbm_small",
@@ -293,6 +312,13 @@ def test_stage01_run_stage_writes_real_screening_artifacts(tmp_path: Path) -> No
     }
 
     ledger = pd.read_csv(result.probe_ledger)
+    assert {
+        "model_family",
+        "block_delta_macro_f1_json",
+        "requested_device",
+        "resolved_device",
+        "device_fallback_reason",
+    }.issubset(ledger.columns)
     assert {
         "stratified_dummy_train_prior",
         "majority_train_prior",
@@ -337,6 +363,16 @@ def test_stage01_run_stage_writes_real_screening_artifacts(tmp_path: Path) -> No
     summary = pd.read_csv(result.summary)
     assert set(summary["window_size"]) == {10, 20, 30}
     assert summary["n_samples_total"].gt(0).all()
+    assert {
+        "best_screening_family",
+        "family_mean_delta_macro_f1_json",
+        "family_lcb_delta_macro_f1_json",
+        "family_positive_ticker_count_json",
+    }.issubset(summary.columns)
+
+    band_diagnostic = pd.read_csv(result.band_diagnostic)
+    assert set(band_diagnostic["band_bps"]) == {3.0, 10.0, 20.0, 30.0, 50.0}
+    assert "overall" in set(band_diagnostic["scope"])
 
     candidates = json.loads(result.candidate_inputs.read_text(encoding="utf-8"))
     assert candidates["recommended_model_families_from_protocol"] == [
@@ -353,6 +389,15 @@ def test_stage01_run_stage_writes_real_screening_artifacts(tmp_path: Path) -> No
     assert len(folds) == 2
 
 
+def test_ms_dlinear_tcn_keeps_trend_and_residual_heads_separate() -> None:
+    source = inspect.getsource(feature_window_search._MSDLinearTCNTiny)
+    assert "trend + residual" not in source
+    assert "self.trend_heads" in source
+    assert "self.residual_heads" in source
+    assert "trend_head(self.dropout(trend.flatten(1)))" in source
+    assert "residual_head(self.dropout(residual.flatten(1)))" in source
+
+
 def test_stage01_rejects_official_validation_selection(tmp_path: Path) -> None:
     stage00_run_dir = tmp_path / "stage00"
     raw_dir = tmp_path / "raw"
@@ -362,6 +407,34 @@ def test_stage01_rejects_official_validation_selection(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="train-inner"):
         run_stage(config)
+
+
+def test_stage01_materializes_windows_after_fold_caps(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage00_run_dir = tmp_path / "stage00"
+    raw_dir = tmp_path / "raw"
+    write_stage00_artifacts(stage00_run_dir, raw_dir)
+    config = stage01_config(tmp_path, stage00_run_dir, raw_dir)
+    config["screening_sample_policy"]["max_train_samples_per_fold"] = 5
+    config["screening_sample_policy"]["max_eval_samples_per_fold"] = 4
+    for probe_id, probe_config in config["lightweight_probes"].items():
+        probe_config["enabled"] = probe_id == "logreg_flat_control"
+    config["budget"]["max_counted_probe_rows"] = 10
+    original = feature_window_search._materialize_window_matrix
+    seen_sizes: list[int] = []
+
+    def wrapped_materialize(dataset, indices):
+        seen_sizes.append(len(indices))
+        return original(dataset, indices)
+
+    monkeypatch.setattr(feature_window_search, "_materialize_window_matrix", wrapped_materialize)
+
+    run_stage(config)
+
+    assert seen_sizes
+    assert max(seen_sizes) <= 5
+    assert 4 in seen_sizes
 
 
 def test_stage01_resolves_repo_relative_notebook_path(

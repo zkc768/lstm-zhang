@@ -32,6 +32,7 @@ outputs:
   candidate_inputs: 01_candidate_inputs.json
   probe_ledger: 01_train_inner_probe_ledger.csv
   fold_manifest: 01_train_inner_fold_manifest.csv
+  label_band_diagnostic: 01_train_label_band_diagnostic.csv
 
 feature_sets:
   price_action_core:
@@ -88,6 +89,7 @@ lightweight_probes:
       max_depth: 6
       num_leaves: 31
       subsample: 0.9
+      subsample_freq: 1
       colsample_bytree: 0.9
       class_weight: balanced
   standard_dlinear_tiny:

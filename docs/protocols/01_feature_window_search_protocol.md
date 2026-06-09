@@ -206,7 +206,7 @@ Recommended lightweight probes:
 | probe_id | Stage 01 role | Fixed defaults |
 |---|---|---|
 | `logreg_flat_control` | cheap linear sanity check on flattened windows | `solver=liblinear`, `class_weight=balanced`, `max_iter=2000` |
-| `lightgbm_small` | tabular non-linear probe and last-step/window control | `n_estimators=200`, `learning_rate=0.03`, `max_depth=6`, `num_leaves=31`, `subsample=0.9`, `colsample_bytree=0.9`, `class_weight=balanced` |
+| `lightgbm_small` | tabular non-linear probe and last-step/window control | `n_estimators=200`, `learning_rate=0.03`, `max_depth=6`, `num_leaves=31`, `subsample=0.9`, `subsample_freq=1`, `colsample_bytree=0.9`, `class_weight=balanced` |
 | `standard_dlinear_tiny` | simple sequence linear probe aligned to the standard DLinear baseline | fixed tiny architecture, no HPO |
 | `tcn_tiny` | causal convolution sequence probe | `channels=(32,32)`, `kernel_size=3`, `dropout=0.10` |
 | `ms_dlinear_tcn_tiny` | Ian-aligned hybrid shape/signal probe | fixed multi-scale DLinear plus small residual TCN |
@@ -259,6 +259,12 @@ sample_method: deterministic_even_stride_by_ticker_label
 The cap is a compute guard only. It must be configured before execution and
 must not be adjusted after inspecting official validation, test, or holdout
 metrics.
+
+The implementation may keep full eligible sample metadata for sample-loss
+reporting, but train/eval window tensors must be materialized only after the
+predeclared fold-level caps are applied. Stage 01 must not build every
+candidate's full dense window matrix before applying `max_train_samples_per_fold`
+and `max_eval_samples_per_fold`.
 
 The expected counted rows are:
 
@@ -332,9 +338,20 @@ balanced_accuracy
 mean_delta_macro_f1_vs_stratified_dummy
 lcb_delta_macro_f1_vs_stratified_dummy
 positive_ticker_count
+best_screening_family
+family_mean_delta_macro_f1_json
+family_lcb_delta_macro_f1_json
+family_positive_ticker_count_json
 seed_std_macro_f1
 fold_std_macro_f1
 ```
+
+The candidate-level LCB used for ranking must not pool heterogeneous model
+families as independent repeats. It must be computed per Stage 02 screening
+family, using train-inner `ticker x trading_day` block deltas where available.
+The summary may expose the best family LCB in the legacy
+`lcb_delta_macro_f1_vs_stratified_dummy` column for compatibility, but the
+per-family JSON columns are the audit trail.
 
 A feature/window cell is Stage 02-eligible only if:
 
@@ -484,6 +501,7 @@ results/01_feature_window_search/<run_id>/
   01_candidate_inputs.json
   01_train_inner_probe_ledger.csv
   01_train_inner_fold_manifest.csv
+  01_train_label_band_diagnostic.csv
 ```
 
 Minimum `01_feature_window_search_summary.csv` columns:
@@ -502,6 +520,10 @@ mean_balanced_accuracy
 mean_delta_macro_f1_vs_stratified_dummy
 lcb_delta_macro_f1_vs_stratified_dummy
 positive_ticker_count
+best_screening_family
+family_mean_delta_macro_f1_json
+family_lcb_delta_macro_f1_json
+family_positive_ticker_count_json
 seed_std_macro_f1
 fold_std_macro_f1
 selected_for_stage02
@@ -525,10 +547,16 @@ holdout_test_contact
 `no_final_model_selected` must be `true`. `holdout_test_contact` must be
 `false`.
 
+`run_manifest.json` must record GPU/CPU provenance for Torch-capable probes:
+`requested_device`, `resolved_device`, `cuda_available`, `gpu_name_or_null`,
+and `device_fallback_reason`. CPU fallback is allowed for Stage 01 when
+`require_gpu=false`, but the fallback must be auditable.
+
 Minimum `01_train_inner_probe_ledger.csv` columns:
 
 ```text
 probe_id
+model_family
 candidate_id
 feature_set
 window_size
@@ -546,11 +574,21 @@ baseline_balanced_accuracy
 delta_macro_f1_vs_baseline
 delta_balanced_accuracy_vs_baseline
 sample_id_hash
+block_delta_macro_f1_json
+requested_device
+resolved_device
+device_fallback_reason
 error_message
 ```
 
 Skipped and failed rows must remain in the ledger with `fit_status` and an
 error message.
+
+`01_train_label_band_diagnostic.csv` is a train-only diagnostic artifact for
+the frozen Stage 00 horizon. It reports `|r_h|` quantiles and class/no-trade
+shares for predeclared diagnostic bands such as `3, 10, 20, 30, 50` bps. It is
+not a Stage 01 search axis and must not change `no_trade_band_bps` without a
+new Stage 00 freeze.
 
 ## 12. Minimum GitHub Tests
 

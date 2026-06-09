@@ -51,6 +51,7 @@ def test_stage01_config_freezes_window_grid_and_budget() -> None:
     assert config["budget"]["max_counted_probe_rows"] == 240
     assert config["train_inner"]["official_validation_for_selection"] is False
     assert config["inputs"]["raw_data_dir"] == "/content/lst_models_raw_stock_data"
+    assert config["outputs"]["label_band_diagnostic"] == "01_train_label_band_diagnostic.csv"
     assert config["screening_sample_policy"]["sample_method"] == (
         "deterministic_even_stride_by_ticker_label"
     )
@@ -74,6 +75,9 @@ def test_stage01_config_declares_feature_sets_and_probes() -> None:
         "tcn_tiny",
         "ms_dlinear_tcn_tiny",
     }
+    lightgbm_defaults = config["lightweight_probes"]["lightgbm_small"]["fixed_defaults"]
+    assert lightgbm_defaults["subsample"] == 0.9
+    assert lightgbm_defaults["subsample_freq"] == 1
 
 
 def test_stage01_config_does_not_promote_recurrent_controls_to_hpo() -> None:

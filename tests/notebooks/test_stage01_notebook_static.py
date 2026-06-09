@@ -44,6 +44,7 @@ def test_stage01_notebook_is_single_stage01_entrypoint() -> None:
     assert "\"tcn\"" in text
     assert "simple_gru" in text
     assert "shallow_lstm" in text
+    assert "01_train_label_band_diagnostic.csv" in text
     assert "git\", \"clone\"" in text
     assert "git\", \"checkout\"" in text
     assert "clear_project_import_cache" in text
