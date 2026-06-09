@@ -85,6 +85,27 @@ HPO_TRIAL_LEDGER_COLUMNS = [
     "error_message",
 ]
 
+HPO_PLAN_LEDGER_COLUMNS = [
+    "trial_id",
+    "candidate_id",
+    "feature_set",
+    "feature_columns_json",
+    "window_size",
+    "model_family",
+    "probe_id",
+    "hpo_profile_id",
+    "hpo_profile_params_json",
+    "fold_id",
+    "seed",
+    "plan_status",
+    "n_train_samples",
+    "n_eval_samples",
+    "train_sample_id_hash",
+    "eval_sample_id_hash",
+    "sample_id_hash",
+    "baseline_id",
+]
+
 HPO_SUMMARY_COLUMNS = [
     "candidate_id",
     "feature_set",
@@ -257,6 +278,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage02Result:
         )
         execution_mode = "formal_train_inner_hpo_completed"
 
+    plan_ledger = _build_hpo_plan_ledger(trial_ledger)
     device_provenance = _device_manifest_fields(config, trial_ledger)
     frozen_candidate = _frozen_candidate_payload(
         config=config,
@@ -288,7 +310,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage02Result:
 
     summary.to_csv(summary_path, index=False)
     trial_ledger.to_csv(trial_ledger_path, index=False)
-    trial_ledger.to_csv(plan_ledger_path, index=False)
+    plan_ledger.to_csv(plan_ledger_path, index=False)
     hpo_summary.to_csv(hpo_summary_path, index=False)
     baseline_summary.to_csv(baseline_summary_path, index=False)
     frozen_candidate_path = write_json(frozen_candidate_path, frozen_candidate)
@@ -782,6 +804,22 @@ def _run_hpo_trials(
         pd.DataFrame(trial_rows, columns=HPO_TRIAL_LEDGER_COLUMNS),
         pd.DataFrame(baseline_rows, columns=BASELINE_CONTROL_COLUMNS),
     )
+
+
+def _build_hpo_plan_ledger(trial_ledger: pd.DataFrame) -> pd.DataFrame:
+    if trial_ledger.empty:
+        return pd.DataFrame(columns=HPO_PLAN_LEDGER_COLUMNS)
+    missing = [
+        column
+        for column in HPO_PLAN_LEDGER_COLUMNS
+        if column != "plan_status" and column not in trial_ledger.columns
+    ]
+    if missing:
+        raise ValueError(f"cannot build Stage 02 HPO plan ledger; missing columns: {missing}")
+    plan = trial_ledger[[column for column in HPO_PLAN_LEDGER_COLUMNS if column != "plan_status"]].copy()
+    insert_at = HPO_PLAN_LEDGER_COLUMNS.index("plan_status")
+    plan.insert(insert_at, "plan_status", "planned")
+    return plan[HPO_PLAN_LEDGER_COLUMNS]
 
 
 def _prepare_candidate_dataset(

@@ -83,7 +83,8 @@ the Stage 01-approved families enabled in the Stage 02 config.
 Current active outputs are:
 
 - `02_model_hpo_train_inner_summary.csv`
-- `02_hpo_plan_ledger.csv`
+- `02_hpo_plan_ledger.csv`, a planned-trial ledger with candidate, family,
+  profile, fold, seed, sample-count, sample-hash, and baseline identifiers only
 - `02_hpo_trial_ledger.csv`
 - `02_hpo_summary.csv`
 - `02_baseline_control_summary.csv`
@@ -106,6 +107,9 @@ Current runner behavior:
 - Scores required same-row baselines on the exact same fold rows.
 - Writes formal HPO trial, summary, baseline/control, frozen-candidate, and
   Stage 03 handoff artifacts.
+- Writes `02_hpo_plan_ledger.csv` as a distinct plan artifact. It must not be a
+  byte-identical copy of `02_hpo_trial_ledger.csv` and must not contain fitted
+  model metrics, `fit_status`, or Stage 03 selection flags.
 - Sets Stage 03 readiness to true only when a primary and fallback candidate are
   frozen from completed train-inner HPO rows and all configured gates pass.
 - Keeps `holdout_test_contact=false`.
@@ -718,8 +722,8 @@ Rules:
 - The Drive result backup must create/update `drive_backup_manifest.json` in
   the Stage 02 local run folder and upload it to the same Drive run folder. The
   manifest must record `stage_name`, `run_id`, local output dir, Drive path
-  parts, Drive folder id, uploaded file names, Drive file ids, uploaded byte
-  sizes, and sync timestamp.
+  parts, Drive folder id, uploaded file names, uploaded relative paths, Drive
+  file ids, uploaded byte sizes, and sync timestamp.
 - When checkpointing is enabled, write a small local checkpoint directory first,
   then upload a compressed archive to Drive.
 - Prefer a small number of archive uploads over many small Drive file writes.
@@ -737,6 +741,10 @@ Rules:
   `02_frozen_candidate.md`, `02_best_params_by_family.json`,
   `02_stage03_handoff.json`, frozen param YAML files when produced, and
   `drive_backup_manifest.json`.
+- Drive result backup must preserve `artifact_inventory.csv` relative paths.
+  Files under `frozen_params/` must remain under `frozen_params/` in the Drive
+  run folder; backup code must not flatten subdirectories by uploading every
+  file directly under the run folder.
 - Pre-run checkpoint may archive the Stage 02 sidecars and exact Stage 00/01
   input artifacts needed to reconstruct the HPO run.
 - Post-run checkpoint may archive the Stage 02 run folder after `run_stage`

@@ -45,6 +45,12 @@ def test_stage02_notebook_is_single_stage02_entrypoint() -> None:
     assert "backup_stage02_results_to_drive" in text
     assert "drive_backup_manifest.json" in text
     assert "backup_manifest_path.write_text" in text
+    assert "ensure_stage02_result_drive_subpath" in text
+    assert "relative_path = local_path.relative_to(run_dir)" in text
+    assert "uploaded_relative_paths" in text
+    assert "relative_path.as_posix()" in text
+    assert "upload_or_update_stage02_result_file(service, drive_folder_id, run_dir, path)" in text
+    assert "upload_or_update_stage02_result_file(service, drive_folder_id, path)" not in text
     assert "stage02_drive_backup_manifest = backup_stage02_results_to_drive(result.output_dir)" in text
     assert "MediaFileUpload" in text
     assert "def quote_drive_query_value" in text

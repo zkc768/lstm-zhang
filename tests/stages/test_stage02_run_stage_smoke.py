@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import sys
 from pathlib import Path
 
@@ -650,6 +651,16 @@ def test_stage02_runs_formal_hpo_rows_for_stage01_candidates(
     assert ledger["selected_for_stage03"].any()
     assert "early_stopping_source" in ledger.columns
     assert "early_stopping_used" in ledger.columns
+
+    plan_ledger = pd.read_csv(result.hpo_plan_ledger)
+    assert len(plan_ledger) == len(ledger)
+    assert set(plan_ledger["plan_status"]) == {"planned"}
+    assert "macro_f1" not in plan_ledger.columns
+    assert "fit_status" not in plan_ledger.columns
+    assert "selected_for_stage03" not in plan_ledger.columns
+    assert hashlib.sha256(result.hpo_plan_ledger.read_bytes()).hexdigest() != hashlib.sha256(
+        result.hpo_trial_ledger.read_bytes()
+    ).hexdigest()
 
     baseline_summary = pd.read_csv(result.baseline_control_summary)
     assert set(baseline_summary["baseline_id"]) == {
