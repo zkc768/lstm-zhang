@@ -1,5 +1,5 @@
 # AGENTS.md - lst_models V2 route
-<!-- AGENTS_VERSION: v1.7-stage-result-save-and-checkpoints -->
+<!-- AGENTS_VERSION: v1.8-codegraph-structural-audit -->
 
 This is a compact Colab-first research project for the V2 `lst_models` route.
 It is not a backend project, not a general ML framework, and not a place to
@@ -50,6 +50,20 @@ technical design/protocol first. Do not guess a file location.
 
 If `docs/lst_models_code_style_and_route_guide.md` is missing, stop and report
 that exact missing path before creating or editing stage code.
+
+For tasks that mention skills, MCP, connectors, agent workflow, literature
+search, paper writing, external apps, multi-perspective review, or codegraph,
+also read:
+
+```text
+docs/agent_capabilities_and_skill_routing.md
+```
+
+Use that file as the project-local routing layer for globally installed skills
+and available MCP-style tools. Do not copy skill source code into this
+repository, and do not let any skill, connector, or MCP tool override the
+safety, placement, validation-only, no-holdout/test, Python-executable, or
+reporting rules in this `AGENTS.md`.
 
 ## 3. Route Contract
 
@@ -390,7 +404,39 @@ note. Classify it and either fix it in the same task or report it as pending.
 - Notebook static gates must be strong enough to catch the contract failures
   discovered in prior work; when a new failure class appears, update the gate.
 
-## 12. Environment And Git
+## 12. Codegraph Structural Audit Rules
+
+Use `mcp__codegraph` as a structural audit tool for non-trivial Python changes.
+It helps detect dependency direction, duplicate helpers, symbol impact, and
+circular imports. It is not the source of research truth and does not replace
+tests, notebook static gates, artifact contracts, protocol docs, or
+holdout/test safety rules.
+
+Codegraph is mandatory when a task:
+
+- touches three or more Python modules under `src/lst_models/`
+- creates, moves, or renames reusable helpers
+- changes `run_stage(config)` or a stage entry point
+- changes shared data, split, label, window, feature, metric, artifact,
+  checkpoint, or device/GPU logic
+- refactors imports, module placement, or file boundaries
+- needs to explain impact across callers/callees before pushing
+
+Preferred codegraph use:
+
+- run `find_cycles` before and after non-trivial Python refactors
+- use `semantic_search` before adding a new helper, to avoid duplicates
+- use `context` before editing an existing function/class with callers
+- use `path` when dependency direction between modules is unclear
+- use `branch_compare` for structural impact review across commits/branches
+
+If the codegraph database is missing or stale, report the exact tool failure and
+use fallback checks: `rg`, direct file reads, `py_compile`, targeted pytest, and
+notebook/static gates. Do not fabricate codegraph results. For a non-trivial
+Python change, the end-of-task report must say either `codegraph: run` with the
+useful result summary, or `codegraph: unavailable` with fallback validation.
+
+## 13. Environment And Git
 
 - Use the project-specified Python executable when one is documented.
 - Do not use bare `python` or bare `pytest` when a project Python path exists.
@@ -401,7 +447,7 @@ note. Classify it and either fix it in the same task or report it as pending.
 - Start and end scoped code-editing work by reporting `git status --short` and
   `git diff --stat` when a git repository exists.
 
-## 13. End-of-Task Report
+## 14. End-of-Task Report
 
 At the end of each task, report:
 
@@ -412,3 +458,5 @@ At the end of each task, report:
 - unresolved issues
 - compliance gaps found, and whether each one is fixed or
   `non_compliant_pending_fix`
+- codegraph result for non-trivial Python changes, or reason it was not
+  required/unavailable
