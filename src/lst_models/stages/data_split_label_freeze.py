@@ -41,8 +41,11 @@ def run_stage(config: Mapping[str, Any]) -> Stage00Result:
     raw_data_dir = Path(str(config["inputs"]["raw_data_dir"]))
     frames = []
     for ticker in raw_manifest["tickers"]:
-        file_name = raw_manifest["raw_source"]["files"][ticker]["name"]
+        file_spec = raw_manifest["raw_source"]["files"][ticker]
+        file_name = file_spec["name"]
         raw_path = raw_data_dir / file_name
+        file_spec["bytes"] = int(raw_path.stat().st_size)
+        file_spec["sha256"] = hash_file(raw_path)
         one_minute = read_raw_txt_file(raw_path, ticker, raw_manifest["raw_source"])
         five_minute = resample_1min_to_5min(one_minute, raw_manifest["five_minute_recipe"])
         split_frame = add_split_column(five_minute, boundaries)

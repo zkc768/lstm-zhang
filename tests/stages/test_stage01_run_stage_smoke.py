@@ -305,6 +305,8 @@ def test_stage01_run_stage_writes_real_screening_artifacts(tmp_path: Path) -> No
     assert isinstance(manifest["cuda_available"], bool)
     assert "gpu_name_or_null" in manifest
     assert "device_fallback_reason" in manifest
+    assert len(manifest["feature_rebuild_code_sha256"]) == 64
+    assert manifest["raw_file_integrity"]["status"] == "metadata_missing"
     assert set(manifest["implemented_probe_ids"]) == {
         "logreg_flat_control",
         "lightgbm_small",
@@ -556,6 +558,19 @@ def test_stage01_resolves_repo_relative_notebook_path(
 
     manifest = json.loads(result.run_manifest.read_text(encoding="utf-8"))
     assert len(manifest["notebook_sha256"]) == 64
+
+
+def test_stage01_blocks_raw_sha256_mismatch(tmp_path: Path) -> None:
+    stage00_run_dir = tmp_path / "stage00"
+    raw_dir = tmp_path / "raw"
+    write_stage00_artifacts(stage00_run_dir, raw_dir)
+    raw_manifest_path = stage00_run_dir / "raw_data_manifest.json"
+    raw_manifest = json.loads(raw_manifest_path.read_text(encoding="utf-8"))
+    raw_manifest["raw_source"]["files"][TICKERS[0]]["sha256"] = "0" * 64
+    raw_manifest_path.write_text(json.dumps(raw_manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="raw file sha256 mismatch"):
+        run_stage(stage01_config(tmp_path, stage00_run_dir, raw_dir))
 
 
 def test_stage01_reports_exact_missing_stage00_artifact(tmp_path: Path) -> None:

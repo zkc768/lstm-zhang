@@ -102,10 +102,14 @@ hpo_sample_policy:
 lightgbm_training_defaults:
   eval_metric: binary_logloss
   early_stopping_rounds: 25
+  early_stopping_validation_source: inner_train_chronological_tail
+  early_stopping_validation_fraction: 0.2
+  minimum_early_stopping_train_samples: 128
+  minimum_early_stopping_validation_samples: 128
 
 probe_training_defaults:
   torch:
-    epochs: 12
+    epochs: 64
     batch_size: 1024
     learning_rate: 0.001
     weight_decay: 0.0001
@@ -113,7 +117,13 @@ probe_training_defaults:
     require_gpu: false
     optimizer: AdamW
     loss: class_weighted_cross_entropy
-    early_stopping: none
+    early_stopping: inner_train_chronological_tail
+    early_stopping_validation_fraction: 0.2
+    minimum_early_stopping_train_samples: 128
+    minimum_early_stopping_validation_samples: 128
+    early_stopping_patience: 8
+    early_stopping_min_delta: 0.0
+    gradient_clip_norm: 1.0
 
 checkpointing:
   enabled: true
@@ -124,6 +134,7 @@ selection_rules:
   primary_metric: macro_f1
   baseline: stratified_dummy_train_prior
   require_completed_rows_before_stage03: true
+  minimum_positive_ticker_count: 3
   max_selected_configs_per_family: 1
   no_official_validation_selection: true
   no_final_model_selected: true

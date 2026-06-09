@@ -97,4 +97,53 @@ def require_artifacts(run_dir: str | Path, required_names: Iterable[str]) -> dic
     if missing:
         missing_text = "\n".join(f"- {path}" for path in missing)
         raise FileNotFoundError(f"missing required stage artifacts:\n{missing_text}")
+    _verify_artifact_inventory_hashes(root, paths)
     return paths
+
+
+def _verify_artifact_inventory_hashes(root: Path, paths: Mapping[str, Path]) -> None:
+    inventory_path = root / "artifact_inventory.csv"
+    if not inventory_path.exists():
+        return
+    try:
+        inventory = pd.read_csv(inventory_path)
+    except pd.errors.EmptyDataError:
+        return
+    if inventory.empty or "sha256" not in inventory.columns:
+        return
+    for required_name, path in paths.items():
+        if required_name == "artifact_inventory.csv":
+            continue
+        row = _artifact_inventory_row(inventory, required_name)
+        if row is None:
+            continue
+        exists_value = row.get("exists")
+        if exists_value is not None and str(exists_value).strip().lower() in {"false", "0", "no"}:
+            raise ValueError(f"artifact inventory marks required artifact as missing: {path}")
+        expected_bytes = row.get("bytes")
+        if pd.notna(expected_bytes) and str(expected_bytes).strip() not in {"", "0"}:
+            observed_bytes = path.stat().st_size
+            if observed_bytes != int(expected_bytes):
+                raise ValueError(
+                    f"artifact byte-size mismatch for {path}: "
+                    f"expected {int(expected_bytes)}, observed {observed_bytes}"
+                )
+        expected_sha256 = row.get("sha256")
+        if pd.notna(expected_sha256) and str(expected_sha256).strip():
+            observed_sha256 = hash_file(path)
+            if observed_sha256 != str(expected_sha256).strip().lower():
+                raise ValueError(
+                    f"artifact sha256 mismatch for {path}: "
+                    f"expected {expected_sha256}, observed {observed_sha256}"
+                )
+
+
+def _artifact_inventory_row(inventory: pd.DataFrame, required_name: str) -> pd.Series | None:
+    normalized_name = Path(required_name).as_posix()
+    for column in ("relative_path", "file_name", "artifact_name"):
+        if column not in inventory.columns:
+            continue
+        matches = inventory.loc[inventory[column].astype(str).eq(normalized_name)]
+        if not matches.empty:
+            return matches.iloc[0]
+    return None

@@ -4,32 +4,24 @@ profiles:
   - profile_id: tcn_p01
     channels: [16, 16]
     kernel_size: 2
-    num_blocks: 2
-    dilation_base: 2
     dropout: 0.0
-    causal: true
-    residual: true
+    learning_rate: 0.001
+    weight_decay: 0.0001
   - profile_id: tcn_p02
     channels: [32, 32]
     kernel_size: 3
-    num_blocks: 2
-    dilation_base: 2
     dropout: 0.10
-    causal: true
-    residual: true
+    learning_rate: 0.001
+    weight_decay: 0.0001
   - profile_id: tcn_p03
     channels: [32, 32, 32]
     kernel_size: 3
-    num_blocks: 3
-    dilation_base: 2
     dropout: 0.10
-    causal: true
-    residual: true
+    learning_rate: 0.0003
+    weight_decay: 0.0001
   - profile_id: tcn_p04
     channels: [32, 32, 32]
     kernel_size: 5
-    num_blocks: 3
-    dilation_base: 2
     dropout: 0.20
-    causal: true
-    residual: true
+    learning_rate: 0.003
+    weight_decay: 0.0

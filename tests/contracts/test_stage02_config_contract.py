@@ -87,6 +87,62 @@ def test_stage02_config_declares_core_hpo_families_and_search_spaces() -> None:
         assert 1 <= len(search_space["profiles"]) <= config["budget"]["max_profiles_per_family"]
 
 
+def test_stage02_search_space_records_only_effective_profile_keys() -> None:
+    config = load_config()
+    allowed_profile_keys = {
+        "lightgbm": {
+            "profile_id",
+            "num_leaves",
+            "max_depth",
+            "min_data_in_leaf",
+            "min_child_samples",
+            "learning_rate",
+            "n_estimators",
+            "feature_fraction",
+            "colsample_bytree",
+            "bagging_fraction",
+            "subsample",
+            "bagging_freq",
+            "subsample_freq",
+            "lambda_l1",
+            "reg_alpha",
+            "lambda_l2",
+            "reg_lambda",
+            "class_weight",
+        },
+        "standard_dlinear": {
+            "profile_id",
+            "moving_avg_kernel",
+            "dropout",
+            "learning_rate",
+            "weight_decay",
+        },
+        "tcn": {
+            "profile_id",
+            "channels",
+            "kernel_size",
+            "dropout",
+            "learning_rate",
+            "weight_decay",
+        },
+        "ms_dlinear_tcn": {
+            "profile_id",
+            "moving_avg_kernels",
+            "tcn_channels",
+            "tcn_kernel_size",
+            "dropout",
+            "learning_rate",
+            "weight_decay",
+        },
+    }
+    for family, allowed_keys in allowed_profile_keys.items():
+        search_space_path = ROOT / config["hpo_families"][family]["search_space"]
+        with search_space_path.open("r", encoding="utf-8") as handle:
+            search_space = yaml.safe_load(handle)
+        for profile in search_space["profiles"]:
+            assert set(profile).issubset(allowed_keys), (family, profile)
+
+
 def test_stage02_config_budget_and_train_inner_rules() -> None:
     config = load_config()
     assert config["train_inner"]["n_folds"] == 3
@@ -96,9 +152,25 @@ def test_stage02_config_budget_and_train_inner_rules() -> None:
     assert config["hpo_sample_policy"]["max_train_samples_per_fold"] == 50000
     assert config["hpo_sample_policy"]["max_eval_samples_per_fold"] == 20000
     assert config["lightgbm_training_defaults"]["early_stopping_rounds"] == 25
-    assert config["probe_training_defaults"]["torch"]["epochs"] == 12
+    assert (
+        config["lightgbm_training_defaults"]["early_stopping_validation_source"]
+        == "inner_train_chronological_tail"
+    )
+    assert config["lightgbm_training_defaults"]["minimum_early_stopping_train_samples"] == 128
+    assert config["lightgbm_training_defaults"]["minimum_early_stopping_validation_samples"] == 128
+    torch_defaults = config["probe_training_defaults"]["torch"]
+    assert torch_defaults["epochs"] == 64
+    assert torch_defaults["early_stopping"] == "inner_train_chronological_tail"
+    assert torch_defaults["early_stopping_validation_fraction"] == 0.2
+    assert torch_defaults["minimum_early_stopping_train_samples"] == 128
+    assert torch_defaults["minimum_early_stopping_validation_samples"] == 128
+    assert torch_defaults["early_stopping_patience"] == 8
+    assert torch_defaults["early_stopping_min_delta"] == 0.0
+    assert torch_defaults["gradient_clip_norm"] == 1.0
     assert config["checkpointing"]["enabled"] is True
     assert config["checkpointing"]["checkpoint_every_trials"] == 8
+    assert config["selection_rules"]["minimum_positive_ticker_count"] == 3
+    assert config["selection_rules"]["max_selected_configs_per_family"] == 1
     assert config["selection_rules"]["no_official_validation_selection"] is True
     assert config["selection_rules"]["no_final_model_selected"] is True
 

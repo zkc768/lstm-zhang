@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -75,6 +76,11 @@ HPO_TRIAL_LEDGER_COLUMNS = [
     "resolved_device",
     "device_fallback_reason",
     "best_iteration",
+    "early_stopping_source",
+    "early_stopping_used",
+    "early_stopping_reason",
+    "early_stopping_train_sample_id_hash",
+    "early_stopping_eval_sample_id_hash",
     "selected_for_stage03",
     "error_message",
 ]
@@ -177,6 +183,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage02Result:
 
     stage01_manifest = _load_json(stage01_paths["run_manifest.json"])
     stage01_handoff = _load_json(stage01_paths["01_candidate_inputs.json"])
+    stage01_summary = _load_stage01_summary(stage01_paths["01_feature_window_search_summary.csv"])
     _validate_stage01_contract(config, stage01_manifest, stage01_handoff)
 
     candidates = _candidate_inputs(stage01_handoff)
@@ -224,6 +231,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage02Result:
             candidates,
             profiles_by_family,
             stage00_context,
+            stage01_summary,
             config,
             run_id=run_id,
         )
@@ -249,11 +257,13 @@ def run_stage(config: Mapping[str, Any]) -> Stage02Result:
         )
         execution_mode = "formal_train_inner_hpo_completed"
 
+    device_provenance = _device_manifest_fields(config, trial_ledger)
     frozen_candidate = _frozen_candidate_payload(
         config=config,
         stage01_handoff=stage01_handoff,
         decision_bundle=decision_bundle,
         hpo_summary=hpo_summary,
+        device_provenance=device_provenance,
     )
     best_params = _best_params_payload(
         config=config,
@@ -318,13 +328,19 @@ def run_stage(config: Mapping[str, Any]) -> Stage02Result:
         "hpo_completed_rows": int(trial_ledger["fit_status"].eq("completed").sum())
         if not trial_ledger.empty
         else 0,
+        "search_space_sha256": _search_space_hashes(config, approved_families),
+        "fold_design_sha256": _fold_design_hash(stage00_context),
+        "raw_file_integrity": _raw_file_integrity_manifest_field(stage00_context),
+        **_feature_rebuild_manifest_fields(stage01_manifest),
+        "random_seeds": [int(seed) for seed in config["train_inner"]["seeds"]],
+        **_git_commit_fields(),
         "approved_model_families_for_stage02": list(approved_families),
         "baseline_registry_names": _baseline_ids(config),
         "official_validation_for_selection": False,
         "no_final_model_selected": True,
         "holdout_test_contact": False,
     }
-    manifest_payload.update(_device_manifest_fields(config, trial_ledger))
+    manifest_payload.update(device_provenance)
     manifest_path = write_json(output_dir / _output_name(outputs, "manifest", "run_manifest.json"), manifest_payload)
     inventory_path = write_artifact_inventory(
         output_dir,
@@ -385,6 +401,31 @@ def _validate_config(config: Mapping[str, Any]) -> None:
         raise ValueError("Stage 02 must declare no_official_validation_selection=true")
     if selection_rules.get("no_final_model_selected") is not True:
         raise ValueError("Stage 02 must declare no_final_model_selected=true")
+    if int(selection_rules.get("minimum_positive_ticker_count", 0)) < 0:
+        raise ValueError("selection_rules.minimum_positive_ticker_count must be non-negative")
+
+    lightgbm_defaults = _as_mapping(
+        config.get("lightgbm_training_defaults", {}), "lightgbm_training_defaults"
+    )
+    if int(lightgbm_defaults.get("early_stopping_rounds", 0)) > 0:
+        if lightgbm_defaults.get("early_stopping_validation_source") != "inner_train_chronological_tail":
+            raise ValueError(
+                "LightGBM early stopping must use inner_train_chronological_tail, not scored inner-eval rows"
+            )
+    torch_defaults = _torch_defaults(config)
+    torch_early_stopping = str(torch_defaults.get("early_stopping", "none"))
+    if torch_early_stopping not in {"none", "inner_train_chronological_tail"}:
+        raise ValueError("Torch early_stopping must be none or inner_train_chronological_tail")
+    if torch_early_stopping == "inner_train_chronological_tail":
+        fraction = float(torch_defaults.get("early_stopping_validation_fraction", 0.2))
+        if not 0.0 < fraction < 1.0:
+            raise ValueError("Torch early_stopping_validation_fraction must be between 0 and 1")
+        if int(torch_defaults.get("minimum_early_stopping_train_samples", 0)) < 1:
+            raise ValueError("Torch minimum_early_stopping_train_samples must be positive")
+        if int(torch_defaults.get("minimum_early_stopping_validation_samples", 0)) < 1:
+            raise ValueError("Torch minimum_early_stopping_validation_samples must be positive")
+        if int(torch_defaults.get("early_stopping_patience", 0)) < 1:
+            raise ValueError("Torch early_stopping_patience must be positive")
 
 
 def _as_mapping(value: Any, name: str) -> Mapping[str, Any]:
@@ -433,6 +474,13 @@ def _validate_stage01_contract(
         raise ValueError(
             "Stage 02 configured Stage 00 run id does not match Stage 01 handoff: "
             f"{configured_stage00!r} != {source_stage00!r}"
+        )
+    source_feature_hash = stage01_manifest.get("feature_rebuild_code_sha256")
+    current_feature_hash = stage01.feature_rebuild_code_sha256()
+    if source_feature_hash and str(source_feature_hash) != current_feature_hash:
+        raise ValueError(
+            "Stage 01 feature rebuild code hash does not match current Stage 02 rebuild code: "
+            f"{source_feature_hash!r} != {current_feature_hash!r}"
         )
 
 
@@ -551,6 +599,79 @@ def _load_search_profiles(
     return profiles_by_family
 
 
+def _search_space_hashes(config: Mapping[str, Any], approved_families: tuple[str, ...]) -> dict[str, str]:
+    family_configs = _as_mapping(config["hpo_families"], "hpo_families")
+    hashes: dict[str, str] = {}
+    for family in approved_families:
+        family_config = _as_mapping(family_configs[family], f"hpo_families.{family}")
+        hashes[str(family)] = hash_file(_resolve_repo_path(family_config["search_space"]))
+    return hashes
+
+
+def _fold_design_hash(data_context: Stage02DataContext | None) -> str | None:
+    if data_context is None:
+        return None
+    return hash_mapping({"folds": data_context.folds.to_dict(orient="records")})
+
+
+def _load_stage01_summary(path: Path) -> pd.DataFrame:
+    summary = pd.read_csv(path)
+    required_columns = {"candidate_id", "n_samples_total", "n_samples_by_ticker_json"}
+    missing = sorted(required_columns - set(summary.columns))
+    if missing:
+        raise ValueError(f"Stage 01 summary missing required columns for Stage 02: {missing}")
+    return summary
+
+
+def _raw_file_integrity_manifest_field(
+    data_context: Stage02DataContext | None,
+) -> dict[str, Any] | None:
+    if data_context is None:
+        return None
+    return stage01._raw_manifest_integrity_summary(data_context.raw_manifest)
+
+
+def _feature_rebuild_manifest_fields(stage01_manifest: Mapping[str, Any]) -> dict[str, Any]:
+    current_feature_hash = stage01.feature_rebuild_code_sha256()
+    source_feature_hash = stage01_manifest.get("feature_rebuild_code_sha256")
+    if source_feature_hash:
+        match = str(source_feature_hash) == current_feature_hash
+        reason = "matched" if match else "mismatch"
+    else:
+        match = None
+        reason = "stage01_manifest_field_missing_legacy_run"
+    return {
+        "stage02_feature_rebuild_code_sha256": current_feature_hash,
+        "source_stage01_feature_rebuild_code_sha256": source_feature_hash,
+        "feature_rebuild_code_match": match,
+        "feature_rebuild_code_match_reason": reason,
+    }
+
+
+def _git_commit_fields() -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=_repo_root(),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return {
+            "git_commit": None,
+            "git_commit_reason": "git_unavailable_or_not_a_repository",
+        }
+    commit = completed.stdout.strip()
+    if completed.returncode == 0 and commit:
+        return {"git_commit": commit, "git_commit_reason": "resolved_from_local_git_checkout"}
+    return {
+        "git_commit": None,
+        "git_commit_reason": "workspace_not_git_repository",
+    }
+
+
 def _planned_hpo_rows(
     candidates: list[Mapping[str, Any]],
     profiles_by_family: Mapping[str, list[Mapping[str, Any]]],
@@ -571,6 +692,7 @@ def _run_hpo_trials(
     candidates: list[Mapping[str, Any]],
     profiles_by_family: Mapping[str, list[Mapping[str, Any]]],
     data_context: Stage02DataContext,
+    stage01_summary: pd.DataFrame,
     config: Mapping[str, Any],
     *,
     run_id: str,
@@ -583,6 +705,7 @@ def _run_hpo_trials(
 
     for candidate in candidates:
         dataset = _prepare_candidate_dataset(candidate, data_context)
+        _validate_rebuilt_candidate_counts(candidate, dataset, stage01_summary)
         feature_columns = tuple(str(column) for column in candidate.get("feature_columns", []))
         for fold in data_context.folds.to_dict(orient="records"):
             train_idx, eval_idx = _fold_capped_indices(dataset, fold, config)
@@ -674,6 +797,38 @@ def _prepare_candidate_dataset(
         feature_columns=feature_columns,
         window_size=int(candidate["window_size"]),
     )
+
+
+def _validate_rebuilt_candidate_counts(
+    candidate: Mapping[str, Any],
+    dataset: stage01.CandidateDataset,
+    stage01_summary: pd.DataFrame,
+) -> None:
+    candidate_id = str(candidate["candidate_id"])
+    matches = stage01_summary.loc[stage01_summary["candidate_id"].astype(str).eq(candidate_id)]
+    if matches.empty:
+        raise ValueError(f"Stage 01 summary missing candidate row for {candidate_id}")
+    row = matches.iloc[0]
+    expected_total = int(row["n_samples_total"])
+    actual_total = int(len(dataset.metadata))
+    if actual_total != expected_total:
+        raise ValueError(
+            f"Stage 02 rebuilt sample count mismatch for {candidate_id}: "
+            f"expected {expected_total}, observed {actual_total}"
+        )
+    expected_by_ticker = {
+        str(ticker): int(count)
+        for ticker, count in json.loads(str(row["n_samples_by_ticker_json"])).items()
+    }
+    actual_by_ticker = {
+        str(ticker): int(count)
+        for ticker, count in dataset.metadata.groupby("ticker").size().to_dict().items()
+    }
+    if actual_by_ticker != expected_by_ticker:
+        raise ValueError(
+            f"Stage 02 rebuilt per-ticker sample count mismatch for {candidate_id}: "
+            f"expected {expected_by_ticker}, observed {actual_by_ticker}"
+        )
 
 
 def _fold_capped_indices(
@@ -838,6 +993,11 @@ def _empty_trial_row(
         "resolved_device": pd.NA,
         "device_fallback_reason": pd.NA,
         "best_iteration": pd.NA,
+        "early_stopping_source": pd.NA,
+        "early_stopping_used": pd.NA,
+        "early_stopping_reason": pd.NA,
+        "early_stopping_train_sample_id_hash": pd.NA,
+        "early_stopping_eval_sample_id_hash": pd.NA,
         "selected_for_stage03": False,
         "error_message": "",
     }
@@ -878,6 +1038,7 @@ def _fit_stage02_model(
             profile=profile,
             x_train=x_train,
             y_train=y_train,
+            train_meta=train_meta,
             x_eval=x_eval,
             y_eval=y_eval,
             eval_meta=eval_meta,
@@ -906,6 +1067,7 @@ def _fit_lightgbm_hpo_trial(
     profile: Mapping[str, Any],
     x_train: np.ndarray,
     y_train: np.ndarray,
+    train_meta: pd.DataFrame,
     x_eval: np.ndarray,
     y_eval: np.ndarray,
     eval_meta: pd.DataFrame,
@@ -924,24 +1086,160 @@ def _fit_lightgbm_hpo_trial(
         config.get("lightgbm_training_defaults", {}), "lightgbm_training_defaults"
     )
     early_rounds = int(training_defaults.get("early_stopping_rounds", 25))
+    split = _lightgbm_inner_train_early_stopping_split(
+        x_train=x_train,
+        y_train=y_train,
+        train_meta=train_meta,
+        training_defaults=training_defaults,
+        early_rounds=early_rounds,
+    )
     callbacks = [log_evaluation(period=0)]
-    if early_rounds > 0:
+    if split["early_stopping_used"]:
         callbacks.append(early_stopping(early_rounds, verbose=False))
+    fit_kwargs: dict[str, Any] = {
+        "eval_metric": str(training_defaults.get("eval_metric", "binary_logloss")),
+        "callbacks": callbacks,
+    }
+    if split["early_stopping_used"]:
+        fit_kwargs["eval_set"] = [(split["x_stop"], split["y_stop"])]
     try:
         model.fit(
-            x_train,
-            y_train,
-            eval_set=[(x_eval, y_eval)],
-            eval_metric=str(training_defaults.get("eval_metric", "binary_logloss")),
-            callbacks=callbacks,
+            split["x_fit"],
+            split["y_fit"],
+            **fit_kwargs,
         )
         predictions = model.predict(x_eval).astype(int)
         scores = model.predict_proba(x_eval)[:, 1].astype(float)
         outcome = _score_model_predictions(eval_meta, predictions, scores, baseline_predictions)
         outcome["best_iteration"] = getattr(model, "best_iteration_", None)
+        outcome.update(_early_stopping_outcome_fields(split))
         return outcome
     except (ValueError, RuntimeError, FloatingPointError) as exc:
-        return {"fit_status": "failed_exception", "error_message": f"{type(exc).__name__}: {exc}"}
+        return {
+            "fit_status": "failed_exception",
+            "error_message": f"{type(exc).__name__}: {exc}",
+            **_early_stopping_outcome_fields(split),
+        }
+
+
+def _lightgbm_inner_train_early_stopping_split(
+    *,
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    train_meta: pd.DataFrame,
+    training_defaults: Mapping[str, Any],
+    early_rounds: int,
+) -> dict[str, Any]:
+    if early_rounds <= 0:
+        return {
+            "x_fit": x_train,
+            "y_fit": y_train,
+            "x_stop": None,
+            "y_stop": None,
+            "early_stopping_source": "disabled",
+            "early_stopping_used": False,
+            "early_stopping_reason": "early_stopping_rounds<=0",
+            "early_stopping_train_sample_id_hash": stage01._sample_id_hash(
+                train_meta["sample_id"].tolist()
+            ),
+            "early_stopping_eval_sample_id_hash": "",
+        }
+
+    validation_fraction = float(training_defaults.get("early_stopping_validation_fraction", 0.2))
+    minimum_eval = int(training_defaults.get("minimum_early_stopping_validation_samples", 128))
+    minimum_train = int(training_defaults.get("minimum_early_stopping_train_samples", 128))
+    validation_fraction = min(max(validation_fraction, 0.05), 0.5)
+    n_samples = int(len(train_meta))
+    n_stop = max(minimum_eval, int(np.ceil(n_samples * validation_fraction)))
+    n_stop = min(n_stop, max(0, n_samples - minimum_train))
+    full_train_hash = stage01._sample_id_hash(train_meta["sample_id"].tolist())
+    if n_stop < minimum_eval:
+        return {
+            "x_fit": x_train,
+            "y_fit": y_train,
+            "x_stop": None,
+            "y_stop": None,
+            "early_stopping_source": "inner_train_chronological_tail",
+            "early_stopping_used": False,
+            "early_stopping_reason": "insufficient_inner_train_rows_for_minimum_validation_subsplit",
+            "early_stopping_train_sample_id_hash": full_train_hash,
+            "early_stopping_eval_sample_id_hash": "",
+        }
+    if n_stop < 1:
+        return {
+            "x_fit": x_train,
+            "y_fit": y_train,
+            "x_stop": None,
+            "y_stop": None,
+            "early_stopping_source": "inner_train_chronological_tail",
+            "early_stopping_used": False,
+            "early_stopping_reason": "insufficient_inner_train_rows_for_subsplit",
+            "early_stopping_train_sample_id_hash": full_train_hash,
+            "early_stopping_eval_sample_id_hash": "",
+        }
+
+    sort_columns = [
+        column
+        for column in ("target_timestamp", "trading_day", "ticker", "sample_id")
+        if column in train_meta.columns
+    ]
+    if sort_columns:
+        ordered_index = train_meta.sort_values(sort_columns, kind="stable").index.to_numpy()
+    else:
+        ordered_index = np.arange(n_samples)
+    stop_index = ordered_index[-n_stop:]
+    fit_index = ordered_index[:-n_stop]
+    fit_labels = y_train[fit_index]
+    stop_labels = y_train[stop_index]
+    if len(np.unique(fit_labels)) < 2:
+        reason = "inner_train_fit_subsplit_single_class"
+    elif len(np.unique(stop_labels)) < 2:
+        reason = "inner_train_early_stopping_subsplit_single_class"
+    else:
+        reason = ""
+    if reason:
+        return {
+            "x_fit": x_train,
+            "y_fit": y_train,
+            "x_stop": None,
+            "y_stop": None,
+            "early_stopping_source": "inner_train_chronological_tail",
+            "early_stopping_used": False,
+            "early_stopping_reason": reason,
+            "early_stopping_train_sample_id_hash": full_train_hash,
+            "early_stopping_eval_sample_id_hash": "",
+        }
+    fit_meta = train_meta.iloc[fit_index]
+    stop_meta = train_meta.iloc[stop_index]
+    return {
+        "x_fit": x_train[fit_index],
+        "y_fit": fit_labels,
+        "x_stop": x_train[stop_index],
+        "y_stop": stop_labels,
+        "early_stopping_source": "inner_train_chronological_tail",
+        "early_stopping_used": True,
+        "early_stopping_reason": "configured_inner_train_subsplit",
+        "early_stopping_train_sample_id_hash": stage01._sample_id_hash(
+            fit_meta["sample_id"].tolist()
+        ),
+        "early_stopping_eval_sample_id_hash": stage01._sample_id_hash(
+            stop_meta["sample_id"].tolist()
+        ),
+    }
+
+
+def _early_stopping_outcome_fields(split: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "early_stopping_source": split.get("early_stopping_source", pd.NA),
+        "early_stopping_used": bool(split.get("early_stopping_used", False)),
+        "early_stopping_reason": split.get("early_stopping_reason", ""),
+        "early_stopping_train_sample_id_hash": split.get(
+            "early_stopping_train_sample_id_hash", ""
+        ),
+        "early_stopping_eval_sample_id_hash": split.get(
+            "early_stopping_eval_sample_id_hash", ""
+        ),
+    }
 
 
 def _lightgbm_params(profile: Mapping[str, Any]) -> dict[str, Any]:
@@ -974,7 +1272,15 @@ def _trial_probe_config(
 ) -> dict[str, Any]:
     fixed_defaults = _profile_params(profile)
     torch_defaults = dict(_torch_defaults(config))
-    for key in ("learning_rate", "weight_decay", "batch_size", "epochs"):
+    for key in (
+        "learning_rate",
+        "weight_decay",
+        "batch_size",
+        "epochs",
+        "early_stopping_patience",
+        "early_stopping_min_delta",
+        "gradient_clip_norm",
+    ):
         if key in fixed_defaults:
             torch_defaults[key] = fixed_defaults[key]
     return {
@@ -1066,6 +1372,15 @@ def _trial_outcome_fields(
     if outcome.get("fit_status") != "completed":
         return {
             "fit_status": outcome.get("fit_status", "failed_unknown"),
+            "early_stopping_source": outcome.get("early_stopping_source", pd.NA),
+            "early_stopping_used": outcome.get("early_stopping_used", pd.NA),
+            "early_stopping_reason": outcome.get("early_stopping_reason", pd.NA),
+            "early_stopping_train_sample_id_hash": outcome.get(
+                "early_stopping_train_sample_id_hash", pd.NA
+            ),
+            "early_stopping_eval_sample_id_hash": outcome.get(
+                "early_stopping_eval_sample_id_hash", pd.NA
+            ),
             "error_message": outcome.get("error_message", ""),
         }
     macro_f1 = float(outcome["macro_f1"])
@@ -1088,6 +1403,13 @@ def _trial_outcome_fields(
         "resolved_device": outcome.get("resolved_device", pd.NA),
         "device_fallback_reason": outcome.get("device_fallback_reason", pd.NA),
         "best_iteration": outcome.get("best_iteration", pd.NA),
+        "early_stopping_source": outcome.get("early_stopping_source", "not_applicable"),
+        "early_stopping_used": outcome.get("early_stopping_used", False),
+        "early_stopping_reason": outcome.get("early_stopping_reason", "not_lightgbm_trial"),
+        "early_stopping_train_sample_id_hash": outcome.get(
+            "early_stopping_train_sample_id_hash", ""
+        ),
+        "early_stopping_eval_sample_id_hash": outcome.get("early_stopping_eval_sample_id_hash", ""),
         "error_message": "",
     }
 
@@ -1219,6 +1541,7 @@ def _baseline_delta_series(
 def _select_frozen_candidates(
     hpo_summary: pd.DataFrame, trial_ledger: pd.DataFrame, config: Mapping[str, Any]
 ) -> dict[str, Any]:
+    selection_rules = _as_mapping(config["selection_rules"], "selection_rules")
     if hpo_summary.empty:
         return _selection_bundle(
             ready_for_stage03=False,
@@ -1227,7 +1550,7 @@ def _select_frozen_candidates(
             primary=None,
             fallback=None,
         )
-    if bool(config["selection_rules"].get("require_completed_rows_before_stage03", True)):
+    if bool(selection_rules.get("require_completed_rows_before_stage03", True)):
         if not trial_ledger["fit_status"].eq("completed").all():
             return _selection_bundle(
                 ready_for_stage03=False,
@@ -1236,29 +1559,32 @@ def _select_frozen_candidates(
                 primary=None,
                 fallback=None,
             )
+    minimum_ticker_count = int(selection_rules.get("minimum_positive_ticker_count", 0))
+    positive_ticker_count = pd.to_numeric(
+        hpo_summary["min_positive_ticker_count"], errors="coerce"
+    )
     eligible = hpo_summary.loc[
         (hpo_summary["completed_rows"] == hpo_summary["expected_rows"])
         & (hpo_summary["mean_delta_macro_f1_vs_stratified_dummy_train_prior"] > 0.0)
         & (hpo_summary["mean_delta_macro_f1_vs_majority_train_prior"] > 0.0)
+        & (positive_ticker_count >= minimum_ticker_count)
     ].copy()
     if eligible.empty:
         return _selection_bundle(
             ready_for_stage03=False,
-            decision="do_not_start_stage03_no_hpo_candidate_cleared_baseline_gates",
-            block_reason="no_hpo_candidate_cleared_baseline_gates",
+            decision="do_not_start_stage03_no_hpo_candidate_cleared_selection_gates",
+            block_reason="no_hpo_candidate_cleared_baseline_or_ticker_robustness_gates",
             primary=None,
             fallback=None,
         )
-    ranked = eligible.sort_values(
-        [
-            "lcb_delta_macro_f1_vs_stratified_dummy_train_prior",
-            "mean_delta_macro_f1_vs_stratified_dummy_train_prior",
-            "mean_macro_f1",
-            "min_positive_ticker_count",
-        ],
-        ascending=[False, False, False, False],
+    ranked_within_candidates = _rank_selection_frame(eligible)
+    candidate_winners = ranked_within_candidates.groupby("candidate_id", sort=False).head(1)
+    ranked_candidate_winners = _rank_selection_frame(candidate_winners)
+    selections = _pick_primary_and_fallback(
+        ranked_candidate_winners,
+        ranked_within_candidates,
+        max_per_family=int(selection_rules.get("max_selected_configs_per_family", 0)),
     )
-    selections = [_selection_record(row) for row in ranked.to_dict(orient="records")]
     primary = selections[0] if selections else None
     fallback = selections[1] if len(selections) > 1 else None
     if primary is None or fallback is None:
@@ -1276,6 +1602,56 @@ def _select_frozen_candidates(
         primary=primary,
         fallback=fallback,
     )
+
+
+def _rank_selection_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    return frame.sort_values(
+        [
+            "lcb_delta_macro_f1_vs_stratified_dummy_train_prior",
+            "mean_delta_macro_f1_vs_stratified_dummy_train_prior",
+            "mean_macro_f1",
+            "min_positive_ticker_count",
+        ],
+        ascending=[False, False, False, False],
+    )
+
+
+def _pick_primary_and_fallback(
+    ranked_candidate_winners: pd.DataFrame,
+    ranked_within_candidates: pd.DataFrame,
+    *,
+    max_per_family: int,
+) -> list[dict[str, Any]]:
+    selected_rows: list[Mapping[str, Any]] = []
+    selected_keys: set[tuple[str, str, str]] = set()
+    family_counts: dict[str, int] = {}
+
+    def try_add(row: Mapping[str, Any]) -> None:
+        key = (
+            str(row["candidate_id"]),
+            str(row["model_family"]),
+            str(row["hpo_profile_id"]),
+        )
+        if key in selected_keys:
+            return
+        family = str(row["model_family"])
+        if max_per_family > 0 and family_counts.get(family, 0) >= max_per_family:
+            return
+        selected_rows.append(row)
+        selected_keys.add(key)
+        family_counts[family] = family_counts.get(family, 0) + 1
+
+    for row in ranked_candidate_winners.to_dict(orient="records"):
+        try_add(row)
+        if len(selected_rows) >= 2:
+            return [_selection_record(row) for row in selected_rows]
+
+    for row in ranked_within_candidates.to_dict(orient="records"):
+        try_add(row)
+        if len(selected_rows) >= 2:
+            return [_selection_record(row) for row in selected_rows]
+
+    return [_selection_record(row) for row in selected_rows]
 
 
 def _selection_record(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -1297,6 +1673,8 @@ def _selection_record(row: Mapping[str, Any]) -> dict[str, Any]:
         "mean_delta_macro_f1_vs_majority_train_prior": _json_number(
             row["mean_delta_macro_f1_vs_majority_train_prior"]
         ),
+        "min_positive_ticker_count": _json_number(row["min_positive_ticker_count"]),
+        "selection_ranking_scope": "within_candidate_input_then_candidate_winners",
     }
 
 
@@ -1416,7 +1794,11 @@ def _frozen_candidate_payload(
     stage01_handoff: Mapping[str, Any],
     decision_bundle: Mapping[str, Any],
     hpo_summary: pd.DataFrame,
+    device_provenance: Mapping[str, Any],
 ) -> dict[str, Any]:
+    outputs = _as_mapping(config["outputs"], "outputs")
+    train_inner = _as_mapping(config["train_inner"], "train_inner")
+    selection_rules = _as_mapping(config["selection_rules"], "selection_rules")
     return {
         "route": config["route"],
         "stage_name": config["stage_name"],
@@ -1430,9 +1812,56 @@ def _frozen_candidate_payload(
         "block_reason": decision_bundle["block_reason"],
         "selection_metric": config["selection_rules"]["primary_metric"],
         "selection_baseline": config["selection_rules"]["baseline"],
+        "selection_rules": {
+            "minimum_positive_ticker_count": int(
+                selection_rules.get("minimum_positive_ticker_count", 0)
+            ),
+            "max_selected_configs_per_family": int(
+                selection_rules.get("max_selected_configs_per_family", 0)
+            ),
+            "candidate_ranking_scope": "within_candidate_input_then_candidate_winners",
+            "same_row_baseline_required": True,
+        },
         "primary_candidate": decision_bundle.get("primary_candidate"),
         "fallback_candidate": decision_bundle.get("fallback_candidate"),
         "hpo_summary_rows": int(len(hpo_summary)),
+        "fold_design": {
+            "n_folds": int(train_inner["n_folds"]),
+            "event_overlap_count_required": int(
+                train_inner.get("event_overlap_count_required", 0)
+            ),
+            "official_validation_for_selection": False,
+            "fold_source": "rebuilt_from_stage00_train_partition",
+            "fold_type": "chronological_train_inner",
+        },
+        "row_contract": {
+            "same_row_baselines": True,
+            "candidate_vs_candidate_comparison": "within_candidate_input_then_candidate_winners",
+            "sample_id_hash_fields": [
+                "train_sample_id_hash",
+                "eval_sample_id_hash",
+                "sample_id_hash",
+            ],
+        },
+        "preprocessing_contract": {
+            "feature_source": "stage01_shortlisted_features_rebuilt_from_stage00_train_partition",
+            "fit_scope": "inner_train_rows_only",
+            "scored_rows": "inner_eval_rows_only",
+            "lightgbm_early_stopping_source": "inner_train_chronological_tail_when_available",
+            "torch_early_stopping_source": "inner_train_chronological_tail_when_available",
+        },
+        "seed_policy": {
+            "train_inner_seeds": [int(seed) for seed in train_inner["seeds"]],
+        },
+        "device_provenance": dict(device_provenance),
+        "artifact_references": {
+            "hpo_trial_ledger": outputs.get("hpo_trial_ledger", "02_hpo_trial_ledger.csv"),
+            "hpo_summary": outputs.get("hpo_summary", "02_hpo_summary.csv"),
+            "baseline_control_summary": outputs.get(
+                "baseline_control_summary", "02_baseline_control_summary.csv"
+            ),
+            "stage03_handoff": outputs.get("stage03_handoff", "02_stage03_handoff.json"),
+        },
         "holdout_test_contact": False,
         "official_validation_for_selection": False,
         "no_final_model_selected": True,

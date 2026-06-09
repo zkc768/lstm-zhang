@@ -68,6 +68,11 @@ def test_stage02_notebook_is_single_stage02_entrypoint() -> None:
     assert 'STAGE01_DRIVE_PATH_PARTS = ["lst_models", "results", "01_feature_window_search", STAGE01_RUN_ID]' in text
     assert "CORE_HPO_FAMILIES" in text
     assert "BASELINE_REGISTRY_NAMES" in text
+    assert "early_stopping_validation_source" in text
+    assert 'torch_defaults["early_stopping"] == "inner_train_chronological_tail"' in text
+    assert '"torch_early_stopping": torch_defaults["early_stopping"]' in text
+    assert "minimum_positive_ticker_count" in text
+    assert "max_selected_configs_per_family" in text
     assert "model_hpo_train_inner.py" in text
     assert "from lst_models.stages.model_hpo_train_inner import run_stage" in text
     assert "run_dir = Path(result.output_dir)" in text

@@ -186,12 +186,24 @@ Required checks:
 - The configured Stage 01 run folder resolves by exact run id.
 - Upstream artifacts resolve by `run_folder / relative_path` or explicit exact
   artifact paths, not by stale runtime-only `/content/...` inventory values.
+- When an upstream `artifact_inventory.csv` includes `bytes` and `sha256`,
+  required artifact reads must verify those values instead of checking existence
+  only.
 - Stage 01 manifest records `holdout_test_contact=false`.
 - Stage 01 handoff records `holdout_test_contact=false`.
 - Stage 01 handoff records `no_final_model_selected=true`.
 - Stage 01 handoff contains at least one candidate input before HPO planning or
   fitting proceeds.
 - Every Stage 01-approved family is enabled in the Stage 02 config.
+- If the Stage 01 manifest records `feature_rebuild_code_sha256`, it must match
+  the current Stage 02 feature-rebuild code hash before Stage 02 rebuilds
+  feature/window data.
+- If the frozen Stage 00 raw manifest records per-file `sha256` or `bytes`,
+  Stage 02 must verify the local raw files before resampling.
+- Stage 02 must compare each rebuilt candidate's total and per-ticker eligible
+  sample counts against `01_feature_window_search_summary.csv`; a mismatch blocks
+  HPO because Stage 02 would no longer be training on the same finite-row
+  contract that Stage 01 screened.
 - No official validation, test, or holdout artifact is configured as an HPO input.
 - HPO search space, folds, seeds, budget, objective, and tie-break rules are
   declared before any fitting trial starts.
@@ -244,7 +256,7 @@ Required same-row baselines:
 - `constant_up`.
 - `constant_down`.
 
-Formal-HPO controls required where technically applicable:
+Tracked architectural controls for future implementation:
 
 - `last_step_mlp`.
 - `last_step_lightgbm_control`.
@@ -263,6 +275,10 @@ The current config uses `stratified_dummy_train_prior` as the primary selection
 baseline and reports all four mandatory baseline controls in
 `02_baseline_control_summary.csv`. Output schemas must retain the Stage 00
 baseline registry names above or update config, code, tests, and docs together.
+The current active runner does not produce `last_step_mlp`,
+`last_step_lightgbm_control`, `dlinear_only`, or `tcn_only` artifacts. Those
+controls are non-blocking future controls unless config, budget arithmetic,
+runner code, tests, and this protocol are updated before execution.
 
 ## 8. Budget Arithmetic
 
@@ -413,9 +429,9 @@ Required selection gates for a frozen primary candidate:
 
 - Positive delta versus same-row stratified dummy on the selected aggregate.
 - Positive delta versus same-row majority baseline on the selected aggregate.
-- Per-ticker robustness recomputed on Stage 02 fitted candidates, with a floor
-  at least as strict as the Stage 01 handoff when Stage 01 provides
-  `positive_ticker_count` or `family_positive_ticker_count`.
+- Per-ticker robustness recomputed on Stage 02 fitted candidates. The active
+  config declares `selection_rules.minimum_positive_ticker_count=3`; a
+  candidate below that floor cannot be frozen for Stage 03.
 - No fold chronology, preprocessing, or artifact-contract violation.
 - No official validation, test, or holdout contact.
 
@@ -424,10 +440,12 @@ and a `positive_ticker_count` floor. Stage 02 should inherit this robustness
 concept or explicitly declare a replacement before fitting. Do not reduce
 per-ticker robustness to a tie-break only.
 
-Lower confidence bounds must declare their resampling unit. If Stage 02 uses LCB
-with only a small number of folds and seeds, it should prefer block-level
-resampling inherited from Stage 01, for example ticker or trading-day blocks,
-rather than treating six fold/seed scores as a stable confidence distribution.
+Lower confidence bounds must declare their resampling unit. The current runner
+uses fold/seed-level LCB only as a conservative ranking statistic after the
+baseline and ticker-robustness gates pass; it does not treat the LCB as a
+standalone significance claim. Block/ticker deltas remain ledger audit fields.
+If Stage 02 later claims statistical confidence rather than a bounded HPO
+ranking, block-level resampling must replace or supplement the current LCB.
 
 ## 12. Search Axes
 
@@ -440,7 +458,9 @@ LightGBM allowed axes:
 - `max_depth`.
 - `min_data_in_leaf`.
 - `learning_rate`.
-- `n_estimators`, selected by train-inner early stopping only.
+- `n_estimators`, selected by early stopping on a chronological tail split
+  carved from the inner-train rows only. The scored inner-eval fold may not be
+  passed as the LightGBM early-stopping `eval_set`.
 - `feature_fraction`.
 - `bagging_fraction`.
 - `bagging_freq`.
@@ -462,6 +482,22 @@ Deep sequence allowed axes:
 - `early_stopping_patience`.
 - Gradient clipping.
 - Optional predeclared loss choice.
+
+For the current active runner, deep sequence profiles train for a predeclared
+maximum epoch count and use an inner-train chronological tail split for early
+stopping and best-epoch restoration when enough rows and both classes are
+available. That stopping split is carved only from the trial's inner-train rows;
+the scored inner-eval fold is never used for epoch selection. If the tail split
+is too small or single-class, the trial must record the fallback reason in the
+HPO ledger.
+
+The active Stage 02 search-space files must include only parameters consumed by
+the implemented builders. For the current TCN builder, depth is represented by
+the length of `channels`; causal padding, dilation base, and residual skip
+behavior are fixed implementation choices unless code and tests wire them into
+the model before execution. For the current TCN, `learning_rate` and
+`weight_decay` are active training axes, not inherited constants. For the current
+`standard_dlinear` builder, `individual_channels` is not an active axis.
 
 MS-DLinear+TCN additional axes:
 
@@ -514,6 +550,20 @@ dimension.
 
 Stage 02 inherits feature semantics from Stage 01. It does not reinterpret,
 recompute, or retune feature definitions.
+
+Current executable Stage 02 rebuilds feature/window tensors from frozen Stage 00
+artifacts and raw files. Because of that rebuild, integrity checks are part of
+the Stage 02 start gate:
+
+- Stage 00 must freeze raw file `bytes` and `sha256` in `raw_data_manifest.json`
+  for newly produced runs.
+- Stage 01 must write `feature_rebuild_code_sha256` in its run manifest.
+- Stage 02 verifies raw file hashes when those hashes are present in the frozen
+  Stage 00 raw manifest.
+- Stage 02 compares Stage 01's `feature_rebuild_code_sha256` against the current
+  rebuild code hash when the Stage 01 field exists. A mismatch blocks Stage 02.
+- Legacy Stage 00/01 runs that predate these fields must be marked in the Stage
+  02 manifest as missing provenance; Stage 02 must not fabricate a match.
 
 For `normalized_macd_hist`:
 
@@ -586,7 +636,7 @@ records:
 Formal HPO implementation must also record:
 
 - HPO method and budget.
-- Search-space hash.
+- Search-space hash for every approved family.
 - Fold-design hash.
 - Random seeds.
 - Requested device.
@@ -621,6 +671,13 @@ Minimum tests for the active formal HPO runner:
   monkeypatched tiny chronology-safe test fixture.
 - HPO trial ledger schema.
 - Baseline same-row contract across candidate-versus-baseline comparisons.
+- Candidate selection ranks within candidate-input groups first, then chooses
+  primary/fallback from candidate winners while respecting configured family
+  caps where possible.
+- Per-ticker robustness floor blocks Stage 03 readiness when no candidate meets
+  `minimum_positive_ticker_count`.
+- LightGBM early stopping uses an inner-train chronological tail split and never
+  the scored inner-eval fold.
 - Frozen candidate schema.
 - Baseline/control summary schema.
 - `run_stage(config)` rejects Stage 01 holdout/test contact.

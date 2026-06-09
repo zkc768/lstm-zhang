@@ -484,7 +484,6 @@ search.
 
 ```text
 moving_avg_kernel: 3, 5, 7, 11
-individual_channels: false, true
 dropout: 0.0, 0.05, 0.10
 learning_rate: 0.0003, 0.001, 0.003
 weight_decay: 0.0, 0.0001
@@ -498,12 +497,18 @@ input window must be excluded.
 ```text
 channels: (16,16), (32,32), (32,32,32)
 kernel_size: 2, 3, 5
-num_blocks: 2, 3
-dilation_base: 2
 dropout: 0.0, 0.10, 0.20
-causal: true
-residual: true
+learning_rate: 0.0003, 0.001, 0.003
+weight_decay: 0.0, 0.0001
 ```
+
+The current active `standard_dlinear` and `tcn` Stage 02 search spaces must
+record only parameters consumed by the implemented builders. TCN depth is
+represented by the length of `channels`; dilation, causal padding, and residual
+skip behavior are fixed implementation choices unless a later protocol revision
+wires them into the model and tests. Stage 02 deep-family profiles use
+predeclared maximum epochs with inner-train chronological-tail early stopping and
+best-epoch restoration, never official validation rows.
 
 ### MS-DLinear+TCN
 

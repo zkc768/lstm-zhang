@@ -12,6 +12,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
+from lst_models.config import hash_file  # noqa: E402
 from lst_models.stages.data_split_label_freeze import run_stage  # noqa: E402
 
 
@@ -110,6 +111,12 @@ def test_stage00_run_stage_writes_contract_artifacts(tmp_path: Path) -> None:
     assert manifest["bootstrap_mode"] == "unit_test"
     assert manifest["runtime_provenance"]["dependency_versions"]["pandas"]
     assert manifest["holdout_test_contact"] is False
+    frozen_raw_manifest = json.loads(
+        (result.output_dir / "raw_data_manifest.json").read_text(encoding="utf-8")
+    )
+    frozen_file_spec = frozen_raw_manifest["raw_source"]["files"]["ABC"]
+    assert frozen_file_spec["bytes"] == raw_file.stat().st_size
+    assert frozen_file_spec["sha256"] == hash_file(raw_file)
     inventory = pd.read_csv(result.artifact_inventory)
     assert "path" not in inventory.columns
     assert {
