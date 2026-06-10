@@ -156,13 +156,13 @@ sample-validity rules inside Stage 02.
 
 Current selected Stage 01 handoff for this Stage 02 config:
 
-- Stage 01 run id: `20260609_070204`.
+- Stage 01 run id: `20260610_075002`.
 - Stage 01 runtime run folder:
-  `/content/lst_models_results/01_feature_window_search/20260609_070204`.
+  `/content/lst_models_results/01_feature_window_search/20260610_075002`.
 - Stage 01 Drive backup folder:
-  `My Drive/lst_models/results/01_feature_window_search/20260609_070204`
-  (`1RofmvfGI1_peaPmB7yvphHJllx949fKJ`).
-- Source Stage 00 run id: `20260609_015034_927813`.
+  `My Drive/lst_models/results/01_feature_window_search/20260610_075002`
+  (`1y2shQD2E2ZF7r4oNb7pjZqZQgGhR1l_6`).
+- Source Stage 00 run id: `20260610_051705_347450`.
 - Stage 01 decision: `selected_candidate_inputs_for_stage02_train_inner_hpo`.
 - Safety flags: `holdout_test_contact=false`,
   `official_validation_for_selection=false`,
@@ -172,8 +172,8 @@ Current Stage 02 candidate inputs from the Stage 01 handoff:
 
 | candidate_id | feature_set | window_size | Stage 01 screening family | median_family_lcb_delta |
 |---|---|---:|---|---:|
-| `price_action_core_w20` | `price_action_core` | 20 | `tcn` | 0.003667 |
-| `price_volume_time_w20` | `price_volume_time` | 20 | `lightgbm` | 0.006686 |
+| `price_action_core_w20` | `price_action_core` | 20 | `tcn` | 0.003711 |
+| `price_volume_time_w20` | `price_volume_time` | 20 | `lightgbm` | 0.006917 |
 
 These Stage 01 screening values are handoff provenance only. They do not rank
 Stage 02 HPO trials, do not authorize official validation readout, and do not

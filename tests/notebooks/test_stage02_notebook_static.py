@@ -8,7 +8,7 @@ import nbformat
 
 ROOT = Path(__file__).resolve().parents[2]
 NOTEBOOK = ROOT / "notebooks" / "02_model_hpo_train_inner_colab.ipynb"
-CURRENT_STAGE01_RUN_ID = "20260609_070204"
+CURRENT_STAGE01_RUN_ID = "20260610_075002"
 CURRENT_STAGE00_RUN_ID = "20260610_051705_347450"
 
 

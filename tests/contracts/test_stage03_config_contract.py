@@ -29,7 +29,7 @@ def test_scope_and_contact_flags() -> None:
 def test_upstream_run_ids_chain() -> None:
     inputs = CONFIG["inputs"]
     assert inputs["stage00_run_id"] == "20260610_051705_347450"
-    assert inputs["stage01_run_id"] == "20260609_070204"
+    assert inputs["stage01_run_id"] == "20260610_075002"
     assert inputs["stage02_run_id"] not in inputs["superseded_stage02_run_ids"]
     assert inputs["stage02_run_id"] != "<NEW_STAGE02_RUN_ID>", (
         "fill inputs.stage02_run_id with the superseding Stage 02 run id "

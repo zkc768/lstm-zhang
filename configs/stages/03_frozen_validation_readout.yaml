@@ -17,9 +17,9 @@ inputs:
     - sample_event_index.csv
     - run_manifest.json
     - artifact_inventory.csv
-  stage01_run_id: "20260609_070204"
-  stage01_runtime_run_dir: /content/lst_models_results/01_feature_window_search/20260609_070204
-  stage01_drive_path_parts: [lst_models, results, 01_feature_window_search, "20260609_070204"]
+  stage01_run_id: "20260610_075002"
+  stage01_runtime_run_dir: /content/lst_models_results/01_feature_window_search/20260610_075002
+  stage01_drive_path_parts: [lst_models, results, 01_feature_window_search, "20260610_075002"]
   required_stage01_artifacts:
     - run_manifest.json
     - artifact_inventory.csv
