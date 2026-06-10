@@ -33,6 +33,23 @@ the superseding Stage 02 run id from roadmap Phase 0.3 (the completed run
 fill-points are marked `<NEW_STAGE02_RUN_ID>` in Task 4 and Task 5; the config
 contract test asserts the value is NOT the superseded id.
 
+> **Correction record (2026-06-10, post-Route-A migration `4672f4d`):** the
+> import instructions in Tasks 6-8 below predate the Route A code migration
+> and are superseded. Cross-stage imports (`from lst_models.stages import
+> feature_window_search as stage01`, `stage02._lightgbm_params`, etc.) are now
+> forbidden by `tests/contracts/test_module_structure.py`; Stage 03 consumes
+> public domain modules instead (`data`, `features`, `splits`, `windows`,
+> `fitting`, `metrics`, `artifacts`). The shared helpers were dedupe-moved on
+> 2026-06-10: `lightgbm_hpo_params`, `lightgbm_inner_train_early_stopping_split`,
+> `probe_trial_config`, `profile_params`, `torch_training_defaults`, and
+> `PROBE_BY_FAMILY` live in `fitting.py`; `score_registry_baseline` lives in
+> `metrics.py`. Upstream pins moved to the R3 clean chain (Stage 00
+> `20260610_051705_347450`, Stage 01 `20260610_075002`); the superseded Stage
+> 02 list is now `["20260609_100637_704705", "20260610_010019_507648"]`.
+> Tasks 1-10 (protocol, config, contract test, runner entry gates, refit
+> wrappers, scoring loop, artifacts) are implemented at HEAD; Task 11
+> (notebook trio) and the runner resume entry are the remaining items.
+
 ```text
 placement_decision:
   target_file_type: protocol|stage_config|python_module|test|notebook (per task below)

@@ -22,6 +22,21 @@ src/lst_models/stages/frozen_validation_readout.py
 docs/protocols/03_frozen_validation_readout_protocol.md
 ```
 
+Revision record:
+
+- 2026-06-10 (pre-execution; zero Stage 03 scoring events had occurred):
+  repointed the upstream pins to the Route A R3 clean-chain run ids and
+  extended the superseded-run rejection list; modernized helper-symbol names
+  after the Route A code migration (`stage01.*` private helpers became public
+  domain-module functions); aligned the section 4 gate-4 artifact list with
+  the config contract (`frozen_params/*.yaml` clause); pre-registered the
+  incomplete-readout decision semantics and the zero-scoring
+  mechanical-failure decision string (section 7); clarified that the
+  feasibility estimate covers train plus validation materialized bytes
+  (section 5); recorded the checkpoint payload, Drive mirroring, and
+  lost-runtime disclosure rules (section 11). Sections 5-10 remain frozen
+  from this revision forward.
+
 ## 1. Implementation Gate
 
 Before writing or changing code for this stage, the implementer MUST read:
@@ -120,10 +135,14 @@ scope, Stage 03 additionally records `official_validation_contact=true` and
 `official_validation_for_selection=false`: official validation is contacted
 for the readout, and the contact is never a selection event.
 
-Legacy provenance: "Stage 00/01 runs predate hash-provenance fields;
-consistency was established by code-diff audit and Stage 02 row-count parity."
-This sentence must be carried into Stage 03 and Stage 05 reporting wherever
-upstream integrity is summarized.
+Legacy provenance: the superseded legacy chain (Stage 00
+`20260609_015034_927813`, Stage 01 `20260609_070204`) predates the
+hash-provenance fields; its consistency was established by code-diff audit and
+Stage 02 row-count parity. The pinned R3 chain (Stage 00
+`20260610_051705_347450`, Stage 01 `20260610_075002`) records full hash
+provenance, so strict verification applies to the pinned inputs and the
+legacy-provenance sentence is carried into Stage 03 and Stage 05 reporting
+only where superseded-chain history is summarized.
 
 ## 3. Wording Rules
 
@@ -171,8 +190,9 @@ Required entry-gate chain:
    (`inputs.stage02_run_id`); never inferred from a parent-folder scan.
 2. `02_stage03_handoff.json` records `ready_for_stage03=true`.
 3. Exactly one primary AND exactly one fallback candidate are frozen in the
-   Stage 02 handoff and frozen-candidate artifacts (the Stage 02 source
-   requires both: `model_hpo_train_inner.py:1628-1635`).
+   Stage 02 handoff and frozen-candidate artifacts (the Stage 02 selection
+   requires both before `ready_for_stage03=true`:
+   `_select_frozen_candidates` in `model_hpo_train_inner.py`).
 4. The full Stage 02 artifact list is present, with `artifact_inventory.csv`
    `bytes` and `sha256` verified via `artifacts.require_artifacts`, not
    existence-only:
@@ -187,10 +207,15 @@ Required entry-gate chain:
 02_frozen_candidate.md
 02_best_params_by_family.json
 02_stage03_handoff.json
-frozen_params/*.yaml
 run_manifest.json
 artifact_inventory.csv
 ```
+
+   The `frozen_params/*.yaml` copies remain Stage 02 evidence inside the run
+   folder and its inventory; Stage 03 candidate reconstruction reads
+   `hpo_profile_params` from `02_stage03_handoff.json` and
+   `02_frozen_candidate.json`, so the gate verifier (exact names only, no
+   globs) imposes no `frozen_params/*.yaml` requirement.
 
 5. The `02_hpo_plan_ledger.csv` sha256 MUST differ from the
    `02_hpo_trial_ledger.csv` sha256. A byte-identical plan ledger is the
@@ -225,10 +250,12 @@ artifact_inventory.csv
    and `stage02_run_id` values must equal the `source_stage00_run_id` and
    `source_stage01_run_id` fields recorded inside the Stage 02 handoff and
    frozen candidate.
-10. `stage01.feature_rebuild_code_sha256()` computed at the Stage 03 execution
-    commit must equal the Stage 02 manifest's
-    `stage02_feature_rebuild_code_sha256`. A mismatch means the rebuild code
-    drifted after Stage 02 froze its candidates and blocks Stage 03.
+10. `artifacts.feature_rebuild_code_sha256()` (the post-migration home of the
+    Stage 01 rebuild hash; payload functions live in `data.py`, `features.py`,
+    and `windows.py`) computed at the Stage 03 execution commit must equal the
+    Stage 02 manifest's `stage02_feature_rebuild_code_sha256`. A mismatch
+    means the rebuild code drifted after Stage 02 froze its candidates and
+    blocks Stage 03.
 11. Rebuilt train-row totals and per-ticker counts for the scored candidate
     must equal `01_feature_window_search_summary.csv` — the same parity check
     Stage 02 ran against Stage 01. A mismatch means Stage 03 would refit on a
@@ -237,28 +264,30 @@ artifact_inventory.csv
 12. `holdout_test_contact=false` and `official_validation_for_selection=false`
     on every upstream manifest and handoff (Stage 00, Stage 01, Stage 02).
 
-Superseded-run rejection: the completed Stage 02 run `20260609_100637_704705`
-predates the `6182508` packaging fix and MUST be rejected as a Stage 03 input.
-The config freezes the upstream pins and the rejection list:
+Superseded-run rejection: the completed Stage 02 runs `20260609_100637_704705`
+(pre-`6182508` packaging defect) and `20260610_010019_507648` (legacy
+pre-Route-A chain, superseded by the R3 clean-chain rerun) MUST be rejected as
+Stage 03 inputs. The config freezes the upstream pins and the rejection list:
 
 ```text
-stage00_run_id: "20260609_015034_927813"
-stage01_run_id: "20260609_070204"
-stage02_run_id: "<NEW_STAGE02_RUN_ID>"   # roadmap Phase 0.3 output; filling
-                                         # this value is the ONLY permitted
-                                         # config edit afterward
-superseded_stage02_run_ids: ["20260609_100637_704705"]
+stage00_run_id: "20260610_051705_347450"
+stage01_run_id: "20260610_075002"
+stage02_run_id: "<NEW_STAGE02_RUN_ID>"   # superseding Route A R3 chain rerun;
+                                         # filling this value is the ONLY
+                                         # permitted config edit afterward
+superseded_stage02_run_ids: ["20260609_100637_704705", "20260610_010019_507648"]
 ```
 
 The runner must raise when `stage02_run_id` is the unfilled placeholder or
 appears in `superseded_stage02_run_ids`. The config contract test enforces the
 same rule statically.
 
-Legacy provenance (roadmap Phase 0.4, quoted): "Stage 00/01 runs predate
-hash-provenance fields; consistency was established by code-diff audit and
-Stage 02 row-count parity." Gates 8 and 10 are therefore legacy-tolerant for
-the frozen Stage 00/01 runs only, with the tolerance reason recorded in the
-Stage 03 manifest; they are strict for all newer upstream runs.
+Legacy tolerance scope: gates 8 and 10 are legacy-tolerant ONLY for upstream
+runs that predate the provenance fields, with the tolerance reason recorded in
+the Stage 03 manifest. The pinned R3 Stage 00/01 runs (`20260610_051705_347450`,
+`20260610_075002`) record full provenance, so strict verification applies to
+the pinned chain; the roadmap Phase 0.4 legacy sentence describes the
+superseded `20260609_*` chain only.
 
 ## 5. Refit Recipe (D1 + D2, Frozen)
 
@@ -350,10 +379,14 @@ error (Zadrozny 2004). Only Stage 03 same-row deltas against the section 6
 baselines support claims.
 
 Feasibility clause (frozen before execution): the notebook pre-flight cell
-estimates materialized train/validation tensor bytes from
-`sample_event_index.csv` row counts BEFORE any scoring event and compares the
-estimate against `readout.max_materialized_train_bytes`. If the estimate is
-infeasible for the Colab runtime, Stage 03 aborts with zero scoring events;
+estimates materialized float32 tensor bytes for BOTH the refit (train) rows
+and the scored validation rows from `sample_event_index.csv` row counts
+(`rows x window_size x n_features x 4` bytes per side, an upper bound on
+eligible windows), sums the two sides, and compares the combined estimate for
+the primary candidate against `readout.max_materialized_train_bytes` BEFORE
+any scoring event (the fallback candidate's estimate is printed as context).
+If the estimate is infeasible for the Colab runtime, Stage 03 aborts with
+zero scoring events;
 the config is then amended to the predeclared fallback sample policy — the
 same `deterministic_even_stride_by_ticker_label` method Stage 02 used, with a
 raised cap declared in config — and a fresh run starts. The sample policy is
@@ -377,8 +410,8 @@ how train rows were windowed in Stages 01/02:
   preprocessing.
 
 The eligible-row contract is computed by the same frozen builder used for
-train rows (`stage01._build_window_dataset`); Stage 03 introduces no new
-windowing code path. The resulting validation row set is recorded as
+train rows (`windows.build_window_dataset`, the post-migration home of the
+Stage 01 builder); Stage 03 introduces no new windowing code path. The resulting validation row set is recorded as
 `n_scored_validation_samples` plus `eval_sample_id_hash` in the readout
 artifacts, so the exact scored rows are auditable and reproducible.
 
@@ -424,12 +457,27 @@ predeclared_criteria:
   per_ticker_aggregation: mean_delta_across_seeds_then_count_positive
 ```
 
-The decision field takes exactly one of two values:
+For any readout with at least one completed scoring event, the judged
+decision field takes exactly one of two values:
 
 ```text
 met_predeclared_validation_readout_criteria
 did_not_meet_predeclared_validation_readout_criteria
 ```
+
+Incomplete and zero-scoring outcomes (pre-registered):
+
+- A crash after the first scoring event leaves `readout_complete=false` with
+  `readout_incomplete_reason` recorded; the decision is still judged on the
+  seeds whose scoring completed and must always be quoted together with the
+  incomplete flag. Completing the remaining seeds requires the section 11
+  exact-run resume path; a fresh full rerun while the incomplete run's ledger
+  is recoverable would repeat scoring events and is forbidden.
+- When zero scoring events completed because both candidates failed
+  mechanically before any scoring, the decision field records
+  `do_not_start_stage03_primary_and_fallback_mechanical_failure` with
+  `official_validation_scoring_events=0` (the same `do_not_start_stage03_*`
+  family the section 4 entry gates use).
 
 Outcome semantics:
 
@@ -630,9 +678,10 @@ additionally records:
 ```text
 official_validation_contact = true
 official_validation_scoring_events = <n>
-stage03_readout_code_sha256 (sha256 over the Stage 03 data-context source
-  composed with stage01.feature_rebuild_code_sha256(); composition documented
-  in the manifest)
+stage03_readout_code_sha256 (artifacts.stage03_readout_code_sha256: sha256
+  over the data.load_train_validation_bars and splits.valid_events_for_split
+  source composed with artifacts.feature_rebuild_code_sha256(); composition
+  documented in the manifest)
 source_stage02_feature_rebuild_code_sha256 + match flag (reason recorded when
   legacy-tolerant)
 requested_device, resolved_device, cuda_available, gpu_name_or_null,
@@ -658,8 +707,18 @@ repo_url, git_commit (git_commit=null with explicit reason when the workspace
   `My Drive/lst_models/checkpoints/03_frozen_validation_readout/<run_id>/`
   with a `checkpoint_manifest.json` recording `stage_name`, `run_id`,
   `status=incomplete`, completed units, pending units, timestamp, and resume
-  instructions. Checkpoints are recovery state, not evidence artifacts. Write
-  locally first, then mirror compact files/archives to Drive.
+  instructions, PLUS the partial output rows accumulated so far
+  (`03_validation_readout_partial.csv`, `03_same_row_baselines_partial.csv`,
+  `03_validation_predictions_partial.csv`) so a resume can rebuild the ledger
+  without re-scoring. Checkpoints are recovery state, not evidence artifacts.
+  The runner writes them locally first; the notebook mirrors the checkpoint
+  folder to the Drive checkpoint path during the run (background mirror of
+  mtime-stable files) and sweeps it again after `run_stage` returns.
+- Lost-runtime disclosure: if the Colab runtime is lost before any checkpoint
+  or result file reached Drive, the lost partial run (date, candidate, seeds
+  started) must be disclosed in the next run's interpretation notes and in
+  the Stage 05 validation-budget accounting. Unrecorded official-validation
+  contact is a protocol breach to report, not a license to silently restart.
 - Durable result save: immediately after `run_stage(config)` returns, the
   notebook validates the seven required outputs and uploads them to
   `My Drive/lst_models/results/03_frozen_validation_readout/<run_id>/` via the
@@ -669,7 +728,9 @@ repo_url, git_commit (git_commit=null with explicit reason when the workspace
   or files under the exact target parent are a hard error.
 - Resume requires the exact `run_id` and checkpoint folder. Resuming from the
   latest checkpoint found by a parent-directory scan is forbidden. A resumed
-  run must not repeat a scoring event already present in the ledger.
+  run loads the exact checkpoint folder, rebuilds the ledger from the partial
+  output rows and the checkpoint manifest, skips every seed whose scoring
+  event is already recorded, and never repeats a scoring event.
 
 ## 12. Minimum Tests
 
@@ -681,8 +742,10 @@ repo_url, git_commit (git_commit=null with explicit reason when the workspace
 - `tests/stages/test_stage03_run_stage_smoke.py` — guards runner behavior on a
   tiny chronology-safe fixture: fail-closed entry gates, refit early-stopping
   tail drawn from refit rows only, exactly one scoring event per seed, weak
-  metrics never activating the fallback, and the output/decision-record/
-  manifest schemas.
+  metrics never activating the fallback, the output/decision-record/manifest
+  schemas, and the section 11 resume contract (a resumed run never repeats a
+  recorded scoring event, retries only seeds without one, and rejects inexact
+  run ids, mismatched checkpoint folders, and missing checkpoint files).
 - `tests/notebooks/test_stage03_notebook_static.py` — guards the notebook
   surface: parse/AST/empty outputs, `RUN_STAGE03 = False` default, exact
   pinned commit and upstream run ids, runtime-path injection lines, the
@@ -701,7 +764,7 @@ repo_url, git_commit (git_commit=null with explicit reason when the workspace
 | Refit regime differs from tuning regime | D1 freezes the Stage 02 early-stopping mechanism; D2 full-row policy is predeclared; Stage 02 vs Stage 03 absolute metrics are declared non-comparable (section 5). |
 | Fallback abuse (weak primary rescued by fallback) | Mechanical-only triggers, allowed only before the first scoring event; weak metrics are explicit forbidden triggers; after the first scoring event nothing activates the fallback. |
 | Wording drift | Section 3 forbidden/allowed lists; `forbidden.wording` in config; notebook static-gate forbidden-pattern checks. |
-| Colab loss mid-refit | Per-seed checkpoints under `My Drive/lst_models/checkpoints/03_frozen_validation_readout/<run_id>/` with `status=incomplete`, pending units, and exact-run-id resume; durable Drive result save immediately after `run_stage`. |
+| Colab loss mid-refit | Per-seed checkpoints (with partial output rows) under `My Drive/lst_models/checkpoints/03_frozen_validation_readout/<run_id>/`, notebook checkpoint mirroring, exact-run-id resume that never repeats a scoring event, durable Drive result save immediately after `run_stage`, and the section 11 lost-runtime disclosure rule. |
 | Stale run ids after the Stage 02 re-run | Config contract test rejects the `<NEW_STAGE02_RUN_ID>` placeholder and the superseded id `20260609_100637_704705`; hardcoded ids in tests/static gates are updated in the same task as the config repoint. |
 
 ## 14. Evidence Basis
