@@ -88,3 +88,71 @@ def test_aggregate_family_delta_cis_is_conservative() -> None:
     aggregate = metrics.aggregate_family_delta_cis(family_cis)
     assert aggregate["min_family_lcb"] == -0.02  # worst family drives selection
     assert aggregate["max_family_mean"] == 0.03
+
+
+def test_reliability_bins_and_ece_equal_width_golden() -> None:
+    y_true = np.array([1, 0, 1, 1, 0, 0, 1, 0])
+    p_up = np.array([0.9, 0.8, 0.7, 0.65, 0.3, 0.2, 0.25, 0.1])
+    bins = metrics.reliability_bins(y_true, p_up, n_bins=2, scheme="equal_width")
+    # bin [0,0.5): p={0.3,0.2,0.25,0.1} -> mean_p=0.2125, freq=1/4
+    # bin [0.5,1]: p={0.9,0.8,0.7,0.65} -> mean_p=0.7625, freq=3/4
+    assert bins["n_rows"].tolist() == [4, 4]
+    assert bins["mean_predicted"].tolist() == pytest.approx([0.2125, 0.7625])
+    assert bins["empirical_frequency"].tolist() == pytest.approx([0.25, 0.75])
+    assert bins["abs_gap"].tolist() == pytest.approx([0.0375, 0.0125])
+    ece = metrics.expected_calibration_error(bins)
+    assert ece == pytest.approx(0.5 * 0.0375 + 0.5 * 0.0125)
+    assert metrics.maximum_calibration_error(bins) == pytest.approx(0.0375)
+
+
+def test_reliability_bins_equal_mass_drops_empty_and_keeps_total() -> None:
+    y_true = np.array([0, 1, 0, 1, 1, 0, 1, 1])
+    p_up = np.array([0.05, 0.05, 0.05, 0.55, 0.55, 0.6, 0.9, 0.95])
+    bins = metrics.reliability_bins(y_true, p_up, n_bins=4, scheme="equal_mass")
+    assert int(bins["n_rows"].sum()) == len(p_up)
+    assert (bins["n_rows"] > 0).all()
+    assert (bins["bin_lower"] <= bins["bin_upper"]).all()
+
+
+def test_brier_decomposition_identity_golden() -> None:
+    y_true = np.array([1, 0, 1, 0])
+    p_up = np.array([0.8, 0.8, 0.4, 0.4])
+    out = metrics.brier_score_decomposition(y_true, p_up, n_bins=2, scheme="equal_mass")
+    assert out["brier_score"] == pytest.approx(float(np.mean((p_up - y_true) ** 2)))
+    recomposed = out["brier_reliability"] - out["brier_resolution"] + out["brier_uncertainty"]
+    # exact identity because forecasts are constant within each bin
+    assert recomposed == pytest.approx(out["brier_score"], abs=1e-12)
+    assert out["brier_uncertainty"] == pytest.approx(0.25)
+
+
+def test_top_label_confidence_and_prediction_convention() -> None:
+    p_up = np.array([0.9, 0.4, 0.5])
+    confidence = metrics.top_label_confidence(p_up)
+    assert confidence.tolist() == pytest.approx([0.9, 0.6, 0.5])
+
+
+def test_risk_coverage_and_aurc_golden() -> None:
+    correct = np.array([1, 1, 0, 1], dtype=bool)
+    confidence = np.array([0.9, 0.8, 0.7, 0.6])
+    curve = metrics.risk_coverage_curve(confidence, correct)
+    assert curve["coverage"].tolist() == pytest.approx([0.25, 0.5, 0.75, 1.0])
+    assert curve["selective_risk"].tolist() == pytest.approx([0.0, 0.0, 1 / 3, 0.25])
+    assert curve["selective_accuracy"].tolist() == pytest.approx([1.0, 1.0, 2 / 3, 0.75])
+    assert curve["confidence_at_coverage"].tolist() == pytest.approx([0.9, 0.8, 0.7, 0.6])
+    out = metrics.aurc_metrics(confidence, correct)
+    assert out["aurc"] == pytest.approx(float(np.mean([0.0, 0.0, 1 / 3, 0.25])))
+    # oracle: the single error sorted last -> risks [0, 0, 0, 0.25]
+    assert out["oracle_aurc"] == pytest.approx(0.0625)
+    assert out["e_aurc"] == pytest.approx(out["aurc"] - 0.0625)
+    assert out["full_coverage_risk"] == pytest.approx(0.25)
+
+
+def test_risk_coverage_tie_break_is_deterministic() -> None:
+    correct = np.array([1, 0, 1, 0], dtype=bool)
+    confidence = np.array([0.7, 0.7, 0.7, 0.7])
+    tie_break = np.array(["d", "c", "b", "a"])
+    curve_a = metrics.risk_coverage_curve(confidence, correct, tie_break=tie_break)
+    curve_b = metrics.risk_coverage_curve(confidence, correct, tie_break=tie_break)
+    assert curve_a["selective_risk"].tolist() == curve_b["selective_risk"].tolist()
+    # ties resolved by ascending tie_break key: a(0), b(1), c(0), d(1)
+    assert curve_a["selective_risk"].tolist() == pytest.approx([1.0, 0.5, 2 / 3, 0.5])

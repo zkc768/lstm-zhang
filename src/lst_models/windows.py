@@ -142,6 +142,73 @@ def sample_id_hash(sample_ids: list[Any]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def build_capped_fold_rows(
+    dataset: CandidateDataset,
+    folds: pd.DataFrame,
+    seeds: list[int],
+    *,
+    max_train_samples: int,
+    max_eval_samples: int,
+    plan_ledger: pd.DataFrame,
+    candidate_id: str,
+    stage_label: str,
+) -> dict[tuple[str, int], dict[str, Any]]:
+    """Capped per-fold row indices and hashes, parity-gated against the
+    recorded Stage 02 plan ledger (deterministic caps are seed-independent;
+    rows are repeated per seed to mirror the trial plan shape)."""
+    fold_rows: dict[tuple[str, int], dict[str, Any]] = {}
+    for fold in folds.to_dict(orient="records"):
+        train_idx, eval_idx = fold_indices(dataset.metadata, fold)
+        train_idx = cap_indices(dataset.metadata, train_idx, max_train_samples)
+        eval_idx = cap_indices(dataset.metadata, eval_idx, max_eval_samples)
+        train_hash = sample_id_hash(dataset.metadata.iloc[train_idx]["sample_id"].tolist())
+        eval_hash = sample_id_hash(dataset.metadata.iloc[eval_idx]["sample_id"].tolist())
+        require_recorded_fold_hash_parity(
+            plan_ledger, candidate_id, str(fold["fold_id"]), train_hash, eval_hash,
+            stage_label=stage_label,
+        )
+        for seed in seeds:
+            fold_rows[(str(fold["fold_id"]), int(seed))] = {
+                "train_idx": train_idx,
+                "eval_idx": eval_idx,
+                "train_sample_id_hash": train_hash,
+                "eval_sample_id_hash": eval_hash,
+            }
+    return fold_rows
+
+
+def require_recorded_fold_hash_parity(
+    plan_ledger: pd.DataFrame,
+    candidate_id: str,
+    fold_id: str,
+    train_hash: str,
+    eval_hash: str,
+    *,
+    stage_label: str,
+) -> None:
+    """Fail closed unless rebuilt capped fold-row hashes equal the recorded
+    plan-ledger hashes — without same-row identity, cross-stage comparability
+    is void (Stage 02 protocol section 10)."""
+    rows = plan_ledger.loc[
+        plan_ledger["candidate_id"].astype(str).eq(candidate_id)
+        & plan_ledger["fold_id"].astype(str).eq(fold_id)
+    ]
+    if rows.empty:
+        raise ValueError(
+            f"{stage_label} blocked: Stage 02 plan ledger has no rows for "
+            f"{candidate_id} {fold_id}"
+        )
+    recorded_train = set(rows["train_sample_id_hash"].astype(str))
+    recorded_eval = set(rows["eval_sample_id_hash"].astype(str))
+    if recorded_train != {train_hash} or recorded_eval != {eval_hash}:
+        raise ValueError(
+            f"{stage_label} blocked: rebuilt fold row hashes differ from the Stage 02 plan "
+            f"ledger for {candidate_id} {fold_id}: train {train_hash} vs "
+            f"{sorted(recorded_train)}, eval {eval_hash} vs {sorted(recorded_eval)}; "
+            "same-row comparability is void"
+        )
+
+
 def validate_rebuilt_candidate_counts(
     candidate: Mapping[str, Any],
     dataset: CandidateDataset,

@@ -343,3 +343,165 @@ def block_bootstrap_lcb(encoded_rows: list[str], *, iterations: int = 1000) -> f
     rng = np.random.default_rng(20260608)
     draws = rng.choice(block_means, size=(iterations, len(block_means)), replace=True)
     return float(np.quantile(draws.mean(axis=1), 0.025))
+
+
+CALIBRATION_BIN_SCHEMES = ("equal_width", "equal_mass")
+
+
+def reliability_bins(
+    y_true: np.ndarray, p_up: np.ndarray, *, n_bins: int, scheme: str
+) -> pd.DataFrame:
+    """Reliability-diagram bins for binary probabilities (measure-only).
+
+    Empty bins are dropped; surviving rows keep their original ``bin_index``
+    so gaps stay visible. ``scheme="equal_mass"`` uses quantile edges with
+    duplicate-edge dedupe, so the effective bin count can be smaller.
+    """
+    if scheme not in CALIBRATION_BIN_SCHEMES:
+        raise ValueError(f"unknown binning scheme {scheme!r}; expected {CALIBRATION_BIN_SCHEMES}")
+    if n_bins < 1:
+        raise ValueError(f"n_bins must be >= 1, got {n_bins}")
+    y_true = np.asarray(y_true, dtype=int)
+    p_up = np.asarray(p_up, dtype=float)
+    if len(y_true) != len(p_up) or len(p_up) == 0:
+        raise ValueError("y_true and p_up must be equal-length and non-empty")
+    if scheme == "equal_width":
+        edges = np.linspace(0.0, 1.0, n_bins + 1)
+    else:
+        edges = np.unique(np.quantile(p_up, np.linspace(0.0, 1.0, n_bins + 1)))
+        if len(edges) < 2:
+            edges = np.array([float(edges[0]), float(edges[0])])
+    assignments = np.clip(np.searchsorted(edges, p_up, side="right") - 1, 0, len(edges) - 2)
+    rows = []
+    for bin_index in range(len(edges) - 1):
+        mask = assignments == bin_index
+        if not mask.any():
+            continue
+        rows.append(
+            {
+                "bin_index": int(bin_index),
+                "bin_lower": float(edges[bin_index]),
+                "bin_upper": float(edges[bin_index + 1]),
+                "n_rows": int(mask.sum()),
+                "mean_predicted": float(p_up[mask].mean()),
+                "empirical_frequency": float(y_true[mask].mean()),
+            }
+        )
+    bins = pd.DataFrame(rows)
+    bins["abs_gap"] = (bins["empirical_frequency"] - bins["mean_predicted"]).abs()
+    return bins
+
+
+def expected_calibration_error(bins: pd.DataFrame) -> float:
+    """Binned ECE: sum over bins of (n_b/N) * |freq_b - mean_pred_b|."""
+    total = float(bins["n_rows"].sum())
+    return float((bins["n_rows"] / total * bins["abs_gap"]).sum())
+
+
+def maximum_calibration_error(bins: pd.DataFrame) -> float:
+    return float(bins["abs_gap"].max())
+
+
+def brier_score_decomposition(
+    y_true: np.ndarray, p_up: np.ndarray, *, n_bins: int, scheme: str
+) -> dict[str, float]:
+    """Brier score plus the Murphy (1973) binned decomposition.
+
+    ``brier_score`` is computed from the raw probabilities. The
+    reliability/resolution/uncertainty terms are binned statistics; the
+    identity ``brier = reliability - resolution + uncertainty`` is exact only
+    when forecasts are constant within each bin (otherwise a within-bin
+    variance remainder exists). All values are descriptive measurements.
+    """
+    y_true = np.asarray(y_true, dtype=int)
+    p_up = np.asarray(p_up, dtype=float)
+    bins = reliability_bins(y_true, p_up, n_bins=n_bins, scheme=scheme)
+    total = float(bins["n_rows"].sum())
+    base_rate = float(y_true.mean())
+    weight = bins["n_rows"] / total
+    reliability = float((weight * (bins["mean_predicted"] - bins["empirical_frequency"]) ** 2).sum())
+    resolution = float((weight * (bins["empirical_frequency"] - base_rate) ** 2).sum())
+    uncertainty = float(base_rate * (1.0 - base_rate))
+    return {
+        "brier_score": float(np.mean((p_up - y_true) ** 2)),
+        "brier_reliability": reliability,
+        "brier_resolution": resolution,
+        "brier_uncertainty": uncertainty,
+    }
+
+
+def top_label_confidence(p_up: np.ndarray) -> np.ndarray:
+    """Top-label confidence max(p_up, 1 - p_up); predicted label is p_up >= 0.5."""
+    p_up = np.asarray(p_up, dtype=float)
+    return np.maximum(p_up, 1.0 - p_up)
+
+
+def _selective_order(
+    confidence: np.ndarray, tie_break: np.ndarray | None
+) -> np.ndarray:
+    """Deterministic confidence-descending order with an optional tie key."""
+    confidence = np.asarray(confidence, dtype=float)
+    if tie_break is None:
+        return np.argsort(-confidence, kind="stable")
+    tie_break = np.asarray(tie_break)
+    tie_rank = np.argsort(np.argsort(tie_break, kind="stable"), kind="stable")
+    return np.lexsort((tie_rank, -confidence))
+
+
+def risk_coverage_curve(
+    confidence: np.ndarray,
+    correct: np.ndarray,
+    *,
+    tie_break: np.ndarray | None = None,
+) -> pd.DataFrame:
+    """Full-resolution selective risk-coverage curve (whole curve, no point).
+
+    Rows are sorted by descending confidence (ties broken by ``tie_break``
+    ascending, else stable input order); row k reports the prefix of the
+    k most-confident rows. Selective risk is 1 - accuracy on covered rows.
+    """
+    correct = np.asarray(correct, dtype=bool)
+    order = _selective_order(confidence, tie_break)
+    ordered_correct = correct[order].astype(float)
+    ordered_confidence = np.asarray(confidence, dtype=float)[order]
+    n_total = len(ordered_correct)
+    n_covered = np.arange(1, n_total + 1, dtype=float)
+    cumulative_accuracy = np.cumsum(ordered_correct) / n_covered
+    return pd.DataFrame(
+        {
+            "coverage": n_covered / n_total,
+            "n_covered": n_covered.astype(int),
+            "confidence_at_coverage": ordered_confidence,
+            "selective_risk": 1.0 - cumulative_accuracy,
+            "selective_accuracy": cumulative_accuracy,
+        }
+    )
+
+
+def aurc_metrics(
+    confidence: np.ndarray,
+    correct: np.ndarray,
+    *,
+    tie_break: np.ndarray | None = None,
+) -> dict[str, float]:
+    """AURC, oracle AURC, and excess AURC (Geifman, Uziel & El-Yaniv 2019).
+
+    AURC is the mean selective risk over the full-resolution per-row curve.
+    The oracle sorts the same error count last; ``e_aurc = aurc - oracle``.
+    """
+    curve = risk_coverage_curve(confidence, correct, tie_break=tie_break)
+    correct = np.asarray(correct, dtype=bool)
+    n_total = len(correct)
+    oracle_correct = np.concatenate(
+        [np.ones(int(correct.sum())), np.zeros(n_total - int(correct.sum()))]
+    )
+    n_covered = np.arange(1, n_total + 1, dtype=float)
+    oracle_risk = 1.0 - np.cumsum(oracle_correct) / n_covered
+    aurc = float(curve["selective_risk"].mean())
+    oracle_aurc = float(oracle_risk.mean())
+    return {
+        "aurc": aurc,
+        "oracle_aurc": oracle_aurc,
+        "e_aurc": aurc - oracle_aurc,
+        "full_coverage_risk": float(curve["selective_risk"].iloc[-1]),
+    }

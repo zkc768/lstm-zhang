@@ -33,7 +33,7 @@ from lst_models.fitting import (
     PROBE_BY_FAMILY,
     fit_probe,
     lightgbm_hpo_params,
-    lightgbm_inner_train_early_stopping_split,
+    lightgbm_tail_split_and_fit_kwargs,
     probe_trial_config,
     profile_params,
     torch_training_defaults,
@@ -1040,7 +1040,7 @@ def _fit_lightgbm_hpo_trial(
     config: Mapping[str, Any],
 ) -> dict[str, Any]:
     try:
-        from lightgbm import LGBMClassifier, early_stopping, log_evaluation
+        from lightgbm import LGBMClassifier
     except ModuleNotFoundError as exc:
         return {"fit_status": "failed_dependency_missing", "error_message": str(exc)}
 
@@ -1049,23 +1049,12 @@ def _fit_lightgbm_hpo_trial(
     training_defaults = require_mapping(
         config.get("lightgbm_training_defaults", {}), "lightgbm_training_defaults"
     )
-    early_rounds = int(training_defaults.get("early_stopping_rounds", 25))
-    split = lightgbm_inner_train_early_stopping_split(
+    split, fit_kwargs = lightgbm_tail_split_and_fit_kwargs(
         x_train=x_train,
         y_train=y_train,
         train_meta=train_meta,
         training_defaults=training_defaults,
-        early_rounds=early_rounds,
     )
-    callbacks = [log_evaluation(period=0)]
-    if split["early_stopping_used"]:
-        callbacks.append(early_stopping(early_rounds, verbose=False))
-    fit_kwargs: dict[str, Any] = {
-        "eval_metric": str(training_defaults.get("eval_metric", "binary_logloss")),
-        "callbacks": callbacks,
-    }
-    if split["early_stopping_used"]:
-        fit_kwargs["eval_set"] = [(split["x_stop"], split["y_stop"])]
     try:
         model.fit(
             split["x_fit"],

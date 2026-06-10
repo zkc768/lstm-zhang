@@ -18,10 +18,13 @@ import pandas as pd
 
 from lst_models import fitting, metrics
 from lst_models.artifacts import (
-    feature_rebuild_code_sha256,
+    feature_rebuild_gate_fields,
     git_commit_fields,
     read_json_object,
     require_artifacts,
+    require_distinct_file_hashes,
+    require_run_id_chain,
+    require_safety_flags,
     stage03_readout_code_sha256,
     write_artifact_inventory,
     write_json,
@@ -473,14 +476,14 @@ def _verify_entry_gates(config: Mapping[str, Any]) -> Stage03Inputs:
 
 
 def _require_plan_ledger_differs_from_trial_ledger(stage02_paths: Mapping[str, Path]) -> None:
-    plan_path = stage02_paths["02_hpo_plan_ledger.csv"]
-    trial_path = stage02_paths["02_hpo_trial_ledger.csv"]
-    if hash_file(plan_path) == hash_file(trial_path):
-        raise ValueError(
-            "Stage 03 blocked: Stage 02 plan ledger is byte-identical to the trial ledger "
-            f"({plan_path} == {trial_path}); a copied plan ledger is the pre-6182508 "
-            "packaging defect signature"
-        )
+    require_distinct_file_hashes(
+        stage02_paths["02_hpo_plan_ledger.csv"],
+        stage02_paths["02_hpo_trial_ledger.csv"],
+        blocked_label=(
+            "Stage 03 blocked: Stage 02 plan ledger is byte-identical to the trial ledger"
+        ),
+        reason="a copied plan ledger is the pre-6182508 packaging defect signature",
+    )
 
 
 def _require_run_id_chain(
@@ -492,42 +495,27 @@ def _require_run_id_chain(
 ) -> None:
     expected_stage00 = str(inputs["stage00_run_id"])
     expected_stage01 = str(inputs["stage01_run_id"])
-    checks = [
-        ("01_candidate_inputs.json source_stage00_run_id", expected_stage00, stage01_handoff.get("source_stage00_run_id")),
-        ("02_stage03_handoff.json source_stage00_run_id", expected_stage00, stage02_handoff.get("source_stage00_run_id")),
-        ("02_stage03_handoff.json source_stage01_run_id", expected_stage01, stage02_handoff.get("source_stage01_run_id")),
-        ("stage02 run_manifest.json source_stage01_run_id", expected_stage01, stage02_manifest.get("source_stage01_run_id")),
-        ("02_frozen_candidate.json source_stage00_run_id", expected_stage00, frozen_candidate.get("source_stage00_run_id")),
-        ("02_frozen_candidate.json source_stage01_run_id", expected_stage01, frozen_candidate.get("source_stage01_run_id")),
-    ]
-    for field_label, expected, observed in checks:
-        if observed is None or str(observed) != expected:
-            raise ValueError(
-                f"Stage 03 run id chain mismatch: {field_label} expected {expected!r}, "
-                f"observed {observed!r}"
-            )
+    require_run_id_chain(
+        [
+            ("01_candidate_inputs.json source_stage00_run_id", expected_stage00, stage01_handoff.get("source_stage00_run_id")),
+            ("02_stage03_handoff.json source_stage00_run_id", expected_stage00, stage02_handoff.get("source_stage00_run_id")),
+            ("02_stage03_handoff.json source_stage01_run_id", expected_stage01, stage02_handoff.get("source_stage01_run_id")),
+            ("stage02 run_manifest.json source_stage01_run_id", expected_stage01, stage02_manifest.get("source_stage01_run_id")),
+            ("02_frozen_candidate.json source_stage00_run_id", expected_stage00, frozen_candidate.get("source_stage00_run_id")),
+            ("02_frozen_candidate.json source_stage01_run_id", expected_stage01, frozen_candidate.get("source_stage01_run_id")),
+        ],
+        stage_label="Stage 03",
+    )
 
 
 def _feature_rebuild_gate_fields(stage02_manifest: Mapping[str, Any]) -> dict[str, Any]:
-    current_hash = feature_rebuild_code_sha256()
-    source_hash = stage02_manifest.get("stage02_feature_rebuild_code_sha256")
-    if source_hash and str(source_hash) != current_hash:
-        raise ValueError(
-            "Stage 02 feature rebuild code hash does not match current Stage 03 rebuild code: "
-            f"{source_hash!r} != {current_hash!r}"
-        )
-    if source_hash:
-        match: bool | None = True
-        reason = "matched"
-    else:
-        match = None
-        reason = "stage02_manifest_field_missing_legacy_run"
-    return {
-        "stage03_feature_rebuild_code_sha256": current_hash,
-        "source_stage02_feature_rebuild_code_sha256": source_hash,
-        "feature_rebuild_code_match": match,
-        "feature_rebuild_code_match_reason": reason,
-    }
+    return feature_rebuild_gate_fields(
+        stage02_manifest,
+        source_field="stage02_feature_rebuild_code_sha256",
+        stage_label="Stage 03",
+        current_field="stage03_feature_rebuild_code_sha256",
+        legacy_reason="stage02_manifest_field_missing_legacy_run",
+    )
 
 
 def _require_upstream_safety_flags(
@@ -539,27 +527,35 @@ def _require_upstream_safety_flags(
     stage02_handoff: Mapping[str, Any],
     frozen_candidate: Mapping[str, Any],
 ) -> None:
-    no_holdout_contact = [
-        ("stage00 run_manifest.json", stage00_manifest),
-        ("stage01 run_manifest.json", stage01_manifest),
-        ("stage02 run_manifest.json", stage02_manifest),
-        ("01_candidate_inputs.json", stage01_handoff),
-        ("02_stage03_handoff.json", stage02_handoff),
-        ("02_frozen_candidate.json", frozen_candidate),
-    ]
-    for label, payload in no_holdout_contact:
-        if payload.get("holdout_test_contact") is not False:
-            raise ValueError(f"Stage 03 requires {label} holdout_test_contact=false")
-    no_validation_selection = [
-        ("stage02 run_manifest.json", stage02_manifest),
-        ("02_stage03_handoff.json", stage02_handoff),
-        ("02_frozen_candidate.json", frozen_candidate),
-    ]
-    for label, payload in no_validation_selection:
-        if payload.get("official_validation_for_selection") is not False:
-            raise ValueError(f"Stage 03 requires {label} official_validation_for_selection=false")
-    if stage02_handoff.get("no_final_model_selected") is not True:
-        raise ValueError("Stage 03 requires 02_stage03_handoff.json no_final_model_selected=true")
+    require_safety_flags(
+        [
+            ("stage00 run_manifest.json", stage00_manifest),
+            ("stage01 run_manifest.json", stage01_manifest),
+            ("stage02 run_manifest.json", stage02_manifest),
+            ("01_candidate_inputs.json", stage01_handoff),
+            ("02_stage03_handoff.json", stage02_handoff),
+            ("02_frozen_candidate.json", frozen_candidate),
+        ],
+        stage_label="Stage 03",
+        field="holdout_test_contact",
+        expected=False,
+    )
+    require_safety_flags(
+        [
+            ("stage02 run_manifest.json", stage02_manifest),
+            ("02_stage03_handoff.json", stage02_handoff),
+            ("02_frozen_candidate.json", frozen_candidate),
+        ],
+        stage_label="Stage 03",
+        field="official_validation_for_selection",
+        expected=False,
+    )
+    require_safety_flags(
+        [("02_stage03_handoff.json", stage02_handoff)],
+        stage_label="Stage 03",
+        field="no_final_model_selected",
+        expected=True,
+    )
 
 
 def _require_frozen_seed_policy(
@@ -697,29 +693,19 @@ def _refit_lightgbm_and_predict(
     early-stopping ``eval_set``; the tail is carved from the refit rows only.
     """
     try:
-        from lightgbm import LGBMClassifier, early_stopping, log_evaluation
+        from lightgbm import LGBMClassifier
     except ModuleNotFoundError as exc:
         return {"fit_status": "failed_dependency_missing", "error_message": str(exc)}
 
     training_defaults = require_mapping(
         config["lightgbm_training_defaults"], "lightgbm_training_defaults"
     )
-    early_rounds = int(training_defaults.get("early_stopping_rounds", 25))
-    split = fitting.lightgbm_inner_train_early_stopping_split(
+    split, fit_kwargs = fitting.lightgbm_tail_split_and_fit_kwargs(
         x_train=x_train,
         y_train=train_meta["label"].to_numpy(dtype=int),
         train_meta=train_meta,
         training_defaults=training_defaults,
-        early_rounds=early_rounds,
     )
-    callbacks = [log_evaluation(period=0)]
-    fit_kwargs: dict[str, Any] = {
-        "eval_metric": str(training_defaults.get("eval_metric", "binary_logloss")),
-        "callbacks": callbacks,
-    }
-    if split["early_stopping_used"]:
-        callbacks.append(early_stopping(early_rounds, verbose=False))
-        fit_kwargs["eval_set"] = [(split["x_stop"], split["y_stop"])]
     model = LGBMClassifier(**fitting.lightgbm_hpo_params(profile), random_state=seed, verbosity=-1)
     try:
         model.fit(split["x_fit"], split["y_fit"], **fit_kwargs)

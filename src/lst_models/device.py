@@ -4,6 +4,41 @@ import importlib
 from typing import Any
 
 
+def aggregate_trial_device_fields(trial_frame: Any) -> dict[str, Any]:
+    """Manifest device-provenance fields aggregated from completed trial rows.
+
+    CPU-safe: when no trial completed (for example torch unavailable), the
+    fields record the fallback reason instead of fabricating GPU provenance.
+    ``trial_frame`` is a pandas DataFrame with ``fit_status``,
+    ``requested_device``, ``resolved_device``, ``device_fallback_reason``.
+    """
+    completed = trial_frame.loc[trial_frame["fit_status"].eq("completed")]
+    if completed.empty:
+        return {
+            "requested_device": "auto",
+            "resolved_device": "cpu",
+            "cuda_available": None,
+            "gpu_name_or_null": None,
+            "device_fallback_reason": "no_completed_control_fits",
+        }
+    resolved = sorted(set(completed["resolved_device"].astype(str)))
+    return {
+        "requested_device": sorted(set(completed["requested_device"].astype(str)))[0],
+        "resolved_device": resolved[0] if len(resolved) == 1 else ",".join(resolved),
+        "cuda_available": bool((completed["resolved_device"].astype(str) == "cuda").any()),
+        "gpu_name_or_null": None,
+        "device_fallback_reason": ";".join(
+            sorted(
+                {
+                    str(reason)
+                    for reason in completed["device_fallback_reason"].dropna().astype(str)
+                    if reason
+                }
+            )
+        ),
+    }
+
+
 def resolve_torch_device(
     torch_module: Any, requested_device: str = "auto", require_gpu: bool = False
 ) -> tuple[Any, str | None]:

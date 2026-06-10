@@ -46,6 +46,125 @@ def read_json_object(path: Path) -> dict[str, Any]:
     return loaded
 
 
+def require_run_id_chain(
+    checks: Iterable[tuple[str, str, Any]], *, stage_label: str
+) -> None:
+    """Fail closed when recorded upstream run ids drift from the config pins.
+
+    ``checks`` rows are ``(field_label, expected, observed)``. Shared by the
+    Stage 03 readout and Stage 04 diagnostics entry gates.
+    """
+    for field_label, expected, observed in checks:
+        if observed is None or str(observed) != str(expected):
+            raise ValueError(
+                f"{stage_label} run id chain mismatch: {field_label} expected "
+                f"{expected!r}, observed {observed!r}"
+            )
+
+
+def require_safety_flags(
+    payloads: Iterable[tuple[str, Mapping[str, Any]]],
+    *,
+    stage_label: str,
+    field: str,
+    expected: bool,
+) -> None:
+    """Fail closed unless every payload records ``field`` exactly ``expected``."""
+    expected_text = "true" if expected else "false"
+    for label, payload in payloads:
+        if payload.get(field) is not expected:
+            raise ValueError(f"{stage_label} requires {label} {field}={expected_text}")
+
+
+def require_distinct_file_hashes(
+    path_a: Path, path_b: Path, *, blocked_label: str, reason: str
+) -> None:
+    """Fail closed when two artifacts are byte-identical (packaging defect)."""
+    if hash_file(path_a) == hash_file(path_b):
+        raise ValueError(f"{blocked_label} ({path_a} == {path_b}); {reason}")
+
+
+def feature_rebuild_gate_fields(
+    upstream_manifest: Mapping[str, Any],
+    *,
+    source_field: str,
+    stage_label: str,
+    current_field: str,
+    legacy_reason: str,
+) -> dict[str, Any]:
+    """Rebuild-hash gate shared by Stage 03/04: block when the current
+    feature-rebuild mechanism hash differs from the recorded upstream hash;
+    record legacy tolerance when the upstream field predates provenance."""
+    current_hash = feature_rebuild_code_sha256()
+    source_hash = upstream_manifest.get(source_field)
+    if source_hash and str(source_hash) != current_hash:
+        raise ValueError(
+            f"{source_field} does not match current {stage_label} rebuild code: "
+            f"{source_hash!r} != {current_hash!r}"
+        )
+    return {
+        current_field: current_hash,
+        f"source_{source_field}": source_hash,
+        "feature_rebuild_code_match": True if source_hash else None,
+        "feature_rebuild_code_match_reason": "matched" if source_hash else legacy_reason,
+    }
+
+
+def load_incremental_checkpoint(checkpoint_dir: Path, *, expected_run_id: str) -> dict[str, Any]:
+    """Exact-run checkpoint manifest loader (AGENTS.md section 5 resume rules).
+
+    Fails closed when the manifest is missing or records a different run id —
+    resume never scans for a latest folder and never crosses run ids.
+    """
+    manifest_path = checkpoint_dir / "checkpoint_manifest.json"
+    if not expected_run_id or not manifest_path.exists():
+        raise ValueError(
+            "resume requires an exact run_id and an existing checkpoint_manifest.json "
+            f"(looked at {manifest_path})"
+        )
+    manifest = read_json_object(manifest_path)
+    if str(manifest.get("run_id")) != expected_run_id:
+        raise ValueError(
+            f"resume run_id mismatch: checkpoint manifest records "
+            f"{manifest.get('run_id')!r}, resume.run_id is {expected_run_id!r}"
+        )
+    return manifest
+
+
+def write_incremental_checkpoint(
+    checkpoint_dir: Path,
+    *,
+    stage_name: str,
+    run_id: str,
+    completed_units: list[str],
+    pending_units: list[str],
+    required_files: list[str],
+) -> Path:
+    """AGENTS.md section 5 incremental checkpoint manifest with exact-run
+    resume instructions (``status=incomplete``, no latest-parent scanning)."""
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    return write_json(
+        checkpoint_dir / "checkpoint_manifest.json",
+        {
+            "stage_name": stage_name,
+            "run_id": run_id,
+            "status": "incomplete",
+            "completed_units": list(completed_units),
+            "pending_units": list(pending_units),
+            "checkpoint_timestamp_utc": datetime.now(UTC).isoformat(),
+            "holdout_test_contact": False,
+            "official_validation_for_selection": False,
+            "resume_instructions": {
+                "resume_mode": "exact_run_checkpoint_only",
+                "latest_parent_scan_allowed": False,
+                "required_run_id": run_id,
+                "required_checkpoint_dir": str(checkpoint_dir),
+                "required_files": list(required_files),
+            },
+        },
+    )
+
+
 def make_run_id(now: datetime | None = None) -> str:
     current = now or datetime.now(UTC)
     if current.tzinfo is None:
@@ -217,6 +336,41 @@ def stage03_readout_code_sha256() -> str:
     code_payload = {
         "load_train_validation_bars": inspect.getsource(load_train_validation_bars),
         "valid_events_for_split": inspect.getsource(valid_events_for_split),
+        "feature_rebuild_code_sha256": feature_rebuild_code_sha256(),
+    }
+    payload = json.dumps(code_payload, sort_keys=True).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def stage04_diagnostics_code_sha256() -> str:
+    """sha256 over the Stage 04 measurement mechanism: the calibration and
+    selective-prediction metric helpers, the baseline-reconstruction helper,
+    the control fit mechanics, and the frozen rebuild chain hash. Domain
+    functions only — stage-orchestration refactors cannot move this hash."""
+    from lst_models import fitting as fitting_module
+    from lst_models import metrics as metrics_module
+
+    code_payload = {
+        "reliability_bins": inspect.getsource(metrics_module.reliability_bins),
+        "expected_calibration_error": inspect.getsource(
+            metrics_module.expected_calibration_error
+        ),
+        "maximum_calibration_error": inspect.getsource(
+            metrics_module.maximum_calibration_error
+        ),
+        "brier_score_decomposition": inspect.getsource(
+            metrics_module.brier_score_decomposition
+        ),
+        "top_label_confidence": inspect.getsource(metrics_module.top_label_confidence),
+        "risk_coverage_curve": inspect.getsource(metrics_module.risk_coverage_curve),
+        "aurc_metrics": inspect.getsource(metrics_module.aurc_metrics),
+        "predict_stratified_dummy": inspect.getsource(
+            metrics_module.predict_stratified_dummy
+        ),
+        "last_bar_slice": inspect.getsource(fitting_module.last_bar_slice),
+        "lightgbm_tail_split_and_fit_kwargs": inspect.getsource(
+            fitting_module.lightgbm_tail_split_and_fit_kwargs
+        ),
         "feature_rebuild_code_sha256": feature_rebuild_code_sha256(),
     }
     payload = json.dumps(code_payload, sort_keys=True).encode("utf-8")
