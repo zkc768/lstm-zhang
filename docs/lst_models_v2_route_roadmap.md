@@ -113,7 +113,12 @@ Hard ordering rules:
   (AGENTS.md codegraph rules), `4d2aeeb` (stage02 provenance/drive
   contracts), `0ff50c0` (notebook re-pins) absorbed the prior dirty state.
   This roadmap is tracked as a separate follow-up documentation commit.
-- [ ] **0.3 Required Stage 02 re-run.** Phase 0.1 failed. Re-run
+- [x] **0.3 Required Stage 02 re-run.** DONE 2026-06-10, superseded by the
+  larger Route A clean-chain rerun (see 0.4 note): the direct re-run produced
+  `20260610_010019_507648`, which was itself superseded by the R3 chain run
+  `20260610_082130_797479` (pinned into the Stage 03 config in `1426460`;
+  both old ids are in `superseded_stage02_run_ids`). Original instruction
+  kept below for the record. Re-run
   `02_model_hpo_train_inner_colab.ipynb` once at the current pin. The new run
   supersedes `20260609_100637_704705` (legitimate: official validation
   untouched). Then update the Stage 02 run id wherever Stage 03 config will
@@ -130,8 +135,24 @@ Hard ordering rules:
   hash-provenance fields; consistency was established by code-diff audit and
   Stage 02 row-count parity."
 
+  **SUPERSESSION NOTE (2026-06-10):** the user subsequently chose Route A
+  (`docs/lst_models_route_a_clean_chain_plan.md` +
+  `docs/lst_models_post_stage02_code_migration_plan.md`): domain-module
+  refactor, then a deliberate full `00 -> 01 -> 02` chain rerun with the
+  refactored, fully hash-provenanced code (R3 chain: Stage 00
+  `20260610_051705_347450`, Stage 01 `20260610_075002`, Stage 02
+  `20260610_082130_797479`). This consciously trades the re-selection re-roll
+  this item warned about for a clean chain with complete raw/feature hash
+  provenance — eliminating the "legacy provenance" caveat for the chain
+  Stage 03 will read. The 2026-06-09 legacy chain remains archived as
+  superseded evidence; the quoted legacy-provenance sentence is no longer
+  needed for the R3 chain.
+
 **Exit gate:** New Stage 02 run id confirmed clean at `6182508` or later;
 `git status --short` clean after the roadmap commit.
+MET 2026-06-10 — R3 Stage 02 run `20260610_082130_797479` produced at the
+post-migration pin (descendant of `6182508`); config/test pointers updated in
+`1426460`/`c89d3ca`.
 
 ---
 
@@ -277,14 +298,14 @@ the decision sections must be committed before Phase 4.
 Protocol content requirements (each is a named section; all were identified
 as gaps in the 2026-06-09 plan review):
 
-- [ ] **B1 Stage boundary + wording rules.** Inherit the Stage 02 canonical
+- [x] **B1 Stage boundary + wording rules.** Inherit the Stage 02 canonical
   forbidden list (`final model`, `official validation winner`,
   `holdout winner`, `test winner`, `proved best model`) and extend with
   `generalization proven`, `profitable`, `holdout-ready`,
   `selected by official validation`, `chosen threshold`. Allowed:
   `validation-only evidence`, `official validation readout`,
   `candidate met/did not meet predeclared validation-readout criteria`.
-- [ ] **B2 Entry gates (full chain).**
+- [x] **B2 Entry gates (full chain).**
   - Exact Stage 02 run folder by run id; `02_stage03_handoff.json` with
     `ready_for_stage03=true`; exactly one primary AND exactly one fallback
     (Stage 02 source requires both: `model_hpo_train_inner.py:1628-1635`).
@@ -310,10 +331,10 @@ as gaps in the 2026-06-09 plan review):
     Stage 02 ran against Stage 01).
   - `holdout_test_contact=false` and `official_validation_for_selection=false`
     on every upstream manifest/handoff.
-- [ ] **B3 Refit recipe (per D1) + sample policy (per D2).** Including: class
+- [x] **B3 Refit recipe (per D1) + sample policy (per D2).** Including: class
   weights recomputed on the refit rows; tail-split fallback reasons recorded;
   per-seed refits use the frozen seed policy `[101, 202]`.
-- [ ] **B4 Validation windowing contract.** First-ever windowing of official
+- [x] **B4 Validation windowing contract.** First-ever windowing of official
   validation rows: cite Stage 00 §9 verbatim (windows per ticker / per split
   / per trading day — no lookback across the 2013-09-16 boundary, day-start
   warmup rows ineligible); eligible-row contract computed by the same frozen
@@ -321,7 +342,7 @@ as gaps in the 2026-06-09 plan review):
   baselines (`stratified_dummy_train_prior` with fixed seed list,
   `majority_train_prior`, `constant_up`, `constant_down`) fit on
   official-train labels only and scored on identical rows.
-- [ ] **B5 Predeclared readout criteria.** Mirror Stage 02 freeze gates on
+- [x] **B5 Predeclared readout criteria.** Mirror Stage 02 freeze gates on
   the pooled validation readout, judged on the seed-aggregate (mean over
   seeds; per-seed reported):
   `delta_macro_f1_vs_stratified_dummy_train_prior > 0`,
@@ -331,18 +352,18 @@ as gaps in the 2026-06-09 plan review):
   not met → record `did_not_meet_predeclared_criteria`, do NOT activate
   fallback, do NOT retune; the only forward path is honest reporting plus an
   optional pre-registered V2.1 revision upstream.
-- [ ] **B6 Fallback rule.** Fallback activates ONLY on predeclared mechanical
+- [x] **B6 Fallback rule.** Fallback activates ONLY on predeclared mechanical
   failure BEFORE any official-validation scoring of the primary (artifact
   missing, fit/refit crash, schema/hash mismatch, candidate not
   reconstructable). Weak primary metrics never activate it. Fallback
   activation and scoring events are logged in the decision record.
-- [ ] **B7 Metrics.** `macro_f1`, `balanced_accuracy`, `accuracy` (aux),
+- [x] **B7 Metrics.** `macro_f1`, `balanced_accuracy`, `accuracy` (aux),
   `mcc`, `roc_auc` (when defined), per-class precision/recall/F1, support by
   class and ticker, both baseline deltas (`..._vs_stratified_dummy_train_prior`,
   `..._vs_majority_train_prior` — keep Stage 02 column naming), per-ticker
   metrics, seed summary. CI/LCB only if predeclared with its resampling unit
   (trading-day block bootstrap via `metrics.block_bootstrap_macro_f1_delta`).
-- [ ] **B8 Required artifacts.**
+- [x] **B8 Required artifacts.**
   ```text
   03_validation_readout.csv          (pooled per candidate × seed + aggregate)
   03_per_ticker_readout.csv
@@ -367,13 +388,13 @@ as gaps in the 2026-06-09 plan review):
   Stage 04 calibration/selective/failure analysis would require re-scoring
   validation (forbidden). It stays out of git (route guide §11), lives in the
   run folder + Drive with sha256 in the inventory.
-- [ ] **B9 Execution discipline.** Each frozen seed×candidate scores official
+- [x] **B9 Execution discipline.** Each frozen seed×candidate scores official
   validation exactly once; no early stopping, threshold selection, loss
   selection, or ranking against official validation; scoring-event ledger in
   the decision record; per-seed/per-candidate checkpoints under
   `My Drive/lst_models/checkpoints/03_frozen_validation_readout/<run_id>/`
   with resume-by-exact-run-id (reuse A5 contract).
-- [ ] **B10 Notebook + tests.** nb03 follows nb02's compliant pattern
+- [x] **B10 Notebook + tests.** nb03 follows nb02's compliant pattern
   (exact-commit two-step pin, true runtime injection per A3, durable save
   cell, heavy cells off, duplicate-Drive hard errors). Static gate forbids
   active holdout/test reads AND any selection-on-validation strings; config
@@ -384,22 +405,42 @@ as gaps in the 2026-06-09 plan review):
 
 **Exit gate:** Batch B merged; fast suite green; D1-D4 decisions visible in
 committed protocol text; pinned full-bundle commit verified by `git ls-tree`.
+MET 2026-06-10 — runner+resume `8b67ec6`, notebook trio `d4aa244`, R3 stage02
+run id pinned `1426460`, notebook pin `c89d3ca`; bundle `1426460` verified by
+`git ls-tree` to contain all nine sidecars; fast suite 129 passed / 1 skipped
+(run-id xfail removed with the fill, as designed). Import-surface deviations
+from the original Task 6-8 text are recorded in the implementation plan's
+correction record (Route A migration `4672f4d`: domain modules, zero
+cross-stage imports, shared refit mechanics dedupe-moved to `fitting.py`).
 
 ---
 
 ## 6. Phase 4 — Stage 03 One-Shot Execution
 
-- [ ] **4.1 Pre-flight.** Confirm Phase 0 exit gate (clean Stage 02 run id in
-  config), Phase 1/3 merged, suite green at the pinned commit.
-- [ ] **4.2 Execute nb03 once** on Colab GPU. Entry gates fail closed on any
-  mismatch. Durable save + decision record verified before the session ends.
-- [ ] **4.3 Freeze.** Record the Stage 03 run id; update Stage 04 config
-  pointers; no second scoring run regardless of outcome. If outcome is
-  `did_not_meet_predeclared_criteria`, Stages 04-05 still run (diagnosis and
-  honest synthesis are not conditional on success).
+- [x] **4.1 Pre-flight.** MET 2026-06-10: Phase 0 exit gate met (R3 Stage 02
+  run id `20260610_082130_797479` pinned in config); Batch A hardening
+  verified at HEAD (A4.1 independent horizon-end overlap test at
+  `tests/stages/test_stage01_run_stage_smoke.py:402-417`; A4.5 covered by
+  `test_fold_and_cap_indices_golden`; A6 via the metrics docstring fix);
+  Batch B merged and pinned (`c89d3ca`); fast suite 129 passed / 1 skipped at
+  the pinned tree.
+- [x] **4.2 Execute nb03 once** on Colab GPU. DONE 2026-06-10: run
+  `20260610_133305_716174` at pin `c89d3ca` (bundle `1426460`), Tesla T4.
+  Entry gates passed; durable save verified
+  (`My Drive/lst_models/results/03_frozen_validation_readout/20260610_133305_716174/`,
+  Drive folder id `1-zHreb4SFs_M1xWOiX5POC3BjdnGCR51`; all six outputs +
+  manifest + inventory + drive_backup_manifest present).
+- [x] **4.3 Freeze.** DONE 2026-06-10: outcome
+  `met_predeclared_validation_readout_criteria` (mean delta vs stratified
+  dummy +0.01689, vs majority +0.18833, positive tickers 5/5; per-seed
+  macro-F1 0.51764/0.51641; 2 scoring events, one per seed; fallback never
+  activated). Stage 04 pointers frozen in
+  `docs/lst_models_stage04_implementation_plan.md`; no second scoring run.
 
 **Exit gate:** `03_decision_record.json` frozen; scoring-event count equals
 the predeclared plan (seeds × candidates actually scored).
+MET 2026-06-10 — `official_validation_scoring_events=2` == 2 seeds × 1 scored
+candidate (primary only); `readout_complete=true`.
 
 ---
 
@@ -409,6 +450,26 @@ Files: `docs/protocols/04_diagnostics_ablation_protocol.md` (complete it),
 `configs/stages/04_diagnostics_ablation.yaml`,
 `src/lst_models/stages/diagnostics_ablation.py`,
 `notebooks/04_diagnostics_ablation_colab.ipynb`, tests triad.
+
+Batch C implementation plan (2026-06-10, written after the Stage 03 freeze):
+`docs/lst_models_stage04_implementation_plan.md` — pins Stage 03 run
+`20260610_133305_716174`, fixes the operational decisions OD1-OD9 (binning,
+baseline reconstruction with equality gates, ablation params derivation,
+dump-native activity proxy, SHAP/permutation deferral), and carries the
+task-by-task bundle steps.
+
+**Batch C implementation status (2026-06-10): bundle implemented at HEAD.**
+Protocol §9-14 completed; config + runner
+(`src/lst_models/stages/diagnostics_ablation.py`, 700 lines, ratchet-clean)
++ new domain module `src/lst_models/diagnostics.py` + control builders +
+shared helper moves (fitting/windows/artifacts/device, incl. the Stage 03
+lightgbm tail-fit and rebuild-hash gate dedupes); nb04 + generator + static
+gate; test surface: metrics golden tests, fitting-control contracts, config
+contract, 14-test stage04 smoke, 7-test static gate. Fast suite at HEAD:
+172 passed / 2 env-gated torch skips. Remaining for the Phase 5 exit gate:
+user-authorized two-step pin (fill `<STAGE04_FULL_BUNDLE_COMMIT>` +
+`EXPECTED_PROJECT_REPO_COMMIT` together), then ONE Colab execution of nb04
+and the durable save; C1-C6 check off when the run's artifacts are frozen.
 
 Scope (route guide §2: "diagnostics, ablations, ECE/AURC, SHAP/permutation,
 and robustness checks without reselection"):
