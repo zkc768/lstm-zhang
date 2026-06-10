@@ -709,7 +709,10 @@ storage concepts:
   `My Drive/lst_models/results/02_model_hpo_train_inner/<stage02_run_id>/`.
   This is the canonical durable result location for downstream stages.
 - Drive checkpoint archive: write compact zip archives under
-  `My Drive/lst_models/checkpoints/02_model_hpo_train_inner/<stage01_run_id>/`.
+  `My Drive/lst_models/checkpoints/02_model_hpo_train_inner/<stage02_run_id>/`.
+  The Colab notebook pre-generates `STAGE02_RUN_ID`, injects it into
+  `outputs.run_id`, and uses the same id for local output, checkpoint archives,
+  and Drive result backup.
   This is for recovery/audit support, not for downstream result lookup.
 
 Rules:
@@ -750,7 +753,9 @@ Rules:
 - Post-run checkpoint may archive the Stage 02 run folder after `run_stage`
   returns.
 - The runner writes incremental local checkpoints after bounded trial batches
-  according to `checkpointing.checkpoint_every_trials`.
+  according to `checkpointing.checkpoint_every_trials`. If `outputs.run_id` is
+  provided by the notebook, the runner must use that exact id for the output
+  folder and checkpoint manifest resume contract.
 - A checkpoint archive does not make Stage 02 ready for Stage 03. Readiness still
   depends on `02_stage03_handoff.json`.
 

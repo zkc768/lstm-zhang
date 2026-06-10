@@ -872,6 +872,42 @@ def test_stage02_run_ids_do_not_merge_fast_repeated_runs(
     assert second.output_dir.name.split("_")[-1].isdigit()
 
 
+def test_stage02_uses_configured_run_id_and_records_superseded_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage01_run_dir = tmp_path / "stage01"
+    write_stage01_artifacts(stage01_run_dir, handoff=candidate_handoff())
+    patch_fake_stage02_execution(monkeypatch, tmp_path)
+    config = stage02_config(tmp_path, stage01_run_dir)
+    config["outputs"]["run_id"] = "20260610_010203_000004"
+    config["superseded_stage02_run_ids"] = ["20260609_100637_704705"]
+
+    result = stage02.run_stage(config)
+
+    assert result.output_dir.name == "20260610_010203_000004"
+    manifest = json.loads(result.run_manifest.read_text(encoding="utf-8"))
+    frozen_candidate = json.loads(result.frozen_candidate.read_text(encoding="utf-8"))
+    handoff = json.loads(result.stage03_handoff.read_text(encoding="utf-8"))
+    assert manifest["run_id"] == "20260610_010203_000004"
+    assert manifest["stage02_run_id"] == "20260610_010203_000004"
+    assert manifest["superseded_stage02_run_ids"] == ["20260609_100637_704705"]
+    assert frozen_candidate["superseded_stage02_run_ids"] == ["20260609_100637_704705"]
+    assert handoff["superseded_stage02_run_ids"] == ["20260609_100637_704705"]
+
+
+def test_stage02_rejects_invalid_configured_run_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage01_run_dir = tmp_path / "stage01"
+    write_stage01_artifacts(stage01_run_dir, handoff=candidate_handoff())
+    patch_fake_stage02_execution(monkeypatch, tmp_path)
+    config = stage02_config(tmp_path, stage01_run_dir)
+    config["outputs"]["run_id"] = "latest"
+
+    with pytest.raises(ValueError, match="outputs.run_id"):
+        stage02.run_stage(config)
+
+
 def test_stage02_rejects_stage01_holdout_contact(tmp_path: Path) -> None:
     stage01_run_dir = tmp_path / "stage01"
     write_stage01_artifacts(stage01_run_dir, holdout_contact=True)

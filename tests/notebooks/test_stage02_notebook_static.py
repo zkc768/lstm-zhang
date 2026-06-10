@@ -38,8 +38,12 @@ def test_stage02_notebook_is_single_stage02_entrypoint() -> None:
     assert "RUN_STAGE02_DRIVE_BACKUP = True" in text
     assert "RUN_STAGE02 = False" in text
     assert "RUN_ARTIFACT_DISPLAY = False" in text
+    assert 'SUPERSEDED_STAGE02_RUN_IDS = ["20260609_100637_704705"]' in text
+    assert 'STAGE02_RUN_ID = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")' in text
+    assert 'STAGE02_OUTPUT_DIR = Path("/content/lst_models_results/02_model_hpo_train_inner") / STAGE02_RUN_ID' in text
     assert 'STAGE02_DRIVE_RESULT_PATH_PARTS = ["lst_models", "results", "02_model_hpo_train_inner"]' in text
-    assert "CHECKPOINT_DRIVE_PATH_PARTS" in text
+    assert 'CHECKPOINT_DRIVE_PATH_PARTS = ["lst_models", "checkpoints", "02_model_hpo_train_inner", STAGE02_RUN_ID]' in text
+    assert 'CHECKPOINT_DRIVE_PATH_PARTS = ["lst_models", "checkpoints", "02_model_hpo_train_inner", STAGE01_RUN_ID]' not in text
     assert "stage02_checkpoint_manifest.json" in text
     assert "Stage 02 Drive Result Backup" in text
     assert "backup_stage02_results_to_drive" in text
@@ -54,6 +58,7 @@ def test_stage02_notebook_is_single_stage02_entrypoint() -> None:
     assert "relative_path.as_posix()" in text
     assert "upload_or_update_stage02_result_file(service, drive_folder_id, run_dir, path)" in text
     assert "upload_or_update_stage02_result_file(service, drive_folder_id, path)" not in text
+    assert '"stage_run_id": run_dir.name' in text
     assert "stage02_drive_backup_manifest = backup_stage02_results_to_drive(result.output_dir)" in text
     assert "MediaFileUpload" in text
     assert "def quote_drive_query_value" in text
@@ -70,7 +75,11 @@ def test_stage02_notebook_is_single_stage02_entrypoint() -> None:
     assert 'stage_inputs["stage01_candidate_inputs"] = str(STAGE01_OUTPUT_DIR / "01_candidate_inputs.json")' in text
     assert 'stage_inputs["raw_data_dir"] = str(RAW_DATA_DIR)' in text
     assert 'stage_outputs["output_dir"] = str(OUTPUT_DIR)' in text
+    assert 'stage_outputs["run_id"] = STAGE02_RUN_ID' in text
+    assert 'stage02_config["superseded_stage02_run_ids"] = SUPERSEDED_STAGE02_RUN_IDS' in text
     assert 'stage_checkpointing["checkpoint_dir"] = str(CHECKPOINT_ROOT)' in text
+    assert 'if Path(result.output_dir).name != STAGE02_RUN_ID:' in text
+    assert 'if Path(result.output_dir) != STAGE02_OUTPUT_DIR:' in text
     assert "required_stage00_artifacts = stage02_config" in text
     assert "datetime.now(timezone.utc)" in text
     assert '"sync_timestamp_utc": datetime.now(timezone.utc).isoformat()' in text

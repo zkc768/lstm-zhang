@@ -166,6 +166,7 @@ DEFAULT_BASELINES = (
     "constant_up",
     "constant_down",
 )
+RUN_ID_PATTERN = re.compile(r"^\d{8}_\d{6}_\d{6}$")
 
 
 @dataclass(frozen=True)
@@ -212,7 +213,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage02Result:
     approved_families = _approved_families(stage01_handoff, config)
     blocked_reason = _stage01_block_reason(stage01_handoff, candidates, approved_families)
 
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+    run_id = _resolve_run_id(outputs.get("run_id"))
     output_dir = Path(str(outputs["output_dir"])) / run_id
     output_dir.mkdir(parents=True, exist_ok=False)
 
@@ -329,6 +330,9 @@ def run_stage(config: Mapping[str, Any]) -> Stage02Result:
         "route": config["route"],
         "stage_name": config["stage_name"],
         "scope": config["scope"],
+        "run_id": run_id,
+        "stage02_run_id": run_id,
+        "superseded_stage02_run_ids": _superseded_stage02_run_ids(config),
         "config_sha256": hash_mapping(config),
         "notebook_sha256": hash_file(notebook_path),
         "source_stage00_run_id": inputs.get("stage00_run_id", stage01_handoff.get("source_stage00_run_id")),
@@ -480,6 +484,27 @@ def _repo_root() -> Path:
 
 def _output_name(outputs: Mapping[str, Any], key: str, default: str) -> str:
     return str(outputs.get(key, default))
+
+
+def _resolve_run_id(configured_run_id: Any | None = None) -> str:
+    if configured_run_id in (None, ""):
+        return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+    run_id = str(configured_run_id)
+    if RUN_ID_PATTERN.fullmatch(run_id) is None:
+        raise ValueError(
+            "Stage 02 outputs.run_id must match YYYYMMDD_HHMMSS_microseconds, "
+            f"got {run_id!r}"
+        )
+    return run_id
+
+
+def _superseded_stage02_run_ids(config: Mapping[str, Any]) -> list[str]:
+    value = config.get("superseded_stage02_run_ids", [])
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list):
+        raise TypeError("Stage 02 superseded_stage02_run_ids must be a list")
+    return [str(item) for item in value]
 
 
 def _validate_stage01_contract(
@@ -1907,6 +1932,7 @@ def _frozen_candidate_payload(
             "stage00_run_id", stage01_handoff.get("source_stage00_run_id")
         ),
         "source_stage01_run_id": config["inputs"]["stage01_run_id"],
+        "superseded_stage02_run_ids": _superseded_stage02_run_ids(config),
         "source_stage01_decision": stage01_handoff.get("decision"),
         "stage02_modeling_scope_axis": _stage02_modeling_scope_axis(stage01_handoff),
         "ready_for_stage03": bool(decision_bundle["ready_for_stage03"]),
@@ -1996,6 +2022,7 @@ def _best_params_payload(
         "route": config["route"],
         "stage_name": config["stage_name"],
         "source_stage01_run_id": config["inputs"]["stage01_run_id"],
+        "superseded_stage02_run_ids": _superseded_stage02_run_ids(config),
         "source_stage01_decision": stage01_handoff.get("decision"),
         "stage02_modeling_scope_axis": _stage02_modeling_scope_axis(stage01_handoff),
         "approved_model_families_for_stage02": list(profiles_by_family),
@@ -2019,6 +2046,7 @@ def _stage03_handoff_payload(
             "stage00_run_id", stage01_handoff.get("source_stage00_run_id")
         ),
         "source_stage01_run_id": config["inputs"]["stage01_run_id"],
+        "superseded_stage02_run_ids": _superseded_stage02_run_ids(config),
         "source_stage01_decision": stage01_handoff.get("decision"),
         "stage02_modeling_scope_axis": _stage02_modeling_scope_axis(stage01_handoff),
         "ready_for_stage03": bool(decision_bundle["ready_for_stage03"]),
