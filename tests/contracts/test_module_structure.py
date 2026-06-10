@@ -63,6 +63,7 @@ STAGE_MODULE_BY_TEST_PREFIX = {
     "test_stage01": "feature_window_search",
     "test_stage02": "model_hpo_train_inner",
     "test_stage03": "frozen_validation_readout",
+    "test_stage04": "diagnostics_ablation",
 }
 
 
