@@ -486,6 +486,8 @@ class Stage04Dirs:
                 )
                 trial_rows.append(
                     {
+                        # mirrors the REAL stage02 HPO_TRIAL_LEDGER_COLUMNS subset
+                        # stage04 consumes (delta vs baseline_id, not a long name)
                         "trial_id": f"trial_{fold_id}_{seed}",
                         "candidate_id": CANDIDATE_ID,
                         "model_family": "tcn",
@@ -493,8 +495,9 @@ class Stage04Dirs:
                         "fold_id": fold_id,
                         "seed": seed,
                         "fit_status": "completed",
+                        "baseline_id": "stratified_dummy_train_prior",
                         "macro_f1": 0.52,
-                        "delta_macro_f1_vs_stratified_dummy_train_prior": 0.02,
+                        "delta_macro_f1_vs_baseline": 0.02,
                     }
                 )
         pd.DataFrame(plan_rows).to_csv(self.stage02_dir / "02_hpo_plan_ledger.csv", index=False)
@@ -720,6 +723,18 @@ class Stage04Dirs:
         pd.read_csv(path).head(keep).to_csv(path, index=False)
         self._write_stage02_inventory()
 
+    def rename_trial_ledger_column(self, old: str, new: str) -> None:
+        path = self.stage02_dir / "02_hpo_trial_ledger.csv"
+        pd.read_csv(path).rename(columns={old: new}).to_csv(path, index=False)
+        self._write_stage02_inventory()
+
+    def set_trial_ledger_baseline_id(self, baseline_id: str) -> None:
+        path = self.stage02_dir / "02_hpo_trial_ledger.csv"
+        frame = pd.read_csv(path)
+        frame["baseline_id"] = baseline_id
+        frame.to_csv(path, index=False)
+        self._write_stage02_inventory()
+
     def single_run_dir(self) -> Path:
         run_dirs = [path for path in self.output_dir.iterdir() if path.is_dir()]
         assert len(run_dirs) == 1, f"expected one run folder, got {len(run_dirs)}"
@@ -782,6 +797,26 @@ def test_blocks_on_fold_hash_parity_mismatch(stage_dirs: Stage04Dirs) -> None:
 def test_reference_join_requires_exact_row_count(stage_dirs: Stage04Dirs) -> None:
     stage_dirs.drop_reference_trial_rows(keep=2)
     with pytest.raises(ValueError, match="reference rows"):
+        run_stage(stage_dirs.config())
+
+
+def test_reference_schema_gate_fires_before_any_fit(
+    stage_dirs: Stage04Dirs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 2026-06-10 Colab regression: the real stage02 ledger names its delta
+    # column delta_macro_f1_vs_baseline; a schema mismatch must fail BEFORE
+    # the fit loop burns compute, and never after it.
+    stage_dirs.rename_trial_ledger_column("delta_macro_f1_vs_baseline", "delta_renamed")
+    def must_not_fit(*args, **kwargs):
+        raise AssertionError("control fit ran despite a reference schema mismatch")
+    monkeypatch.setattr(stage04, "_fit_control", must_not_fit)
+    with pytest.raises(ValueError, match="missing columns"):
+        run_stage(stage_dirs.config())
+
+
+def test_reference_rows_require_stratified_dummy_baseline_id(stage_dirs: Stage04Dirs) -> None:
+    stage_dirs.set_trial_ledger_baseline_id("majority_train_prior")
+    with pytest.raises(ValueError, match="must be measured against"):
         run_stage(stage_dirs.config())
 
 

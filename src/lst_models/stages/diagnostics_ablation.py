@@ -58,6 +58,8 @@ CONTROL_FAMILY = {
     "tcn_only": "tcn", "dlinear_only": "ms_dlinear_only",
     "last_step_mlp": "last_step_mlp", "last_step_lightgbm_control": "lightgbm",
 }
+# Real stage02 ledger delta column; baseline_id gate pins its baseline.
+REFERENCE_DELTA_SOURCE_COLUMN = "delta_macro_f1_vs_baseline"
 
 REQUIRED_STAGE04_ARTIFACTS = [
     "run_manifest.json", "artifact_inventory.csv",
@@ -144,10 +146,11 @@ def run_stage(config: Mapping[str, Any]) -> Stage04Result:
     )
     plan_frame = _build_ablation_plan(config, inputs, context)
     _require_plan_within_budget(config, plan_frame)
+    reference_rows = _reference_rows(config, inputs)  # schema-gated BEFORE any fit
     trial_frame = _run_ablation_fits(
         config, inputs, context, plan_frame, run_id, resume_rows, completed_controls
     )
-    summary_frame = _ablation_summary(config, inputs, trial_frame)
+    summary_frame = _ablation_summary(config, reference_rows, trial_frame)
 
     frames = {
         key: (diagnostics_result[key], getattr(diagnostics, f"{key.upper()}_COLUMNS"))
@@ -156,9 +159,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage04Result:
     frames["ablation_plan_ledger"] = (plan_frame, ABLATION_PLAN_COLUMNS)
     frames["ablation_trial_ledger"] = (trial_frame, ABLATION_TRIAL_COLUMNS)
     frames["ablation_summary"] = (summary_frame, ABLATION_SUMMARY_COLUMNS)
-    return _write_outputs(
-        config, inputs, run_dir, run_id, frames, diagnostics_result, trial_frame
-    )
+    return _write_outputs(config, inputs, run_dir, run_id, frames, diagnostics_result, trial_frame)
 
 
 def _validate_config(config: Mapping[str, Any]) -> None:
@@ -169,9 +170,7 @@ def _validate_config(config: Mapping[str, Any]) -> None:
     if config.get("holdout_test_contact") is not False:
         raise ValueError("Stage 04 requires holdout_test_contact=false")
     if str(config.get("official_validation_contact")) != "read_frozen_artifacts_only":
-        raise ValueError(
-            "Stage 04 requires official_validation_contact=read_frozen_artifacts_only"
-        )
+        raise ValueError("Stage 04 requires official_validation_contact=read_frozen_artifacts_only")
     if config.get("official_validation_for_selection") is not False:
         raise ValueError("Stage 04 requires official_validation_for_selection=false")
     if int(config.get("new_validation_fit_predict_events", -1)) != 0:
@@ -211,9 +210,8 @@ def _verify_entry_gates(config: Mapping[str, Any]) -> Stage04Inputs:
     ledger = record.get("scoring_event_ledger", [])
     if int(record.get("official_validation_scoring_events", -1)) != len(ledger):
         raise ValueError(
-            "Stage 04 blocked: official_validation_scoring_events does not equal the "
-            "scoring_event_ledger length"
-        )
+            "Stage 04 blocked: official_validation_scoring_events does not equal "
+            "the scoring_event_ledger length")
     require_run_id_chain(
         [
             (
@@ -288,8 +286,7 @@ def _resolve_candidate_entry(
     ]
     if not matches:
         raise ValueError(
-            f"ablation.candidate_input {candidate_id!r} not found in 01_candidate_inputs.json"
-        )
+            f"ablation.candidate_input {candidate_id!r} not found in 01_candidate_inputs.json")
     return matches[0]
 
 
@@ -317,9 +314,8 @@ def _load_ablation_data_context(
     )
     if overlap:
         raise ValueError(
-            f"Stage 04 blocked: {len(overlap)} ablation train rows overlap validation "
-            "dump sample_ids"
-        )
+            f"Stage 04 blocked: {len(overlap)} ablation train rows overlap "
+            "validation dump sample_ids")
     folds = build_train_inner_folds(train_events, int(ablation["n_folds"]))
     caps = require_mapping(ablation["hpo_sample_policy"], "ablation.hpo_sample_policy")
     fold_rows = build_capped_fold_rows(
@@ -353,9 +349,8 @@ def _resolve_run_identity(
     checkpoint_dir = Path(str(resume.get("checkpoint_dir") or ""))
     manifest = load_incremental_checkpoint(checkpoint_dir, expected_run_id=run_id)
     partial = pd.read_csv(checkpoint_dir / "04_ablation_trial_ledger_partial.csv")
-    return run_id, partial.to_dict(orient="records"), [
-        str(control) for control in manifest.get("completed_units", [])
-    ]
+    completed = [str(control) for control in manifest.get("completed_units", [])]
+    return run_id, partial.to_dict(orient="records"), completed
 
 
 def _resolve_control_profile(
@@ -409,9 +404,8 @@ def _require_plan_within_budget(config: Mapping[str, Any], plan_frame: pd.DataFr
     cap = int(require_mapping(config["ablation"], "ablation")["budget"]["max_ablation_plan_rows"])
     if len(plan_frame) > cap:
         raise ValueError(
-            f"Stage 04 ablation plan has {len(plan_frame)} rows, above the predeclared "
-            f"budget cap {cap}"
-        )
+            f"Stage 04 ablation plan has {len(plan_frame)} rows, above the "
+            f"predeclared budget cap {cap}")
 
 
 def _run_ablation_fits(
@@ -440,9 +434,8 @@ def _run_ablation_fits(
             outcome = _fit_control(control_id, params, plan_row, fold_data, context, config)
             trial_rows.append({**plan_row, **outcome, "scope": STAGE04_ROW_SCOPE})
             print(
-                f"stage04 ablation {control_id} {plan_row['fold_id']} seed {plan_row['seed']}: "
-                f"{outcome.get('fit_status')}"
-            )
+                f"stage04 ablation {control_id} {plan_row['fold_id']} "
+                f"seed {plan_row['seed']}: {outcome.get('fit_status')}")
         done_controls.append(control_id)
         if bool(checkpointing.get("enabled")) and bool(
             checkpointing.get("checkpoint_after_each_control")
@@ -507,13 +500,10 @@ def _completed_stat(completed: pd.DataFrame, column: str, statistic: str = "mean
 
 
 def _ablation_summary(
-    config: Mapping[str, Any], inputs: Stage04Inputs, trial_frame: pd.DataFrame
+    config: Mapping[str, Any], reference: pd.DataFrame, trial_frame: pd.DataFrame
 ) -> pd.DataFrame:
-    reference = _reference_rows(config, inputs)
     reference_macro = float(reference["macro_f1"].astype(float).mean())
-    reference_delta = float(
-        reference["delta_macro_f1_vs_stratified_dummy_train_prior"].astype(float).mean()
-    )
+    reference_delta = float(reference[REFERENCE_DELTA_SOURCE_COLUMN].astype(float).mean())
     delta_col = "delta_macro_f1_vs_stratified_dummy_train_prior"
     rows: list[dict[str, Any]] = []
     for control_id in CONTROL_PROBE_BY_ID:
@@ -550,6 +540,13 @@ def _ablation_summary(
 def _reference_rows(config: Mapping[str, Any], inputs: Stage04Inputs) -> pd.DataFrame:
     reference = require_mapping(config["ablation"], "ablation")["reference_rows"]
     trial_ledger = pd.read_csv(inputs.stage_paths["stage02"]["02_hpo_trial_ledger.csv"])
+    missing = sorted(
+        {"macro_f1", REFERENCE_DELTA_SOURCE_COLUMN, "baseline_id"} - set(trial_ledger.columns)
+    )
+    if missing:
+        raise ValueError(
+            f"Stage 04 reference rows: 02_hpo_trial_ledger.csv is missing columns "
+            f"{missing}; observed columns {sorted(trial_ledger.columns)}")
     rows = trial_ledger.loc[
         trial_ledger["candidate_id"].astype(str).eq(str(reference["candidate_id"]))
         & trial_ledger["model_family"].astype(str).eq(str(reference["model_family"]))
@@ -559,10 +556,14 @@ def _reference_rows(config: Mapping[str, Any], inputs: Stage04Inputs) -> pd.Data
     expected = int(reference["expected_row_count"])
     if len(rows) != expected:
         raise ValueError(
-            f"Stage 04 reference rows: expected exactly {expected} completed Stage 02 trial "
-            f"rows for ({reference['candidate_id']}, {reference['model_family']}, "
-            f"{reference['hpo_profile_id']}), found {len(rows)}"
-        )
+            f"Stage 04 reference rows: expected exactly {expected} completed Stage 02 "
+            f"trial rows for ({reference['candidate_id']}, {reference['model_family']}, "
+            f"{reference['hpo_profile_id']}), found {len(rows)}")
+    baseline_ids = set(rows["baseline_id"].astype(str))
+    if baseline_ids != {"stratified_dummy_train_prior"}:
+        raise ValueError(
+            "Stage 04 reference rows: delta_macro_f1_vs_baseline must be measured against "
+            f"stratified_dummy_train_prior on every row; observed {sorted(baseline_ids)}")
     return rows
 
 
@@ -595,8 +596,7 @@ def _write_outputs(
     missing = [name for name in REQUIRED_STAGE04_ARTIFACTS if not (run_dir / name).exists()]
     if missing:
         raise FileNotFoundError(
-            f"Stage 04 required artifacts missing after write: {missing} under {run_dir}"
-        )
+            f"Stage 04 required artifacts missing after write: {missing} under {run_dir}")
     return Stage04Result(
         run_dir=run_dir,
         diagnostics_report_path=run_dir / report_name,

@@ -2,6 +2,20 @@
 
 Revision record:
 
+- 2026-06-10 (Colab execution regression fix, first nb04 run): all 24
+  control fits completed, then `_ablation_summary` crashed on a
+  fixture-invented column name — the REAL `02_hpo_trial_ledger.csv` names
+  its delta `delta_macro_f1_vs_baseline` (with `baseline_id` identifying the
+  baseline), not `delta_macro_f1_vs_stratified_dummy_train_prior`. Fix:
+  reference rows now read `REFERENCE_DELTA_SOURCE_COLUMN` with a hard
+  `baseline_id == stratified_dummy_train_prior` gate, the reference
+  schema/count/baseline gates moved BEFORE the fit loop (schema mismatches
+  must fail in seconds, never after compute), the smoke fixture mirrors the
+  real ledger schema, and two regression tests pin the gate ordering and the
+  baseline-id requirement. Recovery path: exact-run resume of the crashed
+  run id (completed controls never refit). Lesson recorded: every consumer
+  of a REAL upstream artifact schema must be verified against the producing
+  stage's column constants, not against fixture assumptions.
 - 2026-06-10 (implementation correction record, post-Batch-C build): the
   700-line stage-module ratchet forced the planned T6-T9 layout to shed
   domain logic during implementation; the as-built placement supersedes the
