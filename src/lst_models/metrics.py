@@ -68,6 +68,27 @@ def score_classifier(
     }
 
 
+def per_class_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
+    """Per-class precision/recall/F1/support over fixed labels {0, 1}."""
+    from sklearn.metrics import precision_recall_fscore_support
+
+    y_true = np.asarray(y_true, dtype=int)
+    y_pred = np.asarray(y_pred, dtype=int)
+    precision, recall, f1, support = precision_recall_fscore_support(
+        y_true, y_pred, labels=list(BINARY_LABELS), zero_division=0
+    )
+    return {
+        "precision_down": float(precision[0]),
+        "recall_down": float(recall[0]),
+        "f1_down": float(f1[0]),
+        "support_down": int(support[0]),
+        "precision_up": float(precision[1]),
+        "recall_up": float(recall[1]),
+        "f1_up": float(f1[1]),
+        "support_up": int(support[1]),
+    }
+
+
 def predict_stratified_dummy(
     y_train: np.ndarray, n_eval: int, seed: int
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -138,7 +159,8 @@ def block_bootstrap_macro_f1_delta(
 
 
 def compute_metric_lcb(values: np.ndarray) -> float:
-    """Small-sample one-sided 95% lower confidence bound (Student t).
+    """Small-sample one-sided 97.5% (lower endpoint of the two-sided 95%
+    Student-t interval) lower confidence bound (Student t).
 
     For scalar per-fold/seed summaries only. With one observation there is no
     spread, so the point value is returned.

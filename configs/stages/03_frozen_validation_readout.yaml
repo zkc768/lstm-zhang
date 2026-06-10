@@ -1,0 +1,135 @@
+stage_name: 03_frozen_validation_readout
+route: lst_models
+scope: validation_only
+holdout_test_contact: false
+official_validation_contact: true
+official_validation_for_selection: false
+
+inputs:
+  stage00_run_id: "20260609_015034_927813"
+  stage00_runtime_run_dir: /content/lst_models_results/00_data_split_label_freeze/20260609_015034_927813
+  stage00_drive_path_parts: [lst_models, results, 00_data_split_label_freeze, "20260609_015034_927813"]
+  required_stage00_artifacts:
+    - raw_data_manifest.json
+    - split_freeze.json
+    - label_policy.json
+    - baseline_registry.json
+    - sample_event_index.csv
+    - run_manifest.json
+    - artifact_inventory.csv
+  stage01_run_id: "20260609_070204"
+  stage01_runtime_run_dir: /content/lst_models_results/01_feature_window_search/20260609_070204
+  stage01_drive_path_parts: [lst_models, results, 01_feature_window_search, "20260609_070204"]
+  required_stage01_artifacts:
+    - run_manifest.json
+    - artifact_inventory.csv
+    - 01_candidate_inputs.json
+    - 01_feature_window_search_summary.csv
+  stage02_run_id: "<NEW_STAGE02_RUN_ID>"
+  stage02_runtime_run_dir: /content/lst_models_results/02_model_hpo_train_inner/<NEW_STAGE02_RUN_ID>
+  stage02_drive_path_parts: [lst_models, results, 02_model_hpo_train_inner, "<NEW_STAGE02_RUN_ID>"]
+  superseded_stage02_run_ids: ["20260609_100637_704705"]
+  required_stage02_artifacts:
+    - run_manifest.json
+    - artifact_inventory.csv
+    - 02_model_hpo_train_inner_summary.csv
+    - 02_hpo_plan_ledger.csv
+    - 02_hpo_trial_ledger.csv
+    - 02_hpo_summary.csv
+    - 02_baseline_control_summary.csv
+    - 02_frozen_candidate.json
+    - 02_frozen_candidate.md
+    - 02_best_params_by_family.json
+    - 02_stage03_handoff.json
+  raw_data_manifest: configs/lst_models_data.yaml
+  raw_data_dir: /content/lst_models_raw_stock_data
+  notebook_path: notebooks/03_frozen_validation_readout_colab.ipynb
+
+outputs:
+  output_dir: /content/lst_models_results/03_frozen_validation_readout
+  manifest: run_manifest.json
+  artifact_inventory: artifact_inventory.csv
+  validation_readout: 03_validation_readout.csv
+  per_ticker_readout: 03_per_ticker_readout.csv
+  seed_summary: 03_seed_summary.csv
+  same_row_baselines: 03_same_row_baselines.csv
+  validation_predictions: 03_validation_predictions.csv
+  decision_record: 03_decision_record.json
+
+readout:
+  seeds: [101, 202]
+  refit_rows: all_eligible_official_train_rows
+  scoring_rows: all_eligible_official_validation_rows
+  refit_recipe: frozen_mechanism_chronological_tail_early_stopping
+  score_each_seed_candidate_exactly_once: true
+  max_materialized_train_bytes: 2000000000
+
+predeclared_criteria:
+  aggregate: mean_over_seeds
+  require_delta_macro_f1_vs_stratified_dummy_train_prior_positive: true
+  require_delta_macro_f1_vs_majority_train_prior_positive: true
+  minimum_positive_ticker_count: 3
+  per_ticker_aggregation: mean_delta_across_seeds_then_count_positive
+
+fallback_policy:
+  allowed_triggers:
+    - missing_frozen_artifact
+    - schema_or_hash_mismatch
+    - refit_crash_before_any_scoring
+    - candidate_not_reconstructable
+  forbidden_triggers:
+    - weak_validation_metrics
+    - below_dummy
+    - per_ticker_instability
+  after_first_scoring_event: never_activate
+
+baseline_controls:
+  mandatory:
+    - stratified_dummy_train_prior
+    - majority_train_prior
+    - constant_up
+    - constant_down
+
+lightgbm_training_defaults:
+  eval_metric: binary_logloss
+  early_stopping_rounds: 25
+  early_stopping_validation_source: inner_train_chronological_tail
+  early_stopping_validation_fraction: 0.2
+  minimum_early_stopping_train_samples: 128
+  minimum_early_stopping_validation_samples: 128
+
+probe_training_defaults:
+  torch:
+    epochs: 64
+    batch_size: 1024
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    device: auto
+    require_gpu: false
+    optimizer: AdamW
+    loss: class_weighted_cross_entropy
+    early_stopping: inner_train_chronological_tail
+    early_stopping_validation_fraction: 0.2
+    minimum_early_stopping_train_samples: 128
+    minimum_early_stopping_validation_samples: 128
+    early_stopping_patience: 8
+    early_stopping_min_delta: 0.0
+    gradient_clip_norm: 1.0
+
+checkpointing:
+  enabled: true
+  checkpoint_after_each_seed: true
+  checkpoint_dir: /content/lst_models_checkpoints/03_frozen_validation_readout
+
+forbidden:
+  wording:
+    - final model
+    - official validation winner
+    - holdout winner
+    - test winner
+    - proved best model
+    - generalization proven
+    - profitable
+    - holdout-ready
+    - selected by official validation
+    - chosen threshold

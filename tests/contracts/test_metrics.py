@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 from sklearn.metrics import f1_score
 
 
@@ -33,6 +34,20 @@ def test_score_classifier_keys_and_roc_auc_guard() -> None:
 
     single_class = metrics.score_classifier(np.array([1, 1, 1]), np.array([1, 0, 1]))
     assert single_class["roc_auc"] != single_class["roc_auc"]  # NaN without scores/2 classes
+
+
+def test_per_class_metrics_matches_sklearn_and_handles_missing_class() -> None:
+    y_true = np.array([0, 0, 1, 1, 1])
+    y_pred = np.array([0, 1, 1, 1, 0])
+    result = metrics.per_class_metrics(y_true, y_pred)
+    assert result["precision_down"] == pytest.approx(0.5)
+    assert result["recall_down"] == pytest.approx(0.5)
+    assert result["f1_down"] == pytest.approx(0.5)
+    assert result["precision_up"] == pytest.approx(2.0 / 3.0)
+    assert result["recall_up"] == pytest.approx(2.0 / 3.0)
+    assert result["support_down"] == 2 and result["support_up"] == 3
+    empty = metrics.per_class_metrics(np.array([1, 1]), np.array([1, 1]))
+    assert empty["support_down"] == 0 and empty["f1_down"] == 0.0
 
 
 def test_dummy_predictions_are_reproducible_and_constant() -> None:

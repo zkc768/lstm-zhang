@@ -179,12 +179,12 @@ follow-up.
      (document intended behavior or fix to proportional floor-1 allocation).
 - [ ] **A5 Stage 02 checkpoint durability.** Partially landed in `4d2aeeb`.
   Done: local incremental checkpoint manifest has `status=incomplete`,
-  completed/pending units, and resume instructions; notebook-level compact
-  checkpoint archives can be uploaded to Drive. Still open: runner-level Drive
-  mirror after natural units, checkpoint Drive folders keyed by the Stage 02
-  run id (current notebook archive path is still Stage 01-run-id based), and
-  exact-run-id resume entry in the runner per AGENTS.md §5. Same contract is
-  reused by Stage 03 refits.
+  completed/pending units, and resume instructions. In the Stage 02 rerun
+  notebook update, the notebook pre-generates `STAGE02_RUN_ID`, injects
+  `outputs.run_id`, and writes notebook-level checkpoint archives under the
+  Stage 02 run-id Drive path. Still open: runner-level Drive mirror after
+  natural units and exact-run-id resume execution in the runner per AGENTS.md
+  §5. Same contract is reused by Stage 03 refits.
 - [ ] **A6 LCB docstring nit.** `src/lst_models/metrics.py:140-155`
   `compute_metric_lcb` says "one-sided 95%" but uses the 97.5% quantile.
   Align the docstring (keep the conservative behavior).
@@ -201,7 +201,11 @@ These four decisions are written into protocol text in Batch B and MUST be
 frozen before the Stage 03 readout executes. Recommended defaults are listed;
 "approve defaults" is a sufficient sign-off.
 
-- [ ] **D1 Stage 03 refit recipe — mechanism-frozen (RECOMMENDED).**
+**SIGN-OFF RECORD: user approved all four recommended defaults ("按推荐"),
+2026-06-09. The choices below are frozen inputs for Batch B; changing any of
+them after the Stage 03 readout executes is forbidden.**
+
+- [x] **D1 Stage 03 refit recipe — mechanism-frozen (RECOMMENDED).**
   `02_frozen_candidate.json` carries profile params but not per-trial
   `best_iteration`/best-epoch. Recommended: freeze the *mechanism*, not the
   number — refit on the official training partition with the same
@@ -212,7 +216,7 @@ frozen before the Stage 03 readout executes. Recommended defaults are listed;
   Alternative (rejected unless user overrides): fixed epochs/n_estimators
   copied from Stage 02 trials — brittle, because Stage 03's training-row
   regime differs from the 50k-row trial regime.
-- [ ] **D2 Stage 03 sample policy — full rows (RECOMMENDED).**
+- [x] **D2 Stage 03 sample policy — full rows (RECOMMENDED).**
   Refit on ALL eligible official-train rows (no 50k cap); score ALL eligible
   official-validation rows (no 20k cap, natural distribution). Document
   explicitly that Stage 02 absolute metrics (stylized equal-allocation
@@ -221,7 +225,7 @@ frozen before the Stage 03 readout executes. Recommended defaults are listed;
   Fallback if full-train refit is infeasible on Colab (memory/time measured,
   not guessed): the SAME deterministic even-stride policy with a raised cap,
   predeclared in config before execution, never tuned afterward.
-- [ ] **D3 Stage 04 ablation scoring path — train-inner only (RECOMMENDED).**
+- [x] **D3 Stage 04 ablation scoring path — train-inner only (RECOMMENDED).**
   Architectural controls (`dlinear_only`, `tcn_only`, `last_step_mlp`,
   `last_step_lightgbm_control`) are new fits. Recommended: score them on
   Stage 02's train-inner folds only (consistent with Stage 02 protocol §7
@@ -230,7 +234,7 @@ frozen before the Stage 03 readout executes. Recommended defaults are listed;
   readout): a bounded one-shot validation-scored ablation budget, every
   fit-predict event counted in the validation ledger. Do not choose this
   after seeing Stage 03 results.
-- [ ] **D4 Stage 06 evidence standard — progress record, no test contact
+- [x] **D4 Stage 06 evidence standard — progress record, no test contact
   (RECOMMENDED).** Freeze now, before any validation number is seen:
   - (a) RECOMMENDED: 06 = progress record + reproducibility inventory;
     closed holdout/test (≥ 2017-01-25) stays closed; final claims remain
@@ -244,6 +248,8 @@ frozen before the Stage 03 readout executes. Recommended defaults are listed;
   (a) into a test claim is not.
 
 **Exit gate:** user reply recording D1-D4 choices (defaults acceptable).
+MET 2026-06-09 — all defaults approved. Batch B implementation plan:
+`docs/lst_models_stage03_implementation_plan.md`.
 
 ---
 
