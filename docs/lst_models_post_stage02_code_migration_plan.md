@@ -416,6 +416,20 @@ Recorded migration notes:
   `9ef9188000292a4500460f8db61cb1c86992bc17e7f71368b1e10fef53c62545`
 - Both new values must be re-verified at the Phase 5 freeze; they change only
   if payload function sources change after this note.
+- 2026-06-09 Phase 5 freeze: hashes re-verified unchanged; extra assurance
+  pass ran before freeze: 12/12 moved model/fit units verified verbatim
+  against pre-migration git HEAD (modulo declared renames plus one documented
+  local-variable rename), and the torch behavior checks (A1 moving-average
+  effect, D3 score range) executed live in plain Python on the relocated
+  code (the pytest-process torch DLL failure on this machine is recorded by
+  the test's own skip reason). A `.gitignore` `models/` rule that silently
+  excluded `src/lst_models/models/` was caught by the ls-tree bundle check
+  and narrowed to `/models/`. Full-bundle commit:
+  `4672f4d27e3e8a009ce95bc5344cadc0aac398e1` (verified to contain src incl.
+  models/fitting, configs, protocols, notebooks, tests). Stage 00/01/02
+  notebooks, generators, and notebook static gates all pin to it. Superseded
+  run `20260610_010019_507648` recorded in stage02/03 configs. Migration
+  complete; handoff to Route A Phase R3 (chain rerun).
 
 ## 11. Validation Commands
 
