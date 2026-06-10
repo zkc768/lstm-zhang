@@ -72,3 +72,26 @@ def hash_file(path: str | Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def require_mapping(value: Any, name: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise TypeError(f"expected mapping for {name}, got {type(value).__name__}")
+    return value
+
+
+def parse_bool_flag(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "t", "yes", "y"}
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def resolve_repo_path(path_value: Any) -> Path:
+    path = Path(str(path_value))
+    if path.is_absolute():
+        return path
+    return repo_root() / path

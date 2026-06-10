@@ -100,10 +100,11 @@ intraday_stock_direction_research/
 │       ├── metrics.py
 │       ├── artifacts.py
 │       ├── device.py
+│       ├── fitting.py
 │       ├── models/
 │       │   ├── registry.py
-│       │   ├── lstm.py
-│       │   ├── gru.py
+│       │   ├── standard_dlinear.py
+│       │   ├── tcn.py
 │       │   └── ms_dlinear_tcn.py
 │       └── stages/
 │           ├── data_split_label_freeze.py
@@ -159,7 +160,8 @@ and update the guide before creating a new directory or abstraction.
 | `src/lst_models/device.py` | CUDA/CPU resolution and manifest fields | Research-selection decisions |
 | `src/lst_models/models/registry.py` | Small model registry and model lookup | Stage orchestration or training loops |
 | `src/lst_models/models/<model>.py` | One compact model class/wrapper per model family | Config parsing, data loading, result writing |
-| `src/lst_models/stages/<stage>.py` | One public `run_stage(config)` orchestration function per executable stage | Notebook UI, markdown display, raw HPO notebooks |
+| `src/lst_models/fitting.py` | Shared probe/trial fit wrappers: logreg/LightGBM/torch sequence fits and early-stopping splits, as plain functions | Trainer frameworks, callback systems, plugin registries, stage orchestration |
+| `src/lst_models/stages/<stage>.py` | One public `run_stage(config)` orchestration function per executable stage; must not import other stage modules or define provenance-hashed mechanism code | Notebook UI, markdown display, raw HPO notebooks, reusable helper libraries |
 | `scripts/notebooks/generate_<stage>_colab.py` | Notebook generation only | Research logic that should be tested as package code |
 | `tests/data/` | Raw schema, split, label, window, train-only preprocessing tests | Slow full training |
 | `tests/stages/` | `run_stage(config)` smoke and contract tests with tiny synthetic data | GPU-required full HPO |
@@ -192,6 +194,9 @@ HPO-selected params edited directly into model source files
 validation result summaries stored as configs
 stage logic placed in scripts/notebooks/
 GPU-only checks required by the fast test suite
+one stage module imported as a helper library by another stage
+provenance-hashed functions defined inside a stage module
+the same helper duplicated into a second module instead of moved to a domain module
 ```
 
 ## 5. Code File Types And Common Function Placement
@@ -207,6 +212,7 @@ the doc is not implementation-ready.
 | Raw `.txt` schema checks | `src/lst_models/data.py` | `validate_raw_bar_schema` | `tests/data/` |
 | 1-minute to 5-minute OHLCV conversion | `src/lst_models/data.py` | `resample_1min_to_5min` | `tests/data/` |
 | Chronological split construction | `src/lst_models/splits.py` | `make_chronological_splits` | `tests/data/` |
+| Inner-fold construction for train-inner CV | `src/lst_models/splits.py` | `build_train_inner_folds` | `tests/data/` |
 | Split-boundary and closed-holdout guards | `src/lst_models/splits.py` | `assert_no_holdout_contact` | `tests/contracts/` |
 | Direction labels and no-trade band | `src/lst_models/labels.py` | `make_direction_labels` | `tests/data/` |
 | Label horizon invalidation | `src/lst_models/labels.py` | `invalidate_cross_boundary_labels` | `tests/data/` |
@@ -217,9 +223,11 @@ the doc is not implementation-ready.
 | Classification metrics and LCB | `src/lst_models/metrics.py` | `score_classifier`, `compute_metric_lcb` | `tests/contracts/` |
 | Run manifest | `src/lst_models/artifacts.py` | `write_run_manifest` | `tests/contracts/` |
 | Artifact names and paths | `src/lst_models/artifacts.py` | `build_stage_artifact_paths` | `tests/contracts/` |
+| Provenance code-hash builders | `src/lst_models/artifacts.py` | `feature_rebuild_code_sha256` | `tests/contracts/` |
 | CUDA/CPU resolution | `src/lst_models/device.py` | `resolve_torch_device` | `tests/contracts/` |
 | Model lookup | `src/lst_models/models/registry.py` | `register_model`, `get_model_class` | `tests/contracts/` |
 | Model architecture | `src/lst_models/models/<model>.py` | `<ModelName>Model` | `tests/stages/` or `tests/contracts/` |
+| Probe/trial fit wrappers and early-stopping splits | `src/lst_models/fitting.py` | `fit_probe`, `fit_lightgbm_probe`, `torch_inner_train_early_stopping_split` | `tests/stages/` or `tests/contracts/` |
 | Stage orchestration | `src/lst_models/stages/<stage>.py` | `run_stage` | `tests/stages/` |
 | Notebook generation | `scripts/notebooks/generate_<stage>_colab.py` | `build_notebook` | `tests/notebooks/` |
 
@@ -504,6 +512,9 @@ Rules:
 - Use train-only preprocessing helpers rather than inline scaler fitting.
 - Any helper that can affect chronology, labels, windows, metrics, or artifacts
   needs a targeted test.
+- Stage modules are orchestration-only: they must not import another stage
+  module and must not define provenance-hashed mechanism code. See the
+  `Anti-Spaghetti Structural Gates` section in `AGENTS.md`.
 
 Function size targets:
 
@@ -584,6 +595,7 @@ try/except Exception: pass
 global config mutated by notebook cells
 random train_test_split for time-series validation
 function names such as do_it, process, run_all, get_data2
+from lst_models.stages import <other_stage> used as a helper library
 ```
 
 ## 11. Artifact Naming
@@ -691,6 +703,8 @@ Must keep on GitHub:
 | run manifest | config hash, notebook hash, scope, and `holdout_test_contact=false` |
 | notebook static gate | notebook parses, code cells AST-parse, outputs empty |
 | forbidden strings | no active holdout/test read in validation-only notebooks |
+| module structure | no cross-stage stage-module imports; provenance payload functions live in domain modules |
+| golden equivalence | provenance payload functions pinned by committed output constants |
 
 Can be local-only or slow CI:
 

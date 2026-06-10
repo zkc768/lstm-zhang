@@ -13,7 +13,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
+import lst_models.fitting as fitting  # noqa: E402
 import lst_models.stages.feature_window_search as feature_window_search  # noqa: E402
+from lst_models.models.ms_dlinear_tcn import MSDLinearTCNTiny  # noqa: E402
 from lst_models.stages.feature_window_search import run_stage  # noqa: E402
 
 
@@ -31,8 +33,8 @@ TRAIN_DAYS = [
 @pytest.fixture(autouse=True)
 def disable_torch_import_for_fast_smoke(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        feature_window_search,
-        "_TORCH_IMPORT_ERROR",
+        fitting,
+        "TORCH_IMPORT_ERROR",
         "torch disabled in fast Stage 01 smoke test",
     )
 
@@ -416,7 +418,7 @@ def test_stage01_run_stage_writes_real_screening_artifacts(tmp_path: Path) -> No
 
 
 def test_ms_dlinear_tcn_keeps_trend_and_residual_heads_separate() -> None:
-    source = inspect.getsource(feature_window_search._MSDLinearTCNTiny)
+    source = inspect.getsource(MSDLinearTCNTiny)
     assert "trend + residual" not in source
     assert "self.trend_heads" in source
     assert "self.residual_heads" in source
@@ -435,6 +437,9 @@ def test_stage01_rejects_official_validation_selection(tmp_path: Path) -> None:
         run_stage(config)
 
 
+# TEMPORARY same-stage private-helper test (AGENTS.md Anti-Spaghetti gates).
+# Removal target: replace with a public stage-selection contract surface in
+# the next Stage 01 selection refactor.
 def test_stage01_candidate_selection_uses_median_family_lcb_not_best() -> None:
     summary = pd.DataFrame(
         [
@@ -477,6 +482,9 @@ def test_stage01_candidate_selection_uses_median_family_lcb_not_best() -> None:
     assert selected_ids == {"robust_median_family"}
 
 
+# TEMPORARY same-stage private-helper test (AGENTS.md Anti-Spaghetti gates).
+# Removal target: replace with a public stage-selection contract surface in
+# the next Stage 01 selection refactor.
 def test_stage01_summary_positive_ticker_count_uses_median_family_support() -> None:
     dataset = feature_window_search.CandidateDataset(
         metadata=pd.DataFrame({"ticker": ["AAA", "BBB", "CCC", "DDD"]}),
@@ -544,14 +552,14 @@ def test_stage01_materializes_windows_after_fold_caps(
     for probe_id, probe_config in config["lightweight_probes"].items():
         probe_config["enabled"] = probe_id == "logreg_flat_control"
     config["budget"]["max_counted_probe_rows"] = 10
-    original = feature_window_search._materialize_window_matrix
+    original = feature_window_search.materialize_window_matrix
     seen_sizes: list[int] = []
 
     def wrapped_materialize(dataset, indices):
         seen_sizes.append(len(indices))
         return original(dataset, indices)
 
-    monkeypatch.setattr(feature_window_search, "_materialize_window_matrix", wrapped_materialize)
+    monkeypatch.setattr(feature_window_search, "materialize_window_matrix", wrapped_materialize)
 
     run_stage(config)
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib
 import json
 import re
-import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,9 +13,38 @@ import pandas as pd
 import yaml
 
 from lst_models import metrics
-from lst_models.artifacts import require_artifacts, write_artifact_inventory, write_json
-from lst_models.config import hash_file, hash_mapping, load_yaml
-from lst_models.stages import feature_window_search as stage01
+from lst_models.artifacts import (
+    feature_rebuild_code_sha256,
+    git_commit_fields,
+    read_json_object,
+    require_artifacts,
+    write_artifact_inventory,
+    write_json,
+)
+from lst_models.config import hash_file, hash_mapping, load_yaml, require_mapping, resolve_repo_path
+from lst_models.data import (
+    load_sample_event_index,
+    load_stage01_summary,
+    load_train_bars,
+    raw_manifest_integrity_summary,
+)
+from lst_models.features import build_feature_frame, require_feature_columns
+from lst_models.fitting import fit_probe
+from lst_models.metrics import (
+    block_delta_macro_f1,
+    score_train_prior_baseline,
+    ticker_delta_macro_f1,
+)
+from lst_models.splits import build_train_inner_folds, train_valid_events
+from lst_models.windows import (
+    CandidateDataset,
+    build_window_dataset,
+    cap_indices,
+    fold_indices,
+    materialize_window_matrix,
+    sample_id_hash,
+    validate_rebuilt_candidate_counts,
+)
 
 
 SUMMARY_COLUMNS = [
@@ -199,14 +227,14 @@ class Stage02DataContext:
 def run_stage(config: Mapping[str, Any]) -> Stage02Result:
     _validate_config(config)
 
-    inputs = _as_mapping(config["inputs"], "inputs")
-    outputs = _as_mapping(config["outputs"], "outputs")
+    inputs = require_mapping(config["inputs"], "inputs")
+    outputs = require_mapping(config["outputs"], "outputs")
     stage01_run_dir = Path(str(inputs["stage01_runtime_run_dir"]))
     stage01_paths = require_artifacts(stage01_run_dir, inputs["required_stage01_artifacts"])
 
-    stage01_manifest = _load_json(stage01_paths["run_manifest.json"])
-    stage01_handoff = _load_json(stage01_paths["01_candidate_inputs.json"])
-    stage01_summary = _load_stage01_summary(stage01_paths["01_feature_window_search_summary.csv"])
+    stage01_manifest = read_json_object(stage01_paths["run_manifest.json"])
+    stage01_handoff = read_json_object(stage01_paths["01_candidate_inputs.json"])
+    stage01_summary = load_stage01_summary(stage01_paths["01_feature_window_search_summary.csv"])
     _validate_stage01_contract(config, stage01_manifest, stage01_handoff)
 
     candidates = _candidate_inputs(stage01_handoff)
@@ -322,7 +350,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage02Result:
     handoff_path = write_json(handoff_path, stage03_handoff)
     frozen_param_paths = _write_frozen_param_yamls(output_dir, outputs, frozen_candidate)
 
-    notebook_path = _resolve_repo_path(inputs["notebook_path"])
+    notebook_path = resolve_repo_path(inputs["notebook_path"])
     input_artifacts = [str(path) for path in stage01_paths.values()]
     if stage00_context is not None:
         input_artifacts.extend(str(path) for path in stage00_context.stage00_paths.values())
@@ -361,7 +389,7 @@ def run_stage(config: Mapping[str, Any]) -> Stage02Result:
         "raw_file_integrity": _raw_file_integrity_manifest_field(stage00_context),
         **_feature_rebuild_manifest_fields(stage01_manifest),
         "random_seeds": [int(seed) for seed in config["train_inner"]["seeds"]],
-        **_git_commit_fields(),
+        **git_commit_fields(),
         "approved_model_families_for_stage02": list(approved_families),
         "stage02_modeling_scope_axis": _stage02_modeling_scope_axis(stage01_handoff),
         "baseline_registry_names": _baseline_ids(config),
@@ -415,17 +443,17 @@ def _validate_config(config: Mapping[str, Any]) -> None:
     if config.get("holdout_test_contact") is not False:
         raise ValueError("Stage 02 requires holdout_test_contact=false")
 
-    inputs = _as_mapping(config["inputs"], "inputs")
+    inputs = require_mapping(config["inputs"], "inputs")
     if "stage01_run_id" not in inputs:
         raise ValueError("Stage 02 config requires inputs.stage01_run_id")
 
-    train_inner = _as_mapping(config["train_inner"], "train_inner")
+    train_inner = require_mapping(config["train_inner"], "train_inner")
     if train_inner.get("official_validation_for_selection") is not False:
         raise ValueError("Stage 02 HPO must use train-inner folds only")
     if int(train_inner["n_folds"]) < 1:
         raise ValueError("train_inner.n_folds must be at least 1")
 
-    selection_rules = _as_mapping(config["selection_rules"], "selection_rules")
+    selection_rules = require_mapping(config["selection_rules"], "selection_rules")
     if selection_rules.get("no_official_validation_selection") is not True:
         raise ValueError("Stage 02 must declare no_official_validation_selection=true")
     if selection_rules.get("no_final_model_selected") is not True:
@@ -433,7 +461,7 @@ def _validate_config(config: Mapping[str, Any]) -> None:
     if int(selection_rules.get("minimum_positive_ticker_count", 0)) < 0:
         raise ValueError("selection_rules.minimum_positive_ticker_count must be non-negative")
 
-    lightgbm_defaults = _as_mapping(
+    lightgbm_defaults = require_mapping(
         config.get("lightgbm_training_defaults", {}), "lightgbm_training_defaults"
     )
     if int(lightgbm_defaults.get("early_stopping_rounds", 0)) > 0:
@@ -455,31 +483,6 @@ def _validate_config(config: Mapping[str, Any]) -> None:
             raise ValueError("Torch minimum_early_stopping_validation_samples must be positive")
         if int(torch_defaults.get("early_stopping_patience", 0)) < 1:
             raise ValueError("Torch early_stopping_patience must be positive")
-
-
-def _as_mapping(value: Any, name: str) -> Mapping[str, Any]:
-    if not isinstance(value, Mapping):
-        raise TypeError(f"expected mapping for {name}, got {type(value).__name__}")
-    return value
-
-
-def _load_json(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
-        loaded = json.load(handle)
-    if not isinstance(loaded, dict):
-        raise ValueError(f"expected JSON object in {path}")
-    return loaded
-
-
-def _resolve_repo_path(path_value: Any) -> Path:
-    path = Path(str(path_value))
-    if path.is_absolute():
-        return path
-    return _repo_root() / path
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
 
 
 def _output_name(outputs: Mapping[str, Any], key: str, default: str) -> str:
@@ -526,7 +529,7 @@ def _validate_stage01_contract(
             f"{configured_stage00!r} != {source_stage00!r}"
         )
     source_feature_hash = stage01_manifest.get("feature_rebuild_code_sha256")
-    current_feature_hash = stage01.feature_rebuild_code_sha256()
+    current_feature_hash = feature_rebuild_code_sha256()
     if source_feature_hash and str(source_feature_hash) != current_feature_hash:
         raise ValueError(
             "Stage 01 feature rebuild code hash does not match current Stage 02 rebuild code: "
@@ -539,7 +542,7 @@ def _candidate_inputs(stage01_handoff: Mapping[str, Any]) -> list[Mapping[str, A
     if not isinstance(candidates, list):
         raise TypeError("01_candidate_inputs.json field candidate_inputs must be a list")
     for candidate in candidates:
-        _as_mapping(candidate, "candidate_input")
+        require_mapping(candidate, "candidate_input")
     return candidates
 
 
@@ -560,10 +563,10 @@ def _approved_families(
 
 
 def _active_hpo_families(config: Mapping[str, Any]) -> tuple[str, ...]:
-    families = _as_mapping(config["hpo_families"], "hpo_families")
+    families = require_mapping(config["hpo_families"], "hpo_families")
     active = []
     for family, family_config in families.items():
-        if _as_mapping(family_config, f"hpo_families.{family}").get("enabled") is True:
+        if require_mapping(family_config, f"hpo_families.{family}").get("enabled") is True:
             if str(family) not in PROBE_BY_FAMILY:
                 raise ValueError(f"Stage 02 enabled unknown HPO family: {family}")
             active.append(str(family))
@@ -590,24 +593,24 @@ def _stage01_block_reason(
 def _load_stage02_data_context(
     config: Mapping[str, Any], stage01_handoff: Mapping[str, Any]
 ) -> Stage02DataContext:
-    inputs = _as_mapping(config["inputs"], "inputs")
+    inputs = require_mapping(config["inputs"], "inputs")
     stage00_run_dir = Path(str(inputs["stage00_runtime_run_dir"]))
     stage00_paths = require_artifacts(stage00_run_dir, inputs["required_stage00_artifacts"])
 
-    stage00_manifest = _load_json(stage00_paths["run_manifest.json"])
+    stage00_manifest = read_json_object(stage00_paths["run_manifest.json"])
     if stage00_manifest.get("holdout_test_contact") is not False:
         raise ValueError("Stage 02 requires Stage 00 run_manifest holdout_test_contact=false")
     if stage01_handoff.get("source_stage00_run_id") and inputs.get("stage00_run_id"):
         if str(stage01_handoff["source_stage00_run_id"]) != str(inputs["stage00_run_id"]):
             raise ValueError("Stage 02 Stage 00 run id does not match Stage 01 handoff")
 
-    raw_manifest = _load_json(stage00_paths["raw_data_manifest.json"])
-    split_freeze = _load_json(stage00_paths["split_freeze.json"])
-    sample_events = stage01._load_sample_event_index(stage00_paths["sample_event_index.csv"])
-    train_events = stage01._train_valid_events(sample_events)
-    train_bars = stage01._load_train_bars(raw_manifest, split_freeze, inputs)
-    feature_frame = stage01._build_feature_frame(train_bars)
-    folds = stage01._build_train_inner_folds(train_events, int(config["train_inner"]["n_folds"]))
+    raw_manifest = read_json_object(stage00_paths["raw_data_manifest.json"])
+    split_freeze = read_json_object(stage00_paths["split_freeze.json"])
+    sample_events = load_sample_event_index(stage00_paths["sample_event_index.csv"])
+    train_events = train_valid_events(sample_events)
+    train_bars = load_train_bars(raw_manifest, split_freeze, inputs)
+    feature_frame = build_feature_frame(train_bars)
+    folds = build_train_inner_folds(train_events, int(config["train_inner"]["n_folds"]))
     expected_overlap = int(config["train_inner"].get("event_overlap_count_required", 0))
     if not folds["event_overlap_count"].eq(expected_overlap).all():
         raise ValueError("Stage 02 train-inner fold overlap check failed")
@@ -626,12 +629,12 @@ def _load_search_profiles(
     approved_families: tuple[str, ...],
     config: Mapping[str, Any],
 ) -> dict[str, list[Mapping[str, Any]]]:
-    family_configs = _as_mapping(config["hpo_families"], "hpo_families")
-    max_profiles = int(_as_mapping(config["budget"], "budget")["max_profiles_per_family"])
+    family_configs = require_mapping(config["hpo_families"], "hpo_families")
+    max_profiles = int(require_mapping(config["budget"], "budget")["max_profiles_per_family"])
     profiles_by_family: dict[str, list[Mapping[str, Any]]] = {}
     for family in approved_families:
-        family_config = _as_mapping(family_configs[family], f"hpo_families.{family}")
-        search_space_path = _resolve_repo_path(family_config["search_space"])
+        family_config = require_mapping(family_configs[family], f"hpo_families.{family}")
+        search_space_path = resolve_repo_path(family_config["search_space"])
         search_space = load_yaml(search_space_path)
         if search_space.get("model_family") != family:
             raise ValueError(
@@ -645,16 +648,16 @@ def _load_search_profiles(
                 f"search space {search_space_path} has {len(profiles)} profiles, "
                 f"exceeding max_profiles_per_family={max_profiles}"
             )
-        profiles_by_family[family] = [_as_mapping(profile, "profile") for profile in profiles]
+        profiles_by_family[family] = [require_mapping(profile, "profile") for profile in profiles]
     return profiles_by_family
 
 
 def _search_space_hashes(config: Mapping[str, Any], approved_families: tuple[str, ...]) -> dict[str, str]:
-    family_configs = _as_mapping(config["hpo_families"], "hpo_families")
+    family_configs = require_mapping(config["hpo_families"], "hpo_families")
     hashes: dict[str, str] = {}
     for family in approved_families:
-        family_config = _as_mapping(family_configs[family], f"hpo_families.{family}")
-        hashes[str(family)] = hash_file(_resolve_repo_path(family_config["search_space"]))
+        family_config = require_mapping(family_configs[family], f"hpo_families.{family}")
+        hashes[str(family)] = hash_file(resolve_repo_path(family_config["search_space"]))
     return hashes
 
 
@@ -664,25 +667,16 @@ def _fold_design_hash(data_context: Stage02DataContext | None) -> str | None:
     return hash_mapping({"folds": data_context.folds.to_dict(orient="records")})
 
 
-def _load_stage01_summary(path: Path) -> pd.DataFrame:
-    summary = pd.read_csv(path)
-    required_columns = {"candidate_id", "n_samples_total", "n_samples_by_ticker_json"}
-    missing = sorted(required_columns - set(summary.columns))
-    if missing:
-        raise ValueError(f"Stage 01 summary missing required columns for Stage 02: {missing}")
-    return summary
-
-
 def _raw_file_integrity_manifest_field(
     data_context: Stage02DataContext | None,
 ) -> dict[str, Any] | None:
     if data_context is None:
         return None
-    return stage01._raw_manifest_integrity_summary(data_context.raw_manifest)
+    return raw_manifest_integrity_summary(data_context.raw_manifest)
 
 
 def _feature_rebuild_manifest_fields(stage01_manifest: Mapping[str, Any]) -> dict[str, Any]:
-    current_feature_hash = stage01.feature_rebuild_code_sha256()
+    current_feature_hash = feature_rebuild_code_sha256()
     source_feature_hash = stage01_manifest.get("feature_rebuild_code_sha256")
     if source_feature_hash:
         match = str(source_feature_hash) == current_feature_hash
@@ -698,30 +692,6 @@ def _feature_rebuild_manifest_fields(stage01_manifest: Mapping[str, Any]) -> dic
     }
 
 
-def _git_commit_fields() -> dict[str, Any]:
-    try:
-        completed = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=_repo_root(),
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return {
-            "git_commit": None,
-            "git_commit_reason": "git_unavailable_or_not_a_repository",
-        }
-    commit = completed.stdout.strip()
-    if completed.returncode == 0 and commit:
-        return {"git_commit": commit, "git_commit_reason": "resolved_from_local_git_checkout"}
-    return {
-        "git_commit": None,
-        "git_commit_reason": "workspace_not_git_repository",
-    }
-
-
 def _planned_hpo_rows(
     candidates: list[Mapping[str, Any]],
     profiles_by_family: Mapping[str, list[Mapping[str, Any]]],
@@ -733,7 +703,7 @@ def _planned_hpo_rows(
 
 
 def _enforce_budget(planned_rows: int, config: Mapping[str, Any]) -> None:
-    cap = int(_as_mapping(config["budget"], "budget")["max_hpo_plan_rows"])
+    cap = int(require_mapping(config["budget"], "budget")["max_hpo_plan_rows"])
     if planned_rows > cap:
         raise ValueError(f"Stage 02 planned HPO rows {planned_rows} exceed budget cap {cap}")
 
@@ -756,13 +726,13 @@ def _run_hpo_trials(
 
     for candidate in candidates:
         dataset = _prepare_candidate_dataset(candidate, data_context)
-        _validate_rebuilt_candidate_counts(candidate, dataset, stage01_summary)
+        validate_rebuilt_candidate_counts(candidate, dataset, stage01_summary)
         feature_columns = tuple(str(column) for column in candidate.get("feature_columns", []))
         for fold in data_context.folds.to_dict(orient="records"):
             train_idx, eval_idx = _fold_capped_indices(dataset, fold, config)
             x_train, train_meta, x_eval, eval_meta = _materialize_fold_data(dataset, train_idx, eval_idx)
-            train_hash = stage01._sample_id_hash(train_meta["sample_id"].tolist())
-            eval_hash = stage01._sample_id_hash(eval_meta["sample_id"].tolist())
+            train_hash = sample_id_hash(train_meta["sample_id"].tolist())
+            eval_hash = sample_id_hash(eval_meta["sample_id"].tolist())
             y_train = train_meta["label"].to_numpy(dtype=int)
             y_eval = eval_meta["label"].to_numpy(dtype=int)
             for seed in seeds:
@@ -854,11 +824,11 @@ def _build_hpo_plan_ledger(trial_ledger: pd.DataFrame) -> pd.DataFrame:
 
 def _prepare_candidate_dataset(
     candidate: Mapping[str, Any], data_context: Stage02DataContext
-) -> stage01.CandidateDataset:
+) -> CandidateDataset:
     feature_set = str(candidate["feature_set"])
     feature_columns = tuple(str(column) for column in candidate["feature_columns"])
-    stage01._require_feature_columns(feature_columns, data_context.feature_frame)
-    return stage01._build_window_dataset(
+    require_feature_columns(feature_columns, data_context.feature_frame)
+    return build_window_dataset(
         data_context.feature_frame,
         data_context.train_events,
         feature_set=feature_set,
@@ -867,58 +837,26 @@ def _prepare_candidate_dataset(
     )
 
 
-def _validate_rebuilt_candidate_counts(
-    candidate: Mapping[str, Any],
-    dataset: stage01.CandidateDataset,
-    stage01_summary: pd.DataFrame,
-) -> None:
-    candidate_id = str(candidate["candidate_id"])
-    matches = stage01_summary.loc[stage01_summary["candidate_id"].astype(str).eq(candidate_id)]
-    if matches.empty:
-        raise ValueError(f"Stage 01 summary missing candidate row for {candidate_id}")
-    row = matches.iloc[0]
-    expected_total = int(row["n_samples_total"])
-    actual_total = int(len(dataset.metadata))
-    if actual_total != expected_total:
-        raise ValueError(
-            f"Stage 02 rebuilt sample count mismatch for {candidate_id}: "
-            f"expected {expected_total}, observed {actual_total}"
-        )
-    expected_by_ticker = {
-        str(ticker): int(count)
-        for ticker, count in json.loads(str(row["n_samples_by_ticker_json"])).items()
-    }
-    actual_by_ticker = {
-        str(ticker): int(count)
-        for ticker, count in dataset.metadata.groupby("ticker").size().to_dict().items()
-    }
-    if actual_by_ticker != expected_by_ticker:
-        raise ValueError(
-            f"Stage 02 rebuilt per-ticker sample count mismatch for {candidate_id}: "
-            f"expected {expected_by_ticker}, observed {actual_by_ticker}"
-        )
-
-
 def _fold_capped_indices(
-    dataset: stage01.CandidateDataset, fold: Mapping[str, Any], config: Mapping[str, Any]
+    dataset: CandidateDataset, fold: Mapping[str, Any], config: Mapping[str, Any]
 ) -> tuple[np.ndarray, np.ndarray]:
-    train_idx, eval_idx = stage01._fold_indices(dataset.metadata, fold)
-    sample_policy = _as_mapping(config.get("hpo_sample_policy", {}), "hpo_sample_policy")
+    train_idx, eval_idx = fold_indices(dataset.metadata, fold)
+    sample_policy = require_mapping(config.get("hpo_sample_policy", {}), "hpo_sample_policy")
     train_cap = int(sample_policy.get("max_train_samples_per_fold", 0))
     eval_cap = int(sample_policy.get("max_eval_samples_per_fold", 0))
     return (
-        stage01._cap_indices(dataset.metadata, train_idx, train_cap),
-        stage01._cap_indices(dataset.metadata, eval_idx, eval_cap),
+        cap_indices(dataset.metadata, train_idx, train_cap),
+        cap_indices(dataset.metadata, eval_idx, eval_cap),
     )
 
 
 def _materialize_fold_data(
-    dataset: stage01.CandidateDataset, train_idx: np.ndarray, eval_idx: np.ndarray
+    dataset: CandidateDataset, train_idx: np.ndarray, eval_idx: np.ndarray
 ) -> tuple[np.ndarray, pd.DataFrame, np.ndarray, pd.DataFrame]:
     train_meta = dataset.metadata.iloc[train_idx].copy().reset_index(drop=True)
     eval_meta = dataset.metadata.iloc[eval_idx].copy().reset_index(drop=True)
-    x_train = stage01._materialize_window_matrix(dataset, train_idx)
-    x_eval = stage01._materialize_window_matrix(dataset, eval_idx)
+    x_train = materialize_window_matrix(dataset, train_idx)
+    x_eval = materialize_window_matrix(dataset, eval_idx)
     return x_train, train_meta, x_eval, eval_meta
 
 
@@ -939,7 +877,7 @@ def _score_stage02_baseline(
     baseline_id: str, y_train: np.ndarray, y_eval: np.ndarray, seed: int
 ) -> dict[str, Any]:
     if baseline_id in {"stratified_dummy_train_prior", "majority_train_prior"}:
-        return stage01._score_train_prior_baseline(baseline_id, y_train, y_eval, seed)
+        return score_train_prior_baseline(baseline_id, y_train, y_eval, seed)
     if len(y_train) == 0 or len(y_eval) == 0:
         predictions = np.zeros(len(y_eval), dtype=int)
         return {
@@ -1116,7 +1054,7 @@ def _fit_stage02_model(
         )
     probe_id = PROBE_BY_FAMILY[family]
     trial_config = _trial_probe_config(config, probe_id, profile)
-    return stage01._fit_probe(
+    return fit_probe(
         probe_id,
         x_train,
         train_meta,
@@ -1150,7 +1088,7 @@ def _fit_lightgbm_hpo_trial(
 
     params = _lightgbm_params(profile)
     model = LGBMClassifier(**params, random_state=seed, verbosity=-1)
-    training_defaults = _as_mapping(
+    training_defaults = require_mapping(
         config.get("lightgbm_training_defaults", {}), "lightgbm_training_defaults"
     )
     early_rounds = int(training_defaults.get("early_stopping_rounds", 25))
@@ -1207,7 +1145,7 @@ def _lightgbm_inner_train_early_stopping_split(
             "early_stopping_source": "disabled",
             "early_stopping_used": False,
             "early_stopping_reason": "early_stopping_rounds<=0",
-            "early_stopping_train_sample_id_hash": stage01._sample_id_hash(
+            "early_stopping_train_sample_id_hash": sample_id_hash(
                 train_meta["sample_id"].tolist()
             ),
             "early_stopping_eval_sample_id_hash": "",
@@ -1220,7 +1158,7 @@ def _lightgbm_inner_train_early_stopping_split(
     n_samples = int(len(train_meta))
     n_stop = max(minimum_eval, int(np.ceil(n_samples * validation_fraction)))
     n_stop = min(n_stop, max(0, n_samples - minimum_train))
-    full_train_hash = stage01._sample_id_hash(train_meta["sample_id"].tolist())
+    full_train_hash = sample_id_hash(train_meta["sample_id"].tolist())
     if n_stop < minimum_eval:
         return {
             "x_fit": x_train,
@@ -1287,10 +1225,10 @@ def _lightgbm_inner_train_early_stopping_split(
         "early_stopping_source": "inner_train_chronological_tail",
         "early_stopping_used": True,
         "early_stopping_reason": "configured_inner_train_subsplit",
-        "early_stopping_train_sample_id_hash": stage01._sample_id_hash(
+        "early_stopping_train_sample_id_hash": sample_id_hash(
             fit_meta["sample_id"].tolist()
         ),
-        "early_stopping_eval_sample_id_hash": stage01._sample_id_hash(
+        "early_stopping_eval_sample_id_hash": sample_id_hash(
             stop_meta["sample_id"].tolist()
         ),
     }
@@ -1358,8 +1296,8 @@ def _trial_probe_config(
 
 
 def _torch_defaults(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    return _as_mapping(
-        _as_mapping(config.get("probe_training_defaults", {}), "probe_training_defaults").get(
+    return require_mapping(
+        require_mapping(config.get("probe_training_defaults", {}), "probe_training_defaults").get(
             "torch", {}
         ),
         "probe_training_defaults.torch",
@@ -1448,10 +1386,10 @@ def _score_model_predictions(
 ) -> dict[str, Any]:
     y_eval = eval_meta["label"].to_numpy(dtype=int)
     scored = metrics.score_classifier(y_eval, predictions, y_score=scores)
-    ticker_deltas, positive_ticker_count = stage01._ticker_delta_macro_f1(
+    ticker_deltas, positive_ticker_count = ticker_delta_macro_f1(
         eval_meta, predictions, baseline_predictions
     )
-    block_deltas = stage01._block_delta_macro_f1(eval_meta, predictions, baseline_predictions)
+    block_deltas = block_delta_macro_f1(eval_meta, predictions, baseline_predictions)
     return {
         "fit_status": "completed",
         "macro_f1": scored["macro_f1"],
@@ -1667,7 +1605,7 @@ def _baseline_delta_series(
 def _select_frozen_candidates(
     hpo_summary: pd.DataFrame, trial_ledger: pd.DataFrame, config: Mapping[str, Any]
 ) -> dict[str, Any]:
-    selection_rules = _as_mapping(config["selection_rules"], "selection_rules")
+    selection_rules = require_mapping(config["selection_rules"], "selection_rules")
     if hpo_summary.empty:
         return _selection_bundle(
             ready_for_stage03=False,
@@ -1922,9 +1860,9 @@ def _frozen_candidate_payload(
     hpo_summary: pd.DataFrame,
     device_provenance: Mapping[str, Any],
 ) -> dict[str, Any]:
-    outputs = _as_mapping(config["outputs"], "outputs")
-    train_inner = _as_mapping(config["train_inner"], "train_inner")
-    selection_rules = _as_mapping(config["selection_rules"], "selection_rules")
+    outputs = require_mapping(config["outputs"], "outputs")
+    train_inner = require_mapping(config["train_inner"], "train_inner")
+    selection_rules = require_mapping(config["selection_rules"], "selection_rules")
     return {
         "route": config["route"],
         "stage_name": config["stage_name"],

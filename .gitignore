@@ -22,7 +22,7 @@ artifacts/**
 !artifacts/.gitkeep
 
 # Model/checkpoint outputs
-models/
+/models/
 checkpoints/
 *.pt
 *.pth

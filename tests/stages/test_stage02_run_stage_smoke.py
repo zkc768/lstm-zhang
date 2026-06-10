@@ -15,8 +15,9 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from lst_models.stages import feature_window_search as stage01  # noqa: E402
 from lst_models.stages import model_hpo_train_inner as stage02  # noqa: E402
+from lst_models.fitting import torch_inner_train_early_stopping_split  # noqa: E402
+from lst_models.windows import CandidateDataset, sample_id_hash  # noqa: E402
 
 
 def write_stage01_artifacts(
@@ -279,7 +280,7 @@ def patch_fake_stage02_execution(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
             [[row_index + 1.0, row_index + 2.0], [row_index + 3.0, row_index + 4.0]],
             dtype=np.float32,
         )
-    dataset = stage01.CandidateDataset(
+    dataset = CandidateDataset(
         metadata=metadata,
         feature_blocks=feature_blocks,
         feature_columns=("f1", "f2"),
@@ -325,6 +326,9 @@ def _sample(sample_id: str, ticker: str, day: str, label: int) -> dict:
     }
 
 
+# TEMPORARY same-stage private-helper test (AGENTS.md Anti-Spaghetti gates).
+# Removal target: replace with a public stage-selection/early-stopping
+# contract surface in the next Stage 02 selection refactor.
 def test_stage02_selection_blocks_below_positive_ticker_floor(tmp_path: Path) -> None:
     config = stage02_config(tmp_path, tmp_path / "stage01")
     hpo_summary = pd.DataFrame(
@@ -363,6 +367,9 @@ def test_stage02_selection_blocks_below_positive_ticker_floor(tmp_path: Path) ->
     assert decision["block_reason"] == "no_hpo_candidate_cleared_baseline_or_ticker_robustness_gates"
 
 
+# TEMPORARY same-stage private-helper test (AGENTS.md Anti-Spaghetti gates).
+# Removal target: replace with a public stage-selection/early-stopping
+# contract surface in the next Stage 02 selection refactor.
 def test_lightgbm_early_stopping_split_uses_inner_train_tail_only() -> None:
     train_meta = pd.DataFrame(
         [
@@ -388,10 +395,13 @@ def test_lightgbm_early_stopping_split_uses_inner_train_tail_only() -> None:
 
     assert split["early_stopping_used"] is True
     assert split["early_stopping_source"] == "inner_train_chronological_tail"
-    assert split["early_stopping_train_sample_id_hash"] == stage01._sample_id_hash(["s1", "s2"])
-    assert split["early_stopping_eval_sample_id_hash"] == stage01._sample_id_hash(["s3", "s4"])
+    assert split["early_stopping_train_sample_id_hash"] == sample_id_hash(["s1", "s2"])
+    assert split["early_stopping_eval_sample_id_hash"] == sample_id_hash(["s3", "s4"])
 
 
+# TEMPORARY same-stage private-helper test (AGENTS.md Anti-Spaghetti gates).
+# Removal target: replace with a public stage-selection/early-stopping
+# contract surface in the next Stage 02 selection refactor.
 def test_lightgbm_early_stopping_split_respects_minimum_validation_rows() -> None:
     train_meta = pd.DataFrame(
         [
@@ -494,10 +504,10 @@ def test_lightgbm_hpo_trial_true_fit_uses_inner_train_tail_eval_set() -> None:
     assert outcome["fit_status"] == "completed"
     assert outcome["early_stopping_used"] is True
     assert outcome["early_stopping_source"] == "inner_train_chronological_tail"
-    assert outcome["early_stopping_train_sample_id_hash"] == stage01._sample_id_hash(
+    assert outcome["early_stopping_train_sample_id_hash"] == sample_id_hash(
         ["s1", "s2", "s3", "s4", "s5", "s6"]
     )
-    assert outcome["early_stopping_eval_sample_id_hash"] == stage01._sample_id_hash(["s7", "s8"])
+    assert outcome["early_stopping_eval_sample_id_hash"] == sample_id_hash(["s7", "s8"])
     assert "best_iteration" in outcome
     assert np.isfinite(float(outcome["macro_f1"]))
     assert np.isfinite(float(outcome["balanced_accuracy"]))
@@ -578,7 +588,7 @@ def test_torch_early_stopping_split_uses_inner_train_tail_only() -> None:
     train_3d = np.arange(8, dtype=np.float32).reshape(4, 2, 1)
     y_train = train_meta["label"].to_numpy(dtype=int)
 
-    split = stage01._torch_inner_train_early_stopping_split(
+    split = torch_inner_train_early_stopping_split(
         train_3d=train_3d,
         y_train=y_train,
         train_meta=train_meta,
@@ -592,8 +602,8 @@ def test_torch_early_stopping_split_uses_inner_train_tail_only() -> None:
 
     assert split["early_stopping_used"] is True
     assert split["early_stopping_source"] == "inner_train_chronological_tail"
-    assert split["early_stopping_train_sample_id_hash"] == stage01._sample_id_hash(["s1", "s2"])
-    assert split["early_stopping_eval_sample_id_hash"] == stage01._sample_id_hash(["s3", "s4"])
+    assert split["early_stopping_train_sample_id_hash"] == sample_id_hash(["s1", "s2"])
+    assert split["early_stopping_eval_sample_id_hash"] == sample_id_hash(["s3", "s4"])
     assert split["y_fit"].tolist() == [0, 1]
     assert split["y_stop"].tolist() == [0, 1]
 
@@ -612,7 +622,7 @@ def test_torch_early_stopping_split_respects_minimum_validation_rows() -> None:
     train_3d = np.arange(12, dtype=np.float32).reshape(6, 2, 1)
     y_train = train_meta["label"].to_numpy(dtype=int)
 
-    split = stage01._torch_inner_train_early_stopping_split(
+    split = torch_inner_train_early_stopping_split(
         train_3d=train_3d,
         y_train=y_train,
         train_meta=train_meta,

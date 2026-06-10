@@ -28,7 +28,7 @@ inputs:
   stage02_run_id: "<NEW_STAGE02_RUN_ID>"
   stage02_runtime_run_dir: /content/lst_models_results/02_model_hpo_train_inner/<NEW_STAGE02_RUN_ID>
   stage02_drive_path_parts: [lst_models, results, 02_model_hpo_train_inner, "<NEW_STAGE02_RUN_ID>"]
-  superseded_stage02_run_ids: ["20260609_100637_704705"]
+  superseded_stage02_run_ids: ["20260609_100637_704705", "20260610_010019_507648"]
   required_stage02_artifacts:
     - run_manifest.json
     - artifact_inventory.csv

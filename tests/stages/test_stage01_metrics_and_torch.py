@@ -20,7 +20,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-import lst_models.stages.feature_window_search as fws  # noqa: E402
+import lst_models.models.ms_dlinear_tcn as ms_dlinear_tcn_module  # noqa: E402
+from lst_models.fitting import fit_torch_sequence_probe  # noqa: E402
+from lst_models.models.ms_dlinear_tcn import MSDLinearTCNTiny  # noqa: E402
 
 if os.environ.get("RUN_STAGE01_TORCH_TESTS") != "1":
     pytest.skip(
@@ -53,13 +55,15 @@ def test_msdlinear_tcn_actually_uses_moving_average_decomposition(monkeypatch) -
         "tcn_kernel_size": 3,
         "dropout": 0.0,
     }
-    model = fws._MSDLinearTCNTiny(window_size, n_features, defaults)
+    model = MSDLinearTCNTiny(window_size, n_features, defaults)
     model.eval()
     x = torch.as_tensor(_windows(8, window_size, n_features, seed=0), dtype=torch.float32)
 
     with torch.no_grad():
         baseline = model(x)
-    monkeypatch.setattr(fws, "_moving_average_same", lambda tensor, kernel: tensor * 0.0)
+    monkeypatch.setattr(
+        ms_dlinear_tcn_module, "moving_average_same", lambda tensor, kernel: tensor * 0.0
+    )
     with torch.no_grad():
         neutralized = model(x)
 
@@ -82,7 +86,7 @@ def test_torch_probe_emits_unit_interval_scores() -> None:
             "torch": {"epochs": 1, "batch_size": 16, "device": "cpu", "require_gpu": False}
         },
     }
-    result = fws._fit_torch_sequence_probe(
+    result = fit_torch_sequence_probe(
         "standard_dlinear_tiny", x_train, y_train, x_eval, config, 0, window_size, n_features
     )
     assert result.predictions.shape == (12,)

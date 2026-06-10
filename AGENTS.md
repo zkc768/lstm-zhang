@@ -1,5 +1,5 @@
 # AGENTS.md - lst_models V2 route
-<!-- AGENTS_VERSION: v1.8-codegraph-structural-audit -->
+<!-- AGENTS_VERSION: v1.9-anti-spaghetti-structural-gates -->
 
 This is a compact Colab-first research project for the V2 `lst_models` route.
 It is not a backend project, not a general ML framework, and not a place to
@@ -120,6 +120,43 @@ The short version:
   utility layer unless the style guide is updated first.
 - Do not import one active notebook from another active notebook.
 
+### Anti-Spaghetti Structural Gates
+
+These gates are mandatory for all Python changes.
+
+- Stage modules under `src/lst_models/stages/` are orchestration files. They
+  own `run_stage(config)`, stage-specific gates, ledgers, selection logic, and
+  artifact payload writers. They are not reusable libraries.
+- Production code must not import one stage module from another. Forbidden in
+  any `src/` file: `from lst_models.stages import <other_stage>`. Downstream
+  stages consume upstream run artifacts (manifests, CSVs, JSON) and public
+  domain modules, never upstream stage code.
+- Any function whose source participates in a provenance code hash (for
+  example the `feature_rebuild_code_sha256` payload) must live in a domain
+  module such as `data.py`, `features.py`, `windows.py`, or `splits.py`, never
+  in a stage module. Provenance hash builders themselves live in
+  `artifacts.py`. The scientific mechanism hash must stay independent of stage
+  orchestration refactors.
+- A helper needed by two stages moves to the domain module named by the route
+  guide before the second stage uses it. Do not copy a helper into a second
+  module; move it and import it. Two implementations of the same helper in two
+  modules are a structural violation, not a convenience.
+- Long-term tests assert on public domain functions or `run_stage(config)`.
+  No test may import a private helper from a different stage's module. A
+  same-stage private-helper test is allowed only with an explicit temporary
+  marker and a removal target.
+- Size ratchet: a new stage module stays under 700 lines and a new
+  `run_stage(config)` body under 90 lines. Existing stage modules must not
+  grow beyond their recorded post-migration baselines; approved stage-scoped
+  features may add lines only with a recorded reason in the task report.
+- `tests/contracts/test_module_structure.py` is the enforcing static gate. A
+  structural violation is `non_compliant_pending_fix`, not a style note.
+
+Known temporary exception: the pre-migration Stage 01/02/03 cross-stage
+private imports exist until the Route A migration
+(`docs/lst_models_post_stage02_code_migration_plan.md`) removes them. Do not
+extend that legacy surface; new code must comply immediately.
+
 ## 5. Notebook Rules
 
 - Colab `.ipynb` is the visible execution entrypoint.
@@ -215,6 +252,14 @@ My Drive/lst_models/checkpoints/<stage_name>/<run_id>/
   that pins `PROJECT_REPO_COMMIT` to that full-bundle commit. Before reporting
   success, verify the pinned commit contains required sidecars with `git ls-tree`
   or equivalent. Do not pin to a notebook-only or scaffold-only commit.
+- Long-running stage loops must print one compact progress line per completed
+  natural unit (profile, fold, ticker, model family) so Colab shows liveness
+  and progress can be correlated with checkpoints. Do not print per-batch or
+  per-epoch spam by default.
+- `drive_backup_manifest.json` must be written and uploaded last. Its own
+  `uploaded_files` entry must not record a stale byte size: record its own
+  size as null (self-reference) or omit its own entry. A self-referential size
+  mismatch must not be reported as an upload failure.
 
 ## 6. Research Safety Rules
 
@@ -231,6 +276,12 @@ These rules are mandatory:
   rows when metrics are reported.
 - Do not fabricate metrics, paths, model behavior, or experiment outcomes.
 - Do not catch and ignore exceptions.
+- Stage 00 raw-data manifests must record `bytes` and `sha256` for every raw
+  input file.
+- Any stage that rebuilds features or windows must record the provenance code
+  hash (`feature_rebuild_code_sha256`) and a `raw_file_integrity` status in
+  its run manifest. Missing upstream fields must be recorded with exact
+  reasons, never fabricated as matches.
 
 ## 7. Implementation Gate For Technical Docs
 
@@ -260,6 +311,7 @@ The implementation MUST preserve:
 - one run_stage(config) per executable stage
 - canonical Python package path: src/lst_models/
 - small Python helpers, no framework expansion
+- no stage-to-stage imports of stage modules in production code
 - validation-only scope unless explicitly authorized
 - no holdout/test read, transform, window, score, or summary
 - train-only preprocessing
@@ -296,6 +348,9 @@ Do not delete all tests. Keep a small GitHub-visible safety suite:
 - durable Drive result-save cell static gates for executable notebooks
 - checkpoint contract tests for long-running stages
 - forbidden holdout/test string checks for validation-only notebooks
+- module-structure static gate: no cross-stage stage-module imports;
+  provenance payload functions live in domain modules
+- golden equivalence constants for provenance payload functions
 
 Slow GPU training, full HPO, full notebook execution, large real-data
 regeneration, and long multi-seed experiments may be local-only or slow CI.

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Mapping
+import json
+from typing import Any, Mapping
 
 import numpy as np
+import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -199,3 +201,101 @@ def aggregate_family_delta_cis(
         "median_family_lcb": float(np.median(lcbs)),
         "max_family_mean": float(np.max(means)),
     }
+
+
+def classification_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
+    accuracy = float((y_true == y_pred).mean()) if len(y_true) else np.nan
+    return {
+        "macro_f1": float(
+            f1_score(y_true, y_pred, labels=[0, 1], average="macro", zero_division=0)
+        )
+        if len(y_true)
+        else np.nan,
+        "balanced_accuracy": float(balanced_accuracy_score(y_true, y_pred))
+        if len(y_true)
+        else np.nan,
+        "accuracy": accuracy,
+    }
+
+
+def score_train_prior_baseline(
+    baseline_id: str, y_train: np.ndarray, y_eval: np.ndarray, seed: int
+) -> dict[str, Any]:
+    if len(y_train) == 0 or len(y_eval) == 0:
+        predictions = np.zeros(len(y_eval), dtype=int)
+        return {
+            "fit_status": "skipped_no_fold_samples",
+            "macro_f1": np.nan,
+            "balanced_accuracy": np.nan,
+            "accuracy": np.nan,
+            "roc_auc": np.nan,
+            "mcc": np.nan,
+            "predictions": predictions,
+            "scores": np.full(len(y_eval), 0.5),
+            "error_message": "baseline has no train/eval samples for this fold",
+        }
+    if baseline_id == "stratified_dummy_train_prior":
+        predictions, prediction_scores = predict_stratified_dummy(y_train, len(y_eval), seed)
+    elif baseline_id == "majority_train_prior":
+        predictions, prediction_scores = predict_majority(y_train, len(y_eval))
+    else:
+        raise ValueError(f"unknown Stage 01 mandatory baseline: {baseline_id}")
+    scored = score_classifier(y_eval.astype(int), predictions, y_score=prediction_scores)
+    return {
+        "fit_status": "completed_baseline",
+        "predictions": predictions,
+        "scores": prediction_scores,
+        "error_message": "",
+        **scored,
+    }
+
+
+def ticker_delta_macro_f1(
+    eval_meta: pd.DataFrame, predictions: np.ndarray, baseline_predictions: np.ndarray
+) -> tuple[dict[str, float], int]:
+    y_eval = eval_meta["label"].to_numpy(dtype=int)
+    deltas: dict[str, float] = {}
+    for ticker, group in eval_meta.assign(_position=np.arange(len(eval_meta))).groupby("ticker", sort=True):
+        positions = group["_position"].to_numpy(dtype=int)
+        model_score = classification_metrics(y_eval[positions], predictions[positions])["macro_f1"]
+        baseline_score = classification_metrics(
+            y_eval[positions], baseline_predictions[positions]
+        )["macro_f1"]
+        deltas[str(ticker)] = float(model_score - baseline_score)
+    positive = sum(1 for value in deltas.values() if value > 0)
+    return deltas, positive
+
+
+def block_delta_macro_f1(
+    eval_meta: pd.DataFrame, predictions: np.ndarray, baseline_predictions: np.ndarray
+) -> dict[str, float]:
+    y_eval = eval_meta["label"].to_numpy(dtype=int)
+    deltas: dict[str, float] = {}
+    indexed = eval_meta.assign(_position=np.arange(len(eval_meta)))
+    for (ticker, trading_day), group in indexed.groupby(["ticker", "trading_day"], sort=True):
+        positions = group["_position"].to_numpy(dtype=int)
+        model_score = classification_metrics(y_eval[positions], predictions[positions])["macro_f1"]
+        baseline_score = classification_metrics(
+            y_eval[positions], baseline_predictions[positions]
+        )["macro_f1"]
+        deltas[f"{ticker}|{trading_day}"] = float(model_score - baseline_score)
+    return deltas
+
+
+def block_bootstrap_lcb(encoded_rows: list[str], *, iterations: int = 1000) -> float:
+    buckets: dict[str, list[float]] = {}
+    for encoded in encoded_rows:
+        if not encoded or encoded == "{}":
+            continue
+        decoded = json.loads(encoded)
+        for block_id, value in decoded.items():
+            buckets.setdefault(str(block_id), []).append(float(value))
+    block_means = np.array([np.mean(values) for values in buckets.values()], dtype=float)
+    block_means = block_means[np.isfinite(block_means)]
+    if len(block_means) == 0:
+        return np.nan
+    if len(block_means) == 1:
+        return float(block_means[0])
+    rng = np.random.default_rng(20260608)
+    draws = rng.choice(block_means, size=(iterations, len(block_means)), replace=True)
+    return float(np.quantile(draws.mean(axis=1), 0.025))

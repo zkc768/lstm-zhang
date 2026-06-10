@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from typing import Any
 
 
@@ -43,3 +44,52 @@ def device_manifest_fields(
         "gpu_name_or_null": gpu_name,
         "device_fallback_reason": fallback_reason,
     }
+
+
+def torch_gpu_name_or_null(torch_module: Any) -> str | None:
+    if not bool(torch_module.cuda.is_available()):
+        return None
+    try:
+        return str(torch_module.cuda.get_device_name(0))
+    except Exception:
+        return None
+
+
+def non_gpu_device_info() -> dict[str, str]:
+    return {
+        "requested_device": "cpu",
+        "resolved_device": "cpu",
+        "device_fallback_reason": "not_gpu_capable_probe",
+    }
+
+
+def detect_torch_runtime(forced_import_error: str | None = None) -> tuple[bool, str | None, str]:
+    """Probe the torch runtime without requiring torch to be installed.
+
+    ``forced_import_error`` lets a stage report a previously captured torch
+    import failure (or a test-injected one) instead of importing torch again.
+    """
+    if forced_import_error:
+        return False, None, forced_import_error
+    try:
+        import torch
+    except ModuleNotFoundError as exc:
+        return False, None, f"torch import failed: {exc}"
+    cuda_available = bool(torch.cuda.is_available())
+    return cuda_available, torch_gpu_name_or_null(torch), "" if cuda_available else "cuda_unavailable"
+
+
+def torch_runtime_device_fields() -> dict[str, Any]:
+    try:
+        torch_module = importlib.import_module("torch")
+    except (ImportError, ModuleNotFoundError, OSError):
+        return {"cuda_available": False, "gpu_name_or_null": None}
+
+    cuda_available = bool(torch_module.cuda.is_available())
+    gpu_name: str | None = None
+    if cuda_available:
+        try:
+            gpu_name = str(torch_module.cuda.get_device_name(0))
+        except (AttributeError, RuntimeError, ValueError):
+            gpu_name = None
+    return {"cuda_available": cuda_available, "gpu_name_or_null": gpu_name}

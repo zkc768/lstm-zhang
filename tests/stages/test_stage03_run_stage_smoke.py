@@ -13,8 +13,11 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from lst_models.artifacts import write_artifact_inventory, write_json  # noqa: E402
-from lst_models.stages import feature_window_search as stage01  # noqa: E402
-from lst_models.stages import frozen_validation_readout as stage03  # noqa: E402
+from lst_models.artifacts import feature_rebuild_code_sha256  # noqa: E402
+from lst_models.data import load_sample_event_index, load_train_validation_bars  # noqa: E402
+from lst_models.features import build_feature_frame  # noqa: E402
+from lst_models.splits import valid_events_for_split  # noqa: E402
+from lst_models.windows import build_window_dataset  # noqa: E402
 from lst_models.stages.frozen_validation_readout import run_stage  # noqa: E402
 
 
@@ -331,15 +334,15 @@ class Stage03Dirs:
         split_freeze = json.loads(
             (self.stage00_dir / "split_freeze.json").read_text(encoding="utf-8")
         )
-        sample_events = stage01._load_sample_event_index(
+        sample_events = load_sample_event_index(
             self.stage00_dir / "sample_event_index.csv"
         )
-        train_events = stage03._valid_events_for_split(sample_events, "train")
-        bars = stage03._load_train_validation_bars(
+        train_events = valid_events_for_split(sample_events, "train")
+        bars = load_train_validation_bars(
             raw_manifest, split_freeze, {"raw_data_dir": str(self.raw_dir)}
         )
-        feature_frame = stage01._build_feature_frame(bars)
-        dataset = stage01._build_window_dataset(
+        feature_frame = build_feature_frame(bars)
+        dataset = build_window_dataset(
             feature_frame,
             train_events,
             feature_set=FEATURE_SET,
@@ -361,7 +364,7 @@ class Stage03Dirs:
             {
                 "holdout_test_contact": False,
                 "config_sha256": "stage01hash",
-                "feature_rebuild_code_sha256": stage01.feature_rebuild_code_sha256(),
+                "feature_rebuild_code_sha256": feature_rebuild_code_sha256(),
             },
         )
         write_json(
@@ -439,7 +442,7 @@ class Stage03Dirs:
                 "config_sha256": "stage02hash",
                 "source_stage00_run_id": STAGE00_RUN_ID,
                 "source_stage01_run_id": STAGE01_RUN_ID,
-                "stage02_feature_rebuild_code_sha256": stage01.feature_rebuild_code_sha256(),
+                "stage02_feature_rebuild_code_sha256": feature_rebuild_code_sha256(),
                 "official_validation_for_selection": False,
                 "no_final_model_selected": True,
                 "holdout_test_contact": False,
