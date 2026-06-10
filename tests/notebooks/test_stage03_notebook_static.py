@@ -11,7 +11,7 @@ NOTEBOOK = ROOT / "notebooks" / "03_frozen_validation_readout_colab.ipynb"
 
 # The two-step exact-commit pin updates EXPECTED_PROJECT_REPO_COMMIT together
 # with the notebook constant in the same commit (AGENTS.md section 5).
-EXPECTED_PROJECT_REPO_COMMIT = "<STAGE03_FULL_BUNDLE_COMMIT>"
+EXPECTED_PROJECT_REPO_COMMIT = "142646000a7bdd11f0985e915fc627a9eea101fd"
 EXPECTED_STAGE02_RUN_ID = "20260610_082130_797479"
 CURRENT_STAGE00_RUN_ID = "20260610_051705_347450"
 CURRENT_STAGE01_RUN_ID = "20260610_075002"
