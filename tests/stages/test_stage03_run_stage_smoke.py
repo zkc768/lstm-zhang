@@ -12,12 +12,14 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
+from lst_models import fitting  # noqa: E402
 from lst_models.artifacts import write_artifact_inventory, write_json  # noqa: E402
 from lst_models.artifacts import feature_rebuild_code_sha256  # noqa: E402
 from lst_models.data import load_sample_event_index, load_train_validation_bars  # noqa: E402
 from lst_models.features import build_feature_frame  # noqa: E402
 from lst_models.splits import valid_events_for_split  # noqa: E402
-from lst_models.windows import build_window_dataset  # noqa: E402
+from lst_models.windows import build_window_dataset, sample_id_hash  # noqa: E402
+from lst_models.stages import frozen_validation_readout as stage03  # noqa: E402
 from lst_models.stages.frozen_validation_readout import run_stage  # noqa: E402
 
 
@@ -327,7 +329,9 @@ class Stage03Dirs:
             pd.DataFrame(rows).to_csv(self.raw_dir / f"{ticker}.txt", index=False)
         pd.DataFrame(events).to_csv(self.stage00_dir / "sample_event_index.csv", index=False)
 
-    def _compute_rebuilt_train_counts(self) -> tuple[int, dict[str, int]]:
+    def rebuild_window_metadata(self, split_name: str) -> pd.DataFrame:
+        """Rebuild the candidate window metadata for one split with the same
+        public domain builders run_stage uses (deterministic row order)."""
         raw_manifest = json.loads(
             (self.stage00_dir / "raw_data_manifest.json").read_text(encoding="utf-8")
         )
@@ -337,25 +341,29 @@ class Stage03Dirs:
         sample_events = load_sample_event_index(
             self.stage00_dir / "sample_event_index.csv"
         )
-        train_events = valid_events_for_split(sample_events, "train")
+        events = valid_events_for_split(sample_events, split_name)
         bars = load_train_validation_bars(
             raw_manifest, split_freeze, {"raw_data_dir": str(self.raw_dir)}
         )
         feature_frame = build_feature_frame(bars)
         dataset = build_window_dataset(
             feature_frame,
-            train_events,
+            events,
             feature_set=FEATURE_SET,
             feature_columns=tuple(FEATURE_COLUMNS),
             window_size=WINDOW_SIZE,
         )
+        return dataset.metadata
+
+    def _compute_rebuilt_train_counts(self) -> tuple[int, dict[str, int]]:
+        metadata = self.rebuild_window_metadata("train")
         by_ticker = {
             str(ticker): int(count)
-            for ticker, count in dataset.metadata.groupby("ticker").size().to_dict().items()
+            for ticker, count in metadata.groupby("ticker").size().to_dict().items()
         }
-        if len(dataset.metadata) == 0:
+        if len(metadata) == 0:
             raise AssertionError("stage03 smoke fixture produced no rebuilt train samples")
-        return int(len(dataset.metadata)), by_ticker
+        return int(len(metadata)), by_ticker
 
     def _write_stage01_run_folder(self, train_total: int, train_by_ticker: dict[str, int]) -> None:
         self.stage01_dir.mkdir(parents=True)
@@ -601,9 +609,569 @@ def test_blocks_on_superseded_stage02_run_id(stage_dirs) -> None:
         run_stage(config)
 
 
-def test_happy_path_reaches_scoring_seam(stage_dirs) -> None:
-    # Gates, data context, primary dataset rebuild, and train-row parity all
-    # pass on clean inputs; plan Task 8 replaces this seam test with real
-    # happy-path scoring tests.
-    with pytest.raises(NotImplementedError, match="Task 8"):
-        run_stage(stage_dirs.config())
+def _install_refit_stub(
+    monkeypatch: pytest.MonkeyPatch,
+    y_eval: np.ndarray,
+    *,
+    invert: bool = False,
+    fail_seeds: set[int] | frozenset[int] = frozenset(),
+) -> None:
+    """Deterministic stand-in for the same-stage refit dispatch seam.
+
+    Stubbing ``_refit_and_predict`` keeps these run_stage scoring-contract
+    tests model-free and torch-free (the pytest process on this machine cannot
+    import torch); the real wrappers are covered by the refit tests below.
+    """
+    expected = np.asarray(y_eval, dtype=int)
+
+    def stub(family, profile, x_train, train_meta, x_eval, config, seed, window_size, n_features):
+        if int(seed) in fail_seeds:
+            return {"fit_status": "failed_exception", "error_message": "stubbed refit crash"}
+        assert len(expected) == len(x_eval)
+        predictions = (1 - expected) if invert else expected.copy()
+        scores = np.where(predictions == 1, 0.9, 0.1).astype(float)
+        return {
+            "fit_status": "completed",
+            "error_message": "",
+            "predictions": predictions,
+            "scores": scores,
+            "best_iteration": 7,
+            "early_stopping_source": "inner_train_chronological_tail",
+            "early_stopping_used": True,
+            "early_stopping_reason": "configured_inner_train_subsplit",
+            "early_stopping_train_sample_id_hash": "stub_fit_subset_hash",
+            "early_stopping_eval_sample_id_hash": "stub_stop_tail_hash",
+            "requested_device": "cpu",
+            "resolved_device": "cpu",
+            "device_fallback_reason": "not_gpu_capable_trial",
+        }
+
+    monkeypatch.setattr(stage03, "_refit_and_predict", stub)
+
+
+def test_scores_each_seed_exactly_once_and_aggregates(
+    stage_dirs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_meta = stage_dirs.rebuild_window_metadata("validation")
+    n_validation = len(eval_meta)
+    assert n_validation > 0
+    _install_refit_stub(monkeypatch, eval_meta["label"].to_numpy(dtype=int))
+
+    result = run_stage(stage_dirs.config())
+
+    record = json.loads(stage_dirs.read_output("03_decision_record.json"))
+    assert record["official_validation_scoring_events"] == 2  # one per frozen seed
+    assert [event["seed"] for event in record["scoring_event_ledger"]] == [101, 202]
+    assert all(
+        event["candidate_role"] == "primary" for event in record["scoring_event_ledger"]
+    )
+    assert record["decision"] == "met_predeclared_validation_readout_criteria"
+    assert record["readout_complete"] is True
+    assert record["fallback_activated"] is False
+
+    readout = pd.read_csv(stage_dirs.read_path("03_validation_readout.csv"))
+    assert set(readout["seed"].astype(str)) == {"101", "202", "aggregate_mean"}
+    assert (readout["n_scored_validation_samples"] == n_validation).all()
+
+    predictions = pd.read_csv(stage_dirs.read_path("03_validation_predictions.csv"))
+    assert len(predictions) == n_validation * 2  # n_scored_validation_samples x seeds
+    assert result.validation_predictions is not None
+    assert result.validation_predictions.exists()
+
+
+def test_weak_primary_never_activates_fallback(
+    stage_dirs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_meta = stage_dirs.rebuild_window_metadata("validation")
+    _install_refit_stub(monkeypatch, eval_meta["label"].to_numpy(dtype=int), invert=True)
+
+    run_stage(stage_dirs.config())
+
+    record = json.loads(stage_dirs.read_output("03_decision_record.json"))
+    assert record["decision"] == "did_not_meet_predeclared_validation_readout_criteria"
+    assert record["fallback_activated"] is False
+    assert record["criteria"] == {
+        "delta_vs_stratified_dummy_met": False,
+        "delta_vs_majority_met": False,
+        "ticker_floor_met": False,
+    }
+    # Weak metrics are readout outcomes, never failures: scoring still happened
+    # exactly once per frozen seed.
+    assert record["official_validation_scoring_events"] == 2
+    assert record["readout_complete"] is True
+
+
+def test_mechanical_failure_before_scoring_activates_fallback(
+    stage_dirs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_meta = stage_dirs.rebuild_window_metadata("validation")
+    _install_refit_stub(monkeypatch, eval_meta["label"].to_numpy(dtype=int))
+    real_prepare = stage03._prepare_candidate_dataset
+
+    def failing_primary_prepare(selection, data_context, events):
+        if str(selection.get("hpo_profile_id")) == "p01":  # the frozen primary profile
+            raise FileNotFoundError(
+                "missing frozen params artifact for primary candidate profile p01"
+            )
+        return real_prepare(selection, data_context, events)
+
+    monkeypatch.setattr(stage03, "_prepare_candidate_dataset", failing_primary_prepare)
+
+    run_stage(stage_dirs.config())
+
+    record = json.loads(stage_dirs.read_output("03_decision_record.json"))
+    assert record["fallback_activated"] is True
+    allowed_triggers = set(stage_dirs.config()["fallback_policy"]["allowed_triggers"])
+    assert record["fallback_reason"].split(":")[0] in allowed_triggers
+    assert record["official_validation_scoring_events"] == 2
+    assert [event["candidate_role"] for event in record["scoring_event_ledger"]] == [
+        "fallback",
+        "fallback",
+    ]
+    assert record["scored_candidate_role"] == "fallback"
+    # Decision is computed from the fallback's own readout metrics.
+    assert record["decision"] == "met_predeclared_validation_readout_criteria"
+    assert record["readout_complete"] is True
+
+
+def test_failure_after_first_scoring_event_never_falls_back(
+    stage_dirs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_meta = stage_dirs.rebuild_window_metadata("validation")
+    n_validation = len(eval_meta)
+    _install_refit_stub(monkeypatch, eval_meta["label"].to_numpy(dtype=int), fail_seeds={202})
+
+    run_stage(stage_dirs.config())
+
+    record = json.loads(stage_dirs.read_output("03_decision_record.json"))
+    assert record["readout_complete"] is False
+    assert record["fallback_activated"] is False
+    assert record["official_validation_scoring_events"] == 1
+    assert [event["seed"] for event in record["scoring_event_ledger"]] == [101]
+
+    # Artifacts for the completed portion are still written, and the failed
+    # seed is recorded honestly in the readout ledger.
+    readout = pd.read_csv(stage_dirs.read_path("03_validation_readout.csv"))
+    fit_status_by_seed = dict(zip(readout["seed"].astype(str), readout["fit_status"]))
+    assert fit_status_by_seed["101"] == "completed"
+    assert fit_status_by_seed["202"] == "failed_exception"
+    assert "aggregate_mean" in fit_status_by_seed
+    predictions = pd.read_csv(stage_dirs.read_path("03_validation_predictions.csv"))
+    assert len(predictions) == n_validation  # one completed seed only
+
+
+def test_artifact_schemas_and_scope(stage_dirs, monkeypatch: pytest.MonkeyPatch) -> None:
+    eval_meta = stage_dirs.rebuild_window_metadata("validation")
+    _install_refit_stub(monkeypatch, eval_meta["label"].to_numpy(dtype=int))
+
+    run_stage(stage_dirs.config())
+
+    expected_columns = {
+        "03_validation_readout.csv": stage03.VALIDATION_READOUT_COLUMNS,
+        "03_per_ticker_readout.csv": stage03.PER_TICKER_READOUT_COLUMNS,
+        "03_seed_summary.csv": stage03.SEED_SUMMARY_COLUMNS,
+        "03_same_row_baselines.csv": stage03.SAME_ROW_BASELINE_COLUMNS,
+        "03_validation_predictions.csv": stage03.VALIDATION_PREDICTION_COLUMNS,
+    }
+    for name, columns in expected_columns.items():
+        frame = pd.read_csv(stage_dirs.read_path(name))
+        assert list(frame.columns) == list(columns), name
+        assert set(frame["scope"]) == {"validation_only"}, name
+
+    baselines = pd.read_csv(stage_dirs.read_path("03_same_row_baselines.csv"))
+    assert len(baselines) == 8  # 4 registry baselines x 2 frozen seeds
+    assert set(baselines["baseline_id"]) == set(
+        stage_dirs.config()["baseline_controls"]["mandatory"]
+    )
+    assert set(baselines["seed"]) == {101, 202}
+    assert (baselines["sample_id_hash"] == baselines["eval_sample_id_hash"]).all()
+
+    manifest = json.loads(stage_dirs.read_output("run_manifest.json"))
+    assert manifest["official_validation_contact"] is True
+    assert manifest["official_validation_scoring_events"] == 2
+    assert manifest["holdout_test_contact"] is False
+    for field_name in (
+        "requested_device",
+        "resolved_device",
+        "cuda_available",
+        "gpu_name_or_null",
+        "device_fallback_reason",
+    ):
+        assert field_name in manifest, field_name
+    assert manifest["stage03_readout_code_sha256"]
+
+
+def test_checkpoint_manifest_written_per_seed(
+    stage_dirs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_meta = stage_dirs.rebuild_window_metadata("validation")
+    _install_refit_stub(monkeypatch, eval_meta["label"].to_numpy(dtype=int))
+    checkpoint_root = stage_dirs.tmp_path / "checkpoints"
+    config = stage_dirs.config()
+    config["checkpointing"] = {
+        "enabled": True,
+        "checkpoint_after_each_seed": True,
+        "checkpoint_dir": str(checkpoint_root),
+    }
+
+    run_stage(config)
+
+    run_id = stage_dirs._single_run_dir().name
+    checkpoint_dir = checkpoint_root / run_id
+    manifest = json.loads(
+        (checkpoint_dir / "checkpoint_manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["stage_name"] == "03_frozen_validation_readout"
+    assert manifest["run_id"] == run_id
+    assert manifest["status"] == "incomplete"
+    assert manifest["candidate_role"] == "primary"
+    assert manifest["completed_seeds"] == [101, 202]
+    assert manifest["pending_seeds"] == []
+    assert manifest["holdout_test_contact"] is False
+    assert manifest["official_validation_for_selection"] is False
+    assert manifest["checkpoint_timestamp_utc"]
+    assert run_id in json.dumps(manifest["resume_instructions"])
+    for name in (
+        "03_validation_readout_partial.csv",
+        "03_same_row_baselines_partial.csv",
+        "03_validation_predictions_partial.csv",
+    ):
+        assert (checkpoint_dir / name).exists(), name
+
+
+def _refit_train_meta(n_rows: int) -> pd.DataFrame:
+    """Deterministic chronology-safe refit metadata with both label classes."""
+    bars_per_day = 36
+    days = pd.bdate_range("2021-01-04", periods=(n_rows // bars_per_day) + 1)
+    rows = []
+    for index in range(n_rows):
+        day = days[index // bars_per_day]
+        rows.append(
+            {
+                "sample_id": f"r{index:04d}",
+                "ticker": "AAA" if index % 2 == 0 else "BBB",
+                "target_timestamp": day + pd.Timedelta(hours=9, minutes=30 + 5 * (index % bars_per_day)),
+                "trading_day": day.strftime("%Y-%m-%d"),
+                "label": index % 2,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _refit_features(train_meta: pd.DataFrame) -> np.ndarray:
+    n_rows = len(train_meta)
+    position = np.arange(n_rows, dtype=np.float32) / max(1, n_rows)
+    labels = train_meta["label"].to_numpy(dtype=np.float32)
+    return np.column_stack(
+        [position + 0.25 * labels, np.sin(0.1 * np.arange(n_rows))]
+    ).astype(np.float32)
+
+
+def _refit_config() -> dict:
+    return {
+        "lightgbm_training_defaults": {
+            "eval_metric": "binary_logloss",
+            "early_stopping_rounds": 5,
+            "early_stopping_validation_source": "inner_train_chronological_tail",
+            "early_stopping_validation_fraction": 0.2,
+            "minimum_early_stopping_train_samples": 128,
+            "minimum_early_stopping_validation_samples": 128,
+        },
+        "probe_training_defaults": {
+            "torch": {
+                "epochs": 1,
+                "batch_size": 64,
+                "learning_rate": 0.001,
+                "weight_decay": 0.0001,
+                "device": "cpu",
+                "require_gpu": False,
+            }
+        },
+    }
+
+
+# TEMPORARY same-stage private-helper tests (AGENTS.md Anti-Spaghetti gates).
+# Removal target: fold into public run_stage(config) scoring-contract tests
+# once plan Task 8 wires _execute_readout to these refit wrappers.
+def test_lightgbm_refit_uses_train_tail_eval_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    lightgbm = pytest.importorskip("lightgbm")
+    train_meta = _refit_train_meta(320)
+    x_train = _refit_features(train_meta)
+    x_eval = np.column_stack(
+        [np.linspace(0.1, 0.9, num=12), np.linspace(-0.5, 0.5, num=12)]
+    ).astype(np.float32)
+    captured: dict[str, object] = {}
+    real_fit = lightgbm.LGBMClassifier.fit
+
+    def spy_fit(self, x_fit, y_fit, **kwargs):
+        captured["x_fit"] = np.asarray(x_fit).copy()
+        captured["eval_set"] = kwargs.get("eval_set")
+        return real_fit(self, x_fit, y_fit, **kwargs)
+
+    monkeypatch.setattr(lightgbm.LGBMClassifier, "fit", spy_fit)
+
+    outcome = stage03._refit_lightgbm_and_predict(
+        {
+            "profile_id": "p_refit_lightgbm",
+            "n_estimators": 40,
+            "num_leaves": 7,
+            "max_depth": 3,
+            "learning_rate": 0.1,
+            "min_data_in_leaf": 5,
+        },
+        x_train,
+        train_meta,
+        x_eval,
+        _refit_config(),
+        seed=101,
+    )
+
+    assert captured["eval_set"] is not None
+    tail_x, tail_y = captured["eval_set"][0]
+    assert len(tail_x) < len(x_train)
+    assert len(tail_x) == 128
+    assert np.array_equal(tail_x, x_train[-128:])
+    assert np.array_equal(tail_y, train_meta["label"].to_numpy(dtype=int)[-128:])
+    sample_ids = train_meta["sample_id"].tolist()
+    assert outcome["early_stopping_train_sample_id_hash"] == sample_id_hash(sample_ids[:-128])
+    assert outcome["early_stopping_eval_sample_id_hash"] == sample_id_hash(sample_ids[-128:])
+    assert outcome["early_stopping_source"] == "inner_train_chronological_tail"
+    assert outcome["early_stopping_used"] is True
+    assert outcome["fit_status"] == "completed"
+    assert len(outcome["predictions"]) == len(x_eval)
+    assert outcome["best_iteration"] is not None
+
+
+def test_lightgbm_refit_without_tail_when_rows_insufficient() -> None:
+    pytest.importorskip("lightgbm")
+    train_meta = _refit_train_meta(200)
+    x_train = _refit_features(train_meta)
+    x_eval = np.column_stack(
+        [np.linspace(0.2, 0.8, num=6), np.linspace(-0.3, 0.3, num=6)]
+    ).astype(np.float32)
+
+    outcome = stage03._refit_lightgbm_and_predict(
+        {
+            "profile_id": "p_refit_no_tail",
+            "n_estimators": 20,
+            "num_leaves": 5,
+            "max_depth": 2,
+            "learning_rate": 0.1,
+        },
+        x_train,
+        train_meta,
+        x_eval,
+        _refit_config(),
+        seed=101,
+    )
+
+    assert outcome["fit_status"] == "completed"
+    assert outcome["early_stopping_used"] is False
+    assert outcome["early_stopping_reason"] == (
+        "insufficient_inner_train_rows_for_minimum_validation_subsplit"
+    )
+    assert outcome["early_stopping_eval_sample_id_hash"] == ""
+    assert len(outcome["predictions"]) == len(x_eval)
+
+
+def test_torch_refit_maps_probe_result_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+    probe_result = fitting.ProbeFitResult(
+        predictions=np.asarray([1, 0, 1], dtype=int),
+        scores=np.asarray([0.9, 0.2, 0.8], dtype=float),
+        requested_device="cpu",
+        resolved_device="cpu",
+        cuda_available=False,
+        gpu_name_or_null=None,
+        device_fallback_reason="cuda_unavailable",
+        best_iteration=4,
+        early_stopping_source="inner_train_chronological_tail",
+        early_stopping_used=True,
+        early_stopping_reason="patience_exhausted",
+        early_stopping_train_sample_id_hash="hash_fit_subset",
+        early_stopping_eval_sample_id_hash="hash_stop_tail",
+    )
+
+    def fake_fit_torch_sequence_probe(
+        probe_id,
+        x_train,
+        y_train,
+        x_eval,
+        trial_config,
+        seed,
+        window_size,
+        n_features,
+        *,
+        train_meta=None,
+    ):
+        captured["probe_id"] = probe_id
+        captured["trial_config"] = trial_config
+        captured["seed"] = seed
+        captured["window_size"] = window_size
+        captured["n_features"] = n_features
+        captured["train_meta_rows"] = 0 if train_meta is None else len(train_meta)
+        captured["y_train"] = np.asarray(y_train).copy()
+        return probe_result
+
+    monkeypatch.setattr(fitting, "fit_torch_sequence_probe", fake_fit_torch_sequence_probe)
+    train_meta = _refit_train_meta(4)
+    x_train = np.arange(16, dtype=np.float32).reshape(4, 4)
+    x_eval = np.arange(12, dtype=np.float32).reshape(3, 4)
+    profile = {"profile_id": "p_torch", "learning_rate": 0.005, "epochs": 3, "channels": [8, 8]}
+
+    outcome = stage03._refit_torch_and_predict(
+        "tcn", profile, x_train, train_meta, x_eval, _refit_config(), 202, 2, 2
+    )
+
+    assert captured["probe_id"] == "tcn_tiny"
+    assert captured["seed"] == 202
+    assert captured["window_size"] == 2
+    assert captured["n_features"] == 2
+    assert captured["train_meta_rows"] == len(train_meta)
+    assert np.array_equal(captured["y_train"], train_meta["label"].to_numpy(dtype=int))
+    trial_config = captured["trial_config"]
+    fixed_defaults = trial_config["lightweight_probes"]["tcn_tiny"]["fixed_defaults"]
+    assert fixed_defaults == {"learning_rate": 0.005, "epochs": 3, "channels": [8, 8]}
+    torch_defaults = trial_config["probe_training_defaults"]["torch"]
+    assert torch_defaults["learning_rate"] == 0.005
+    assert torch_defaults["epochs"] == 3
+    assert torch_defaults["device"] == "cpu"
+
+    assert outcome["fit_status"] == "completed"
+    assert np.array_equal(outcome["predictions"], probe_result.predictions)
+    assert np.array_equal(outcome["scores"], probe_result.scores)
+    assert outcome["best_iteration"] == 4
+    assert outcome["early_stopping_source"] == "inner_train_chronological_tail"
+    assert outcome["early_stopping_used"] is True
+    assert outcome["early_stopping_reason"] == "patience_exhausted"
+    assert outcome["early_stopping_train_sample_id_hash"] == "hash_fit_subset"
+    assert outcome["early_stopping_eval_sample_id_hash"] == "hash_stop_tail"
+    assert outcome["requested_device"] == "cpu"
+    assert outcome["resolved_device"] == "cpu"
+    assert outcome["device_fallback_reason"] == "cuda_unavailable"
+
+
+def test_refit_dispatch_rejects_unknown_family() -> None:
+    train_meta = _refit_train_meta(4)
+    x_train = np.arange(8, dtype=np.float32).reshape(4, 2)
+    x_eval = np.arange(4, dtype=np.float32).reshape(2, 2)
+
+    with pytest.raises(ValueError, match="unknown Stage 03 refit model family"):
+        stage03._refit_and_predict(
+            "shallow_lstm",
+            {"profile_id": "p_bad"},
+            x_train,
+            train_meta,
+            x_eval,
+            _refit_config(),
+            101,
+            2,
+            1,
+        )
+
+
+def _checkpointing_block(stage_dirs) -> dict:
+    return {
+        "enabled": True,
+        "checkpoint_after_each_seed": True,
+        "checkpoint_dir": str(stage_dirs.tmp_path / "checkpoints"),
+    }
+
+
+def test_resume_completes_pending_seed_without_repeating_scoring(
+    stage_dirs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Protocol section 11: a resumed run loads the exact checkpoint, retries
+    only the seed without a scoring event, and never re-scores seed 101."""
+    eval_meta = stage_dirs.rebuild_window_metadata("validation")
+    y_eval = eval_meta["label"].to_numpy(dtype=int)
+
+    config = stage_dirs.config()
+    config["checkpointing"] = _checkpointing_block(stage_dirs)
+    _install_refit_stub(monkeypatch, y_eval, fail_seeds={202})
+    run_stage(config)
+
+    first_record = json.loads(stage_dirs.read_output("03_decision_record.json"))
+    assert first_record["readout_complete"] is False
+    assert first_record["official_validation_scoring_events"] == 1
+    first_events = first_record["scoring_event_ledger"]
+    assert [event["seed"] for event in first_events] == [101]
+    run_id = stage_dirs.read_path("run_manifest.json").parent.name
+    checkpoint_dir = stage_dirs.tmp_path / "checkpoints" / run_id
+    assert (checkpoint_dir / "03_ledger_state_partial.json").exists()
+
+    _install_refit_stub(monkeypatch, y_eval)
+    resume_config = stage_dirs.config()
+    resume_config["checkpointing"] = _checkpointing_block(stage_dirs)
+    resume_config["resume"] = {
+        "enabled": True,
+        "run_id": run_id,
+        "checkpoint_dir": str(checkpoint_dir),
+    }
+    result = run_stage(resume_config)
+
+    assert Path(result.output_dir).name == run_id
+    record = json.loads(stage_dirs.read_output("03_decision_record.json"))
+    assert record["resumed_from_checkpoint"] is True
+    assert record["readout_complete"] is True
+    assert record["official_validation_scoring_events"] == 2
+    assert [event["seed"] for event in record["scoring_event_ledger"]] == [101, 202]
+    # Seed 101's restored scoring event is byte-identical: it was never re-scored.
+    assert record["scoring_event_ledger"][0] == first_events[0]
+    assert record["readout_incomplete_reason"].startswith("resolved_after_resume: ")
+
+    readout = pd.read_csv(stage_dirs.read_path("03_validation_readout.csv"))
+    per_seed = readout[readout["seed"].astype(str).isin({"101", "202"})]
+    assert sorted(per_seed["seed"].astype(int).tolist()) == [101, 202]
+    assert (per_seed["fit_status"] == "completed").all()
+    predictions = pd.read_csv(stage_dirs.read_path("03_validation_predictions.csv"))
+    assert len(predictions) == len(eval_meta) * 2
+
+    # Idempotence: a second resume with every seed completed re-scores nothing.
+    rerun_config = stage_dirs.config()
+    rerun_config["checkpointing"] = _checkpointing_block(stage_dirs)
+    rerun_config["resume"] = {
+        "enabled": True,
+        "run_id": run_id,
+        "checkpoint_dir": str(checkpoint_dir),
+    }
+    run_stage(rerun_config)
+    rerun_record = json.loads(stage_dirs.read_output("03_decision_record.json"))
+    assert rerun_record["official_validation_scoring_events"] == 2
+    assert rerun_record["scoring_event_ledger"] == record["scoring_event_ledger"]
+
+
+def test_resume_rejects_inexact_or_missing_checkpoint_inputs(
+    stage_dirs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eval_meta = stage_dirs.rebuild_window_metadata("validation")
+    _install_refit_stub(monkeypatch, eval_meta["label"].to_numpy(dtype=int))
+
+    bad_run_id = stage_dirs.config()
+    bad_run_id["resume"] = {
+        "enabled": True,
+        "run_id": "latest",
+        "checkpoint_dir": str(stage_dirs.tmp_path / "checkpoints" / "latest"),
+    }
+    with pytest.raises(ValueError, match="exact Stage 03 run id"):
+        run_stage(bad_run_id)
+
+    mismatched_folder = stage_dirs.config()
+    mismatched_folder["resume"] = {
+        "enabled": True,
+        "run_id": "20260610_120000_000001",
+        "checkpoint_dir": str(stage_dirs.tmp_path / "checkpoints"),
+    }
+    with pytest.raises(ValueError, match="must end in the exact resume.run_id"):
+        run_stage(mismatched_folder)
+
+    missing_files = stage_dirs.config()
+    empty_dir = stage_dirs.tmp_path / "checkpoints" / "20260610_120000_000001"
+    empty_dir.mkdir(parents=True)
+    missing_files["resume"] = {
+        "enabled": True,
+        "run_id": "20260610_120000_000001",
+        "checkpoint_dir": str(empty_dir),
+    }
+    with pytest.raises(FileNotFoundError, match="resume checkpoint files"):
+        run_stage(missing_files)

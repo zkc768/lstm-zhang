@@ -16,7 +16,10 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from lst_models.stages import model_hpo_train_inner as stage02  # noqa: E402
-from lst_models.fitting import torch_inner_train_early_stopping_split  # noqa: E402
+from lst_models.fitting import (  # noqa: E402
+    lightgbm_inner_train_early_stopping_split,
+    torch_inner_train_early_stopping_split,
+)
 from lst_models.windows import CandidateDataset, sample_id_hash  # noqa: E402
 
 
@@ -367,9 +370,6 @@ def test_stage02_selection_blocks_below_positive_ticker_floor(tmp_path: Path) ->
     assert decision["block_reason"] == "no_hpo_candidate_cleared_baseline_or_ticker_robustness_gates"
 
 
-# TEMPORARY same-stage private-helper test (AGENTS.md Anti-Spaghetti gates).
-# Removal target: replace with a public stage-selection/early-stopping
-# contract surface in the next Stage 02 selection refactor.
 def test_lightgbm_early_stopping_split_uses_inner_train_tail_only() -> None:
     train_meta = pd.DataFrame(
         [
@@ -381,7 +381,7 @@ def test_lightgbm_early_stopping_split_uses_inner_train_tail_only() -> None:
     )
     x_train = np.arange(8, dtype=np.float32).reshape(4, 2)
     y_train = train_meta["label"].to_numpy(dtype=int)
-    split = stage02._lightgbm_inner_train_early_stopping_split(
+    split = lightgbm_inner_train_early_stopping_split(
         x_train=x_train,
         y_train=y_train,
         train_meta=train_meta,
@@ -399,9 +399,6 @@ def test_lightgbm_early_stopping_split_uses_inner_train_tail_only() -> None:
     assert split["early_stopping_eval_sample_id_hash"] == sample_id_hash(["s3", "s4"])
 
 
-# TEMPORARY same-stage private-helper test (AGENTS.md Anti-Spaghetti gates).
-# Removal target: replace with a public stage-selection/early-stopping
-# contract surface in the next Stage 02 selection refactor.
 def test_lightgbm_early_stopping_split_respects_minimum_validation_rows() -> None:
     train_meta = pd.DataFrame(
         [
@@ -416,7 +413,7 @@ def test_lightgbm_early_stopping_split_respects_minimum_validation_rows() -> Non
     x_train = np.arange(12, dtype=np.float32).reshape(6, 2)
     y_train = train_meta["label"].to_numpy(dtype=int)
 
-    split = stage02._lightgbm_inner_train_early_stopping_split(
+    split = lightgbm_inner_train_early_stopping_split(
         x_train=x_train,
         y_train=y_train,
         train_meta=train_meta,

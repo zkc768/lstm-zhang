@@ -31,11 +31,27 @@ TESTS = ROOT / "tests"
 
 # Post-migration baselines recorded 2026-06-09 (Route A Phase 4). Raising a
 # number requires an approved stage-scoped reason in the same change.
+# 2026-06-10 Stage 03 plan Task 7: PROBE_BY_FAMILY / lightgbm params /
+# lightgbm tail split / trial probe config dedupe-moved from stage02 into
+# fitting.py (model_hpo_train_inner.py tightened 2084 -> 1920), and the
+# approved stage-scoped mechanism-frozen refit wrappers were added to
+# frozen_validation_readout.py (495 -> 647).
+# 2026-06-10 Stage 03 plan Tasks 8+9: the approved stage-scoped one-shot
+# scoring loop, mechanical-only fallback wiring, predeclared-criteria
+# judgement, per-seed checkpoints, and the seven readout artifact/manifest/
+# decision-record writers landed in frozen_validation_readout.py
+# (647 -> 1603); the registry baseline scorer dedupe-moved from stage02 to
+# metrics.score_registry_baseline (model_hpo_train_inner.py tightened
+# 1920 -> 1880).
+# 2026-06-10 Stage 03 protocol section 11 resume contract: the approved
+# stage-scoped exact-run-id resume entry (_load_resume_state/_ResumeState),
+# ledger-state checkpoint payload, and failed-seed retry purge landed in
+# frozen_validation_readout.py (1603 -> 1844).
 STAGE_MODULE_MAX_LINES = {
     "data_split_label_freeze.py": 133,
     "feature_window_search.py": 1004,
-    "model_hpo_train_inner.py": 2084,
-    "frozen_validation_readout.py": 495,
+    "model_hpo_train_inner.py": 1880,
+    "frozen_validation_readout.py": 1844,
 }
 NEW_STAGE_MODULE_MAX_LINES = 700
 

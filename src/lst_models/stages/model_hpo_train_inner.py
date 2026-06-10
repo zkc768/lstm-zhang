@@ -29,12 +29,16 @@ from lst_models.data import (
     raw_manifest_integrity_summary,
 )
 from lst_models.features import build_feature_frame, require_feature_columns
-from lst_models.fitting import fit_probe
-from lst_models.metrics import (
-    block_delta_macro_f1,
-    score_train_prior_baseline,
-    ticker_delta_macro_f1,
+from lst_models.fitting import (
+    PROBE_BY_FAMILY,
+    fit_probe,
+    lightgbm_hpo_params,
+    lightgbm_inner_train_early_stopping_split,
+    probe_trial_config,
+    profile_params,
+    torch_training_defaults,
 )
+from lst_models.metrics import block_delta_macro_f1, ticker_delta_macro_f1
 from lst_models.splits import build_train_inner_folds, train_valid_events
 from lst_models.windows import (
     CandidateDataset,
@@ -181,12 +185,6 @@ BASELINE_CONTROL_COLUMNS = [
     "error_message",
 ]
 
-PROBE_BY_FAMILY = {
-    "lightgbm": "lightgbm_small",
-    "standard_dlinear": "standard_dlinear_tiny",
-    "tcn": "tcn_tiny",
-    "ms_dlinear_tcn": "ms_dlinear_tcn_tiny",
-}
 TORCH_FAMILIES = {"standard_dlinear", "tcn", "ms_dlinear_tcn"}
 DEFAULT_BASELINES = (
     "stratified_dummy_train_prior",
@@ -469,7 +467,7 @@ def _validate_config(config: Mapping[str, Any]) -> None:
             raise ValueError(
                 "LightGBM early stopping must use inner_train_chronological_tail, not scored inner-eval rows"
             )
-    torch_defaults = _torch_defaults(config)
+    torch_defaults = torch_training_defaults(config)
     torch_early_stopping = str(torch_defaults.get("early_stopping", "none"))
     if torch_early_stopping not in {"none", "inner_train_chronological_tail"}:
         raise ValueError("Torch early_stopping must be none or inner_train_chronological_tail")
@@ -737,7 +735,7 @@ def _run_hpo_trials(
             y_eval = eval_meta["label"].to_numpy(dtype=int)
             for seed in seeds:
                 baseline_scores = {
-                    baseline_id: _score_stage02_baseline(baseline_id, y_train, y_eval, seed)
+                    baseline_id: metrics.score_registry_baseline(baseline_id, y_train, y_eval, seed)
                     for baseline_id in baseline_ids
                 }
                 for baseline_id, baseline_score in baseline_scores.items():
@@ -873,42 +871,6 @@ def _baseline_ids(config: Mapping[str, Any]) -> list[str]:
     return baseline_ids
 
 
-def _score_stage02_baseline(
-    baseline_id: str, y_train: np.ndarray, y_eval: np.ndarray, seed: int
-) -> dict[str, Any]:
-    if baseline_id in {"stratified_dummy_train_prior", "majority_train_prior"}:
-        return score_train_prior_baseline(baseline_id, y_train, y_eval, seed)
-    if len(y_train) == 0 or len(y_eval) == 0:
-        predictions = np.zeros(len(y_eval), dtype=int)
-        return {
-            "fit_status": "skipped_no_fold_samples",
-            "predictions": predictions,
-            "scores": np.full(len(y_eval), 0.5, dtype=float),
-            "error_message": "baseline has no train/eval samples for this fold",
-            "macro_f1": np.nan,
-            "balanced_accuracy": np.nan,
-            "accuracy": np.nan,
-            "roc_auc": np.nan,
-            "mcc": np.nan,
-        }
-    if baseline_id == "constant_up":
-        predictions = np.ones(len(y_eval), dtype=int)
-        scores = np.ones(len(y_eval), dtype=float)
-    elif baseline_id == "constant_down":
-        predictions = np.zeros(len(y_eval), dtype=int)
-        scores = np.zeros(len(y_eval), dtype=float)
-    else:
-        raise ValueError(f"unknown Stage 02 baseline control: {baseline_id}")
-    scored = metrics.score_classifier(y_eval.astype(int), predictions, y_score=scores)
-    return {
-        "fit_status": "completed_baseline",
-        "predictions": predictions,
-        "scores": scores,
-        "error_message": "",
-        **scored,
-    }
-
-
 def _baseline_summary_row(
     candidate: Mapping[str, Any],
     fold: Mapping[str, Any],
@@ -969,7 +931,7 @@ def _empty_trial_row(
         "model_family": family,
         "probe_id": probe_id,
         "hpo_profile_id": profile_id,
-        "hpo_profile_params_json": json.dumps(_profile_params(profile), sort_keys=True),
+        "hpo_profile_params_json": json.dumps(profile_params(profile), sort_keys=True),
         "fold_id": str(fold["fold_id"]),
         "seed": int(seed),
         "fit_status": "not_started",
@@ -1007,10 +969,6 @@ def _empty_trial_row(
         "selected_for_stage03": False,
         "error_message": "",
     }
-
-
-def _profile_params(profile: Mapping[str, Any]) -> dict[str, Any]:
-    return {str(key): value for key, value in profile.items() if str(key) != "profile_id"}
 
 
 def _fit_stage02_model(
@@ -1053,7 +1011,7 @@ def _fit_stage02_model(
             config=config,
         )
     probe_id = PROBE_BY_FAMILY[family]
-    trial_config = _trial_probe_config(config, probe_id, profile)
+    trial_config = probe_trial_config(config, probe_id, profile)
     return fit_probe(
         probe_id,
         x_train,
@@ -1086,13 +1044,13 @@ def _fit_lightgbm_hpo_trial(
     except ModuleNotFoundError as exc:
         return {"fit_status": "failed_dependency_missing", "error_message": str(exc)}
 
-    params = _lightgbm_params(profile)
+    params = lightgbm_hpo_params(profile)
     model = LGBMClassifier(**params, random_state=seed, verbosity=-1)
     training_defaults = require_mapping(
         config.get("lightgbm_training_defaults", {}), "lightgbm_training_defaults"
     )
     early_rounds = int(training_defaults.get("early_stopping_rounds", 25))
-    split = _lightgbm_inner_train_early_stopping_split(
+    split = lightgbm_inner_train_early_stopping_split(
         x_train=x_train,
         y_train=y_train,
         train_meta=train_meta,
@@ -1128,112 +1086,6 @@ def _fit_lightgbm_hpo_trial(
         }
 
 
-def _lightgbm_inner_train_early_stopping_split(
-    *,
-    x_train: np.ndarray,
-    y_train: np.ndarray,
-    train_meta: pd.DataFrame,
-    training_defaults: Mapping[str, Any],
-    early_rounds: int,
-) -> dict[str, Any]:
-    if early_rounds <= 0:
-        return {
-            "x_fit": x_train,
-            "y_fit": y_train,
-            "x_stop": None,
-            "y_stop": None,
-            "early_stopping_source": "disabled",
-            "early_stopping_used": False,
-            "early_stopping_reason": "early_stopping_rounds<=0",
-            "early_stopping_train_sample_id_hash": sample_id_hash(
-                train_meta["sample_id"].tolist()
-            ),
-            "early_stopping_eval_sample_id_hash": "",
-        }
-
-    validation_fraction = float(training_defaults.get("early_stopping_validation_fraction", 0.2))
-    minimum_eval = int(training_defaults.get("minimum_early_stopping_validation_samples", 128))
-    minimum_train = int(training_defaults.get("minimum_early_stopping_train_samples", 128))
-    validation_fraction = min(max(validation_fraction, 0.05), 0.5)
-    n_samples = int(len(train_meta))
-    n_stop = max(minimum_eval, int(np.ceil(n_samples * validation_fraction)))
-    n_stop = min(n_stop, max(0, n_samples - minimum_train))
-    full_train_hash = sample_id_hash(train_meta["sample_id"].tolist())
-    if n_stop < minimum_eval:
-        return {
-            "x_fit": x_train,
-            "y_fit": y_train,
-            "x_stop": None,
-            "y_stop": None,
-            "early_stopping_source": "inner_train_chronological_tail",
-            "early_stopping_used": False,
-            "early_stopping_reason": "insufficient_inner_train_rows_for_minimum_validation_subsplit",
-            "early_stopping_train_sample_id_hash": full_train_hash,
-            "early_stopping_eval_sample_id_hash": "",
-        }
-    if n_stop < 1:
-        return {
-            "x_fit": x_train,
-            "y_fit": y_train,
-            "x_stop": None,
-            "y_stop": None,
-            "early_stopping_source": "inner_train_chronological_tail",
-            "early_stopping_used": False,
-            "early_stopping_reason": "insufficient_inner_train_rows_for_subsplit",
-            "early_stopping_train_sample_id_hash": full_train_hash,
-            "early_stopping_eval_sample_id_hash": "",
-        }
-
-    sort_columns = [
-        column
-        for column in ("target_timestamp", "trading_day", "ticker", "sample_id")
-        if column in train_meta.columns
-    ]
-    if sort_columns:
-        ordered_index = train_meta.sort_values(sort_columns, kind="stable").index.to_numpy()
-    else:
-        ordered_index = np.arange(n_samples)
-    stop_index = ordered_index[-n_stop:]
-    fit_index = ordered_index[:-n_stop]
-    fit_labels = y_train[fit_index]
-    stop_labels = y_train[stop_index]
-    if len(np.unique(fit_labels)) < 2:
-        reason = "inner_train_fit_subsplit_single_class"
-    elif len(np.unique(stop_labels)) < 2:
-        reason = "inner_train_early_stopping_subsplit_single_class"
-    else:
-        reason = ""
-    if reason:
-        return {
-            "x_fit": x_train,
-            "y_fit": y_train,
-            "x_stop": None,
-            "y_stop": None,
-            "early_stopping_source": "inner_train_chronological_tail",
-            "early_stopping_used": False,
-            "early_stopping_reason": reason,
-            "early_stopping_train_sample_id_hash": full_train_hash,
-            "early_stopping_eval_sample_id_hash": "",
-        }
-    fit_meta = train_meta.iloc[fit_index]
-    stop_meta = train_meta.iloc[stop_index]
-    return {
-        "x_fit": x_train[fit_index],
-        "y_fit": fit_labels,
-        "x_stop": x_train[stop_index],
-        "y_stop": stop_labels,
-        "early_stopping_source": "inner_train_chronological_tail",
-        "early_stopping_used": True,
-        "early_stopping_reason": "configured_inner_train_subsplit",
-        "early_stopping_train_sample_id_hash": sample_id_hash(
-            fit_meta["sample_id"].tolist()
-        ),
-        "early_stopping_eval_sample_id_hash": sample_id_hash(
-            stop_meta["sample_id"].tolist()
-        ),
-    }
-
-
 def _early_stopping_outcome_fields(split: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "early_stopping_source": split.get("early_stopping_source", pd.NA),
@@ -1246,62 +1098,6 @@ def _early_stopping_outcome_fields(split: Mapping[str, Any]) -> dict[str, Any]:
             "early_stopping_eval_sample_id_hash", ""
         ),
     }
-
-
-def _lightgbm_params(profile: Mapping[str, Any]) -> dict[str, Any]:
-    params = _profile_params(profile)
-    renames = {
-        "min_data_in_leaf": "min_child_samples",
-        "feature_fraction": "colsample_bytree",
-        "bagging_fraction": "subsample",
-        "bagging_freq": "subsample_freq",
-        "lambda_l1": "reg_alpha",
-        "lambda_l2": "reg_lambda",
-    }
-    for old, new in renames.items():
-        if old in params and new not in params:
-            params[new] = params.pop(old)
-    params.setdefault("n_estimators", 200)
-    params.setdefault("learning_rate", 0.03)
-    params.setdefault("max_depth", 6)
-    params.setdefault("num_leaves", 31)
-    params.setdefault("subsample", 0.9)
-    if float(params.get("subsample", 1.0)) < 1.0:
-        params.setdefault("subsample_freq", 1)
-    params.setdefault("colsample_bytree", 0.9)
-    params.setdefault("class_weight", "balanced")
-    return params
-
-
-def _trial_probe_config(
-    config: Mapping[str, Any], probe_id: str, profile: Mapping[str, Any]
-) -> dict[str, Any]:
-    fixed_defaults = _profile_params(profile)
-    torch_defaults = dict(_torch_defaults(config))
-    for key in (
-        "learning_rate",
-        "weight_decay",
-        "batch_size",
-        "epochs",
-        "early_stopping_patience",
-        "early_stopping_min_delta",
-        "gradient_clip_norm",
-    ):
-        if key in fixed_defaults:
-            torch_defaults[key] = fixed_defaults[key]
-    return {
-        "lightweight_probes": {probe_id: {"enabled": True, "fixed_defaults": fixed_defaults}},
-        "probe_training_defaults": {"torch": torch_defaults},
-    }
-
-
-def _torch_defaults(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    return require_mapping(
-        require_mapping(config.get("probe_training_defaults", {}), "probe_training_defaults").get(
-            "torch", {}
-        ),
-        "probe_training_defaults.torch",
-    )
 
 
 def _stage02_modeling_scope_axis(stage01_handoff: Mapping[str, Any]) -> list[str]:
@@ -1318,7 +1114,7 @@ def _stage02_modeling_scope_axis(stage01_handoff: Mapping[str, Any]) -> list[str
 
 
 def _device_manifest_fields(config: Mapping[str, Any], trial_ledger: pd.DataFrame) -> dict[str, Any]:
-    requested_device = str(_torch_defaults(config).get("device", "auto"))
+    requested_device = str(torch_training_defaults(config).get("device", "auto"))
     if trial_ledger.empty:
         return {
             "requested_device": requested_device,

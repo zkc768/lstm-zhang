@@ -121,6 +121,14 @@ checkpointing:
   checkpoint_after_each_seed: true
   checkpoint_dir: /content/lst_models_checkpoints/03_frozen_validation_readout
 
+# Exact-run resume (protocol section 11): recovery for a crashed readout only.
+# A resumed run rebuilds the ledger from the exact checkpoint folder and never
+# repeats a scoring event. Fresh runs keep enabled: false.
+resume:
+  enabled: false
+  run_id: null
+  checkpoint_dir: null
+
 forbidden:
   wording:
     - final model

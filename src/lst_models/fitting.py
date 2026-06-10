@@ -1,9 +1,9 @@
-"""Shared probe/trial model-fit wrappers for stage screening and HPO.
+"""Shared probe/trial model-fit wrappers for stage screening, HPO, and refits.
 
 Plain functions only: no trainer abstraction, no callback system, no plugin
 registry (route guide, "What Not To Build"). Stages own their ledgers and
 orchestration; this module owns the per-fold fit/predict mechanics shared by
-Stage 01 probes and Stage 02 HPO trials.
+Stage 01 probes, Stage 02 HPO trials, and Stage 03 mechanism-frozen refits.
 
 ``TORCH_IMPORT_ERROR`` caches a failed torch import (or a test-injected
 disable) so repeated torch probes fail fast with the same recorded reason
@@ -38,6 +38,13 @@ from lst_models.windows import sample_id_hash
 
 TORCH_IMPORT_ERROR: str | None = None
 
+PROBE_BY_FAMILY = {
+    "lightgbm": "lightgbm_small",
+    "standard_dlinear": "standard_dlinear_tiny",
+    "tcn": "tcn_tiny",
+    "ms_dlinear_tcn": "ms_dlinear_tcn_tiny",
+}
+
 
 @dataclass(frozen=True)
 class ProbeFitResult:
@@ -59,6 +66,69 @@ class ProbeFitResult:
 def probe_defaults(config: Mapping[str, Any], probe_id: str) -> Mapping[str, Any]:
     probe_config = require_mapping(config["lightweight_probes"][probe_id], f"lightweight_probes.{probe_id}")
     return require_mapping(probe_config.get("fixed_defaults", {}), f"lightweight_probes.{probe_id}.fixed_defaults")
+
+
+def profile_params(profile: Mapping[str, Any]) -> dict[str, Any]:
+    """HPO profile parameters with the ``profile_id`` key removed."""
+    return {str(key): value for key, value in profile.items() if str(key) != "profile_id"}
+
+
+def torch_training_defaults(config: Mapping[str, Any]) -> Mapping[str, Any]:
+    return require_mapping(
+        require_mapping(config.get("probe_training_defaults", {}), "probe_training_defaults").get(
+            "torch", {}
+        ),
+        "probe_training_defaults.torch",
+    )
+
+
+def lightgbm_hpo_params(profile: Mapping[str, Any]) -> dict[str, Any]:
+    """LGBMClassifier kwargs for an HPO profile: alias renames plus defaults."""
+    params = profile_params(profile)
+    renames = {
+        "min_data_in_leaf": "min_child_samples",
+        "feature_fraction": "colsample_bytree",
+        "bagging_fraction": "subsample",
+        "bagging_freq": "subsample_freq",
+        "lambda_l1": "reg_alpha",
+        "lambda_l2": "reg_lambda",
+    }
+    for old, new in renames.items():
+        if old in params and new not in params:
+            params[new] = params.pop(old)
+    params.setdefault("n_estimators", 200)
+    params.setdefault("learning_rate", 0.03)
+    params.setdefault("max_depth", 6)
+    params.setdefault("num_leaves", 31)
+    params.setdefault("subsample", 0.9)
+    if float(params.get("subsample", 1.0)) < 1.0:
+        params.setdefault("subsample_freq", 1)
+    params.setdefault("colsample_bytree", 0.9)
+    params.setdefault("class_weight", "balanced")
+    return params
+
+
+def probe_trial_config(
+    config: Mapping[str, Any], probe_id: str, profile: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Per-trial probe config: profile params as fixed defaults plus torch overrides."""
+    fixed_defaults = profile_params(profile)
+    torch_defaults = dict(torch_training_defaults(config))
+    for key in (
+        "learning_rate",
+        "weight_decay",
+        "batch_size",
+        "epochs",
+        "early_stopping_patience",
+        "early_stopping_min_delta",
+        "gradient_clip_norm",
+    ):
+        if key in fixed_defaults:
+            torch_defaults[key] = fixed_defaults[key]
+    return {
+        "lightweight_probes": {probe_id: {"enabled": True, "fixed_defaults": fixed_defaults}},
+        "probe_training_defaults": {"torch": torch_defaults},
+    }
 
 
 def fit_probe(
@@ -223,12 +293,7 @@ def fit_torch_sequence_probe(
     raw_train_3d = x_train.reshape(len(x_train), window_size, n_features).astype(np.float32)
     eval_3d = x_eval.reshape(len(x_eval), window_size, n_features).astype(np.float32)
 
-    torch_defaults = require_mapping(
-        require_mapping(config.get("probe_training_defaults", {}), "probe_training_defaults").get(
-            "torch", {}
-        ),
-        "probe_training_defaults.torch",
-    )
+    torch_defaults = torch_training_defaults(config)
     fixed_defaults = probe_defaults(config, probe_id)
     requested_device = str(torch_defaults.get("device", "auto"))
     require_gpu = bool(torch_defaults.get("require_gpu", False))
@@ -447,5 +512,111 @@ def torch_inner_train_early_stopping_split(
         ),
         "early_stopping_eval_sample_id_hash": sample_id_hash(
             meta.iloc[stop_index]["sample_id"].astype(str).tolist()
+        ),
+    }
+
+
+def lightgbm_inner_train_early_stopping_split(
+    *,
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    train_meta: pd.DataFrame,
+    training_defaults: Mapping[str, Any],
+    early_rounds: int,
+) -> dict[str, Any]:
+    if early_rounds <= 0:
+        return {
+            "x_fit": x_train,
+            "y_fit": y_train,
+            "x_stop": None,
+            "y_stop": None,
+            "early_stopping_source": "disabled",
+            "early_stopping_used": False,
+            "early_stopping_reason": "early_stopping_rounds<=0",
+            "early_stopping_train_sample_id_hash": sample_id_hash(
+                train_meta["sample_id"].tolist()
+            ),
+            "early_stopping_eval_sample_id_hash": "",
+        }
+
+    validation_fraction = float(training_defaults.get("early_stopping_validation_fraction", 0.2))
+    minimum_eval = int(training_defaults.get("minimum_early_stopping_validation_samples", 128))
+    minimum_train = int(training_defaults.get("minimum_early_stopping_train_samples", 128))
+    validation_fraction = min(max(validation_fraction, 0.05), 0.5)
+    n_samples = int(len(train_meta))
+    n_stop = max(minimum_eval, int(np.ceil(n_samples * validation_fraction)))
+    n_stop = min(n_stop, max(0, n_samples - minimum_train))
+    full_train_hash = sample_id_hash(train_meta["sample_id"].tolist())
+    if n_stop < minimum_eval:
+        return {
+            "x_fit": x_train,
+            "y_fit": y_train,
+            "x_stop": None,
+            "y_stop": None,
+            "early_stopping_source": "inner_train_chronological_tail",
+            "early_stopping_used": False,
+            "early_stopping_reason": "insufficient_inner_train_rows_for_minimum_validation_subsplit",
+            "early_stopping_train_sample_id_hash": full_train_hash,
+            "early_stopping_eval_sample_id_hash": "",
+        }
+    if n_stop < 1:
+        return {
+            "x_fit": x_train,
+            "y_fit": y_train,
+            "x_stop": None,
+            "y_stop": None,
+            "early_stopping_source": "inner_train_chronological_tail",
+            "early_stopping_used": False,
+            "early_stopping_reason": "insufficient_inner_train_rows_for_subsplit",
+            "early_stopping_train_sample_id_hash": full_train_hash,
+            "early_stopping_eval_sample_id_hash": "",
+        }
+
+    sort_columns = [
+        column
+        for column in ("target_timestamp", "trading_day", "ticker", "sample_id")
+        if column in train_meta.columns
+    ]
+    if sort_columns:
+        ordered_index = train_meta.sort_values(sort_columns, kind="stable").index.to_numpy()
+    else:
+        ordered_index = np.arange(n_samples)
+    stop_index = ordered_index[-n_stop:]
+    fit_index = ordered_index[:-n_stop]
+    fit_labels = y_train[fit_index]
+    stop_labels = y_train[stop_index]
+    if len(np.unique(fit_labels)) < 2:
+        reason = "inner_train_fit_subsplit_single_class"
+    elif len(np.unique(stop_labels)) < 2:
+        reason = "inner_train_early_stopping_subsplit_single_class"
+    else:
+        reason = ""
+    if reason:
+        return {
+            "x_fit": x_train,
+            "y_fit": y_train,
+            "x_stop": None,
+            "y_stop": None,
+            "early_stopping_source": "inner_train_chronological_tail",
+            "early_stopping_used": False,
+            "early_stopping_reason": reason,
+            "early_stopping_train_sample_id_hash": full_train_hash,
+            "early_stopping_eval_sample_id_hash": "",
+        }
+    fit_meta = train_meta.iloc[fit_index]
+    stop_meta = train_meta.iloc[stop_index]
+    return {
+        "x_fit": x_train[fit_index],
+        "y_fit": fit_labels,
+        "x_stop": x_train[stop_index],
+        "y_stop": stop_labels,
+        "early_stopping_source": "inner_train_chronological_tail",
+        "early_stopping_used": True,
+        "early_stopping_reason": "configured_inner_train_subsplit",
+        "early_stopping_train_sample_id_hash": sample_id_hash(
+            fit_meta["sample_id"].tolist()
+        ),
+        "early_stopping_eval_sample_id_hash": sample_id_hash(
+            stop_meta["sample_id"].tolist()
         ),
     }

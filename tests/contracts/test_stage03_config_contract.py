@@ -25,15 +25,23 @@ def test_scope_and_contact_flags() -> None:
     assert CONFIG["official_validation_for_selection"] is False
 
 
-@pytest.mark.xfail(strict=False, reason="pending roadmap Phase 0.3 stage02 re-run id")
-def test_upstream_run_ids_chain() -> None:
+def test_upstream_run_ids_pinned_to_r3_chain() -> None:
     inputs = CONFIG["inputs"]
     assert inputs["stage00_run_id"] == "20260610_051705_347450"
     assert inputs["stage01_run_id"] == "20260610_075002"
+    assert inputs["stage00_run_id"] in inputs["stage00_runtime_run_dir"]
+    assert inputs["stage01_run_id"] in inputs["stage01_runtime_run_dir"]
+    assert "20260609_100637_704705" in inputs["superseded_stage02_run_ids"]
+    assert "20260610_010019_507648" in inputs["superseded_stage02_run_ids"]
+
+
+@pytest.mark.xfail(strict=False, reason="pending superseding stage02 run id (R3 chain rerun)")
+def test_stage02_run_id_filled_with_superseding_run() -> None:
+    inputs = CONFIG["inputs"]
     assert inputs["stage02_run_id"] not in inputs["superseded_stage02_run_ids"]
     assert inputs["stage02_run_id"] != "<NEW_STAGE02_RUN_ID>", (
         "fill inputs.stage02_run_id with the superseding Stage 02 run id "
-        "(roadmap Phase 0.3) before executing Stage 03"
+        "(Route A R3 chain rerun) before executing Stage 03"
     )
     assert inputs["stage02_run_id"] in inputs["stage02_runtime_run_dir"]
 
@@ -63,6 +71,13 @@ def test_fallback_policy_mechanical_only() -> None:
         "refit_crash_before_any_scoring",
         "candidate_not_reconstructable",
     }
+
+
+def test_resume_block_disabled_for_fresh_runs() -> None:
+    resume = CONFIG["resume"]
+    assert resume["enabled"] is False
+    assert resume["run_id"] is None
+    assert resume["checkpoint_dir"] is None
 
 
 def test_required_artifact_names_and_wording() -> None:

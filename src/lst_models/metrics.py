@@ -250,6 +250,50 @@ def score_train_prior_baseline(
     }
 
 
+def score_registry_baseline(
+    baseline_id: str, y_train: np.ndarray, y_eval: np.ndarray, seed: int
+) -> dict[str, Any]:
+    """Score one Stage 00 registry baseline on shared evaluation rows.
+
+    Train-prior baselines delegate to :func:`score_train_prior_baseline` (the
+    stratified dummy is seeded with the trial seed); ``constant_up`` and
+    ``constant_down`` learn nothing. Moved verbatim from the Stage 02 runner so
+    Stage 02 HPO trials and the Stage 03 frozen readout score the identical
+    baseline registry.
+    """
+    if baseline_id in {"stratified_dummy_train_prior", "majority_train_prior"}:
+        return score_train_prior_baseline(baseline_id, y_train, y_eval, seed)
+    if len(y_train) == 0 or len(y_eval) == 0:
+        predictions = np.zeros(len(y_eval), dtype=int)
+        return {
+            "fit_status": "skipped_no_fold_samples",
+            "predictions": predictions,
+            "scores": np.full(len(y_eval), 0.5, dtype=float),
+            "error_message": "baseline has no train/eval samples for this fold",
+            "macro_f1": np.nan,
+            "balanced_accuracy": np.nan,
+            "accuracy": np.nan,
+            "roc_auc": np.nan,
+            "mcc": np.nan,
+        }
+    if baseline_id == "constant_up":
+        predictions = np.ones(len(y_eval), dtype=int)
+        scores = np.ones(len(y_eval), dtype=float)
+    elif baseline_id == "constant_down":
+        predictions = np.zeros(len(y_eval), dtype=int)
+        scores = np.zeros(len(y_eval), dtype=float)
+    else:
+        raise ValueError(f"unknown Stage 02 baseline control: {baseline_id}")
+    scored = score_classifier(y_eval.astype(int), predictions, y_score=scores)
+    return {
+        "fit_status": "completed_baseline",
+        "predictions": predictions,
+        "scores": scores,
+        "error_message": "",
+        **scored,
+    }
+
+
 def ticker_delta_macro_f1(
     eval_meta: pd.DataFrame, predictions: np.ndarray, baseline_predictions: np.ndarray
 ) -> tuple[dict[str, float], int]:
