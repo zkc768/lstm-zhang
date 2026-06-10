@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import yaml
 
 
@@ -35,15 +34,12 @@ def test_upstream_run_ids_pinned_to_r3_chain() -> None:
     assert "20260610_010019_507648" in inputs["superseded_stage02_run_ids"]
 
 
-@pytest.mark.xfail(strict=False, reason="pending superseding stage02 run id (R3 chain rerun)")
 def test_stage02_run_id_filled_with_superseding_run() -> None:
     inputs = CONFIG["inputs"]
+    assert inputs["stage02_run_id"] == "20260610_082130_797479"
     assert inputs["stage02_run_id"] not in inputs["superseded_stage02_run_ids"]
-    assert inputs["stage02_run_id"] != "<NEW_STAGE02_RUN_ID>", (
-        "fill inputs.stage02_run_id with the superseding Stage 02 run id "
-        "(Route A R3 chain rerun) before executing Stage 03"
-    )
     assert inputs["stage02_run_id"] in inputs["stage02_runtime_run_dir"]
+    assert inputs["stage02_run_id"] in str(inputs["stage02_drive_path_parts"])
 
 
 def test_frozen_training_defaults_match_stage02() -> None:

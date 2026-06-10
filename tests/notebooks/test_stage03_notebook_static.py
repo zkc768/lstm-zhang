@@ -9,10 +9,10 @@ import nbformat
 ROOT = Path(__file__).resolve().parents[2]
 NOTEBOOK = ROOT / "notebooks" / "03_frozen_validation_readout_colab.ipynb"
 
-# Pre-pin placeholders: the publish task (two-step exact-commit pin) replaces
-# both placeholders and these expected constants in the same commit.
+# The two-step exact-commit pin updates EXPECTED_PROJECT_REPO_COMMIT together
+# with the notebook constant in the same commit (AGENTS.md section 5).
 EXPECTED_PROJECT_REPO_COMMIT = "<STAGE03_FULL_BUNDLE_COMMIT>"
-EXPECTED_STAGE02_RUN_ID = "<NEW_STAGE02_RUN_ID>"
+EXPECTED_STAGE02_RUN_ID = "20260610_082130_797479"
 CURRENT_STAGE00_RUN_ID = "20260610_051705_347450"
 CURRENT_STAGE01_RUN_ID = "20260610_075002"
 SUPERSEDED_STAGE02_RUN_IDS = '["20260609_100637_704705", "20260610_010019_507648"]'
