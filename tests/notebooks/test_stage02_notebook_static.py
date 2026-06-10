@@ -9,7 +9,7 @@ import nbformat
 ROOT = Path(__file__).resolve().parents[2]
 NOTEBOOK = ROOT / "notebooks" / "02_model_hpo_train_inner_colab.ipynb"
 CURRENT_STAGE01_RUN_ID = "20260609_070204"
-CURRENT_STAGE00_RUN_ID = "20260609_015034_927813"
+CURRENT_STAGE00_RUN_ID = "20260610_051705_347450"
 
 
 def test_stage02_notebook_parses_and_has_empty_outputs() -> None:

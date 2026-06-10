@@ -43,7 +43,7 @@ def test_stage01_notebook_is_single_stage01_entrypoint() -> None:
     assert 'stage00_inputs["stage00_run_manifest"] = str(STAGE00_OUTPUT_DIR / "run_manifest.json")' in text
     assert 'stage00_inputs["raw_data_dir"] = str(RAW_DATA_DIR)' in text
     assert 'stage_outputs["output_dir"] = str(OUTPUT_DIR)' in text
-    assert 'STAGE00_RUN_ID = "20260609_015034_927813"' in text
+    assert 'STAGE00_RUN_ID = "20260610_051705_347450"' in text
     assert 'STAGE00_DRIVE_PATH_PARTS = ["lst_models", "results", "00_data_split_label_freeze", STAGE00_RUN_ID]' in text
     assert "EXPECTED_WINDOWS = [10, 20, 30]" in text
     assert "STAGE02_RECOMMENDED_FAMILIES" in text

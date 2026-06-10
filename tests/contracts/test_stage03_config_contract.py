@@ -28,7 +28,7 @@ def test_scope_and_contact_flags() -> None:
 @pytest.mark.xfail(strict=False, reason="pending roadmap Phase 0.3 stage02 re-run id")
 def test_upstream_run_ids_chain() -> None:
     inputs = CONFIG["inputs"]
-    assert inputs["stage00_run_id"] == "20260609_015034_927813"
+    assert inputs["stage00_run_id"] == "20260610_051705_347450"
     assert inputs["stage01_run_id"] == "20260609_070204"
     assert inputs["stage02_run_id"] not in inputs["superseded_stage02_run_ids"]
     assert inputs["stage02_run_id"] != "<NEW_STAGE02_RUN_ID>", (

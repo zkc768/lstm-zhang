@@ -8,7 +8,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs" / "stages" / "02_model_hpo_train_inner.yaml"
 CURRENT_STAGE01_RUN_ID = "20260609_070204"
-CURRENT_STAGE00_RUN_ID = "20260609_015034_927813"
+CURRENT_STAGE00_RUN_ID = "20260610_051705_347450"
 
 
 def load_config() -> dict:
