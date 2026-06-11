@@ -34,3 +34,6 @@ checkpoints/
 .env
 .venv/
 venv/
+
+# AI-facing docs (local only)
+docs/
