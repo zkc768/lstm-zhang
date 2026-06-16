@@ -37,3 +37,6 @@ venv/
 
 # AI-facing docs (local only)
 docs/
+
+# Local paper workspace (Doc A contract: local-only)
+paper/
