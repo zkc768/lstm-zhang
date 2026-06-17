@@ -76,6 +76,18 @@ PREDICTION_COLUMNS = [
     "period_id", "seed", "sample_id", "ticker", "target_timestamp",
     "trading_day", "y_true", "p_up", "y_pred", "scope", "readout_tier",
 ]
+# Per-row baseline (stratified_dummy_train_prior) predictions for the judged
+# row, captured so the protocol row-pooled pooled_delta (§8 lines 508-511 --
+# candidate + per-period baseline predictions concatenated across periods per
+# seed) is reproducible from artifacts. The dummy is scored once at seeds[0]
+# and reused for every candidate seed (finding F10); one baseline frame is
+# emitted per (period, seed) the judged row is scored on so the per-seed
+# row-union lines up 1:1 with the candidate rows.
+BASELINE_PREDICTION_COLUMNS = [
+    "baseline_id", "period_id", "seed", "sample_id", "ticker",
+    "target_timestamp", "trading_day", "y_true", "p_up", "y_pred",
+    "scope", "readout_tier",
+]
 
 REFIT_EARLY_STOPPING_KEYS = (
     "early_stopping_source",
@@ -117,6 +129,7 @@ class _WalkforwardLedger:
     per_ticker_rows: list[dict[str, Any]] = field(default_factory=list)
     baseline_rows: list[dict[str, Any]] = field(default_factory=list)
     prediction_frames: list[pd.DataFrame] = field(default_factory=list)
+    baseline_prediction_frames: list[pd.DataFrame] = field(default_factory=list)
     scoring_events: list[dict[str, Any]] = field(default_factory=list)
     refit_records: list[dict[str, Any]] = field(default_factory=list)
     completed_units: list[str] = field(default_factory=list)
@@ -467,6 +480,11 @@ def _execute_walkforward(
     candidate_id = str(candidate["candidate_id"])
     feature_set = str(candidate["feature_set"])
     window_size = int(candidate["window_size"])
+    judged_row = str(
+        require_mapping(config["predeclared_criteria"], "predeclared_criteria")[
+            "judged_row"
+        ]
+    )
 
     meta = data_context.metadata
     ledger = resume_state.ledger if resume_state is not None else _WalkforwardLedger()
@@ -618,6 +636,14 @@ def _execute_walkforward(
                         model["hpo_profile_id"], pid, seed,
                         test_meta, predictions, scores,
                     )
+                    if rid == judged_row:
+                        _record_baseline_predictions(
+                            ledger, "stratified_dummy_train_prior", pid, seed,
+                            test_meta, dummy_preds,
+                            period_baselines[
+                                "stratified_dummy_train_prior"
+                            ]["scores"],
+                        )
 
                 ledger.refit_records.append({
                     "table_row_id": rid, "period_id": pid, "seed": seed,
@@ -648,7 +674,9 @@ def _execute_walkforward(
             f"{len(periods) * len(model_rows) * len(seeds)} expected events"
         )
 
-    judgement = _aggregate_and_judge(ledger, config)
+    judgement = _aggregate_and_judge(
+        ledger, config, is_resumed=resume_state is not None,
+    )
     return _write_result(
         config=config,
         inputs_map=inputs_map,
@@ -839,6 +867,84 @@ def _record_predictions(
     ledger.prediction_frames.append(frame)
 
 
+def _record_baseline_predictions(
+    ledger: _WalkforwardLedger,
+    baseline_id: str, pid: str, seed: int,
+    eval_meta: pd.DataFrame,
+    predictions: np.ndarray, scores: np.ndarray,
+) -> None:
+    """Persist per-period baseline per-row predictions for the row-pooled
+    pooled_delta. y_true/sample_id come from the SAME eval_meta the candidate
+    cell used, so concatenation across periods per seed aligns 1:1. The dummy
+    is seed-independent (scored at seeds[0]; finding F10), so per-seed frames
+    are identical apart from the recorded ``seed`` column.
+    """
+    frame = pd.DataFrame({
+        "baseline_id": baseline_id,
+        "period_id": pid,
+        "seed": int(seed),
+        "sample_id": eval_meta["sample_id"].to_numpy(),
+        "ticker": eval_meta["ticker"].to_numpy(),
+        "target_timestamp": eval_meta["target_timestamp"].to_numpy(),
+        "trading_day": eval_meta["trading_day"].to_numpy(),
+        "y_true": eval_meta["label"].to_numpy(dtype=int),
+        "p_up": np.asarray(scores, dtype=float),
+        "y_pred": np.asarray(predictions, dtype=int),
+        "scope": SCOPE,
+        "readout_tier": READOUT_TIER,
+    })[BASELINE_PREDICTION_COLUMNS]
+    ledger.baseline_prediction_frames.append(frame)
+
+
+def _concat_baseline_predictions(frames: list[pd.DataFrame]) -> pd.DataFrame:
+    if not frames:
+        return pd.DataFrame(columns=BASELINE_PREDICTION_COLUMNS)
+    return pd.concat(frames, ignore_index=True)[BASELINE_PREDICTION_COLUMNS]
+
+
+def _row_pooled_pooled_delta(
+    candidate_frames: list[pd.DataFrame],
+    baseline_frames: list[pd.DataFrame],
+    judged_row: str,
+) -> float | None:
+    """Protocol §8 row-pooled pooled_delta (lines 508-511).
+
+    For each seed s, concatenate the judged row's predictions across all scored
+    periods and the per-period stratified-dummy predictions across all periods,
+    compute macro-F1 on each row-union, take delta(s), and return the mean of
+    delta(s) over seeds. Returns ``None`` when the baseline per-row predictions
+    were not captured (runs produced before this field existed) or when no seed
+    has both candidate and baseline rows, so callers fall back to the
+    equal-weight companion without crashing.
+    """
+    if not candidate_frames or not baseline_frames:
+        return None
+    cand = pd.concat(candidate_frames, ignore_index=True)
+    cand = cand[cand["table_row_id"] == judged_row]
+    base = pd.concat(baseline_frames, ignore_index=True)
+    if cand.empty or base.empty:
+        return None
+    common_seeds = sorted(
+        set(cand["seed"].tolist()) & set(base["seed"].tolist())
+    )
+    seed_deltas: list[float] = []
+    for seed in common_seeds:
+        c = cand[cand["seed"] == seed]
+        b = base[base["seed"] == seed]
+        if c.empty or b.empty:
+            continue
+        cand_f1 = metrics.binary_macro_f1(
+            c["y_true"].to_numpy(dtype=int), c["y_pred"].to_numpy(dtype=int)
+        )
+        base_f1 = metrics.binary_macro_f1(
+            b["y_true"].to_numpy(dtype=int), b["y_pred"].to_numpy(dtype=int)
+        )
+        seed_deltas.append(float(cand_f1) - float(base_f1))
+    if not seed_deltas:
+        return None
+    return float(np.mean(seed_deltas))
+
+
 def _write_checkpoint(
     config: Mapping[str, Any], run_id: str, ledger: _WalkforwardLedger,
 ) -> None:
@@ -860,6 +966,9 @@ def _write_checkpoint(
     )
     _concat_predictions(ledger.prediction_frames).to_csv(
         checkpoint_dir / "v2_1_predictions_partial.csv", index=False
+    )
+    _concat_baseline_predictions(ledger.baseline_prediction_frames).to_csv(
+        checkpoint_dir / "v2_1_baseline_predictions_partial.csv", index=False
     )
     write_json(
         checkpoint_dir / "v2_1_ledger_state_partial.json",
@@ -909,6 +1018,14 @@ def _load_resume_state(config: Mapping[str, Any]) -> _ResumeState | None:
         ledger.prediction_frames.append(
             pd.read_csv(partial_pred)[PREDICTION_COLUMNS]
         )
+    # Optional-if-present: older checkpoints (including the completed 20260617
+    # run) predate this file, so it is NOT a required resume file -- load it
+    # only when a post-fix checkpoint provides it.
+    partial_base = checkpoint_dir / "v2_1_baseline_predictions_partial.csv"
+    if partial_base.exists() and partial_base.stat().st_size > 0:
+        ledger.baseline_prediction_frames.append(
+            pd.read_csv(partial_base)[BASELINE_PREDICTION_COLUMNS]
+        )
     return _ResumeState(
         run_id=run_id, checkpoint_dir=checkpoint_dir, ledger=ledger,
     )
@@ -922,6 +1039,7 @@ def _concat_predictions(frames: list[pd.DataFrame]) -> pd.DataFrame:
 
 def _aggregate_and_judge(
     ledger: _WalkforwardLedger, config: Mapping[str, Any],
+    *, is_resumed: bool = False,
 ) -> dict[str, Any]:
     criteria = require_mapping(
         config["predeclared_criteria"], "predeclared_criteria"
@@ -938,6 +1056,10 @@ def _aggregate_and_judge(
             "decision": "did_not_meet_predeclared_guarded_stability_criteria",
             "positive_period_count": 0,
             "pooled_delta": 0.0,
+            "pooled_delta_estimand": "equal_weight",
+            "pooled_delta_equal_weight": 0.0,
+            "pooled_delta_row_pooled": None,
+            "pooled_delta_row_pooled_available": False,
             "criteria_met": {
                 "positive_period_count": False, "pooled_delta": False,
             },
@@ -956,11 +1078,41 @@ def _aggregate_and_judge(
     positive_period_count = sum(
         1 for d in period_mean_deltas.values() if d > 0
     )
-    pooled_delta = float(np.mean([
+    # Two pooled_delta estimands (see register FIX-1 / F9 and the protocol
+    # 2026-06-17 erratum):
+    #   * equal_weight -- mean over per-(period, seed) cell deltas. This is what
+    #     the shipped code computed and what the signed-off run
+    #     20260617_051047_321730 reported (+0.005439); it currently BINDS c2.
+    #   * row_pooled   -- the protocol section 8 definition (lines 508-511):
+    #     per-seed row-union macro-F1 delta, mean over seeds. Emitted as a
+    #     disclosed companion; this is the value c2 SHOULD bind once it is
+    #     reconciled offline against the Drive prediction dump.
+    # The row-pooled value is only trustworthy on a fresh single-pass run: on a
+    # resumed run the candidate frames cover all periods but the baseline frames
+    # (a new artifact) may cover only post-resume periods, so the row-union would
+    # be coverage-mismatched. It is therefore computed only when not resumed.
+    pooled_delta_equal_weight = float(np.mean([
         r["delta_macro_f1_vs_stratified_dummy_train_prior"]
         for r in completed
         if r["delta_macro_f1_vs_stratified_dummy_train_prior"] is not None
     ]))
+    pooled_delta_row_pooled = (
+        None if is_resumed
+        else _row_pooled_pooled_delta(
+            ledger.prediction_frames, ledger.baseline_prediction_frames,
+            judged_row,
+        )
+    )
+    row_pooled_available = pooled_delta_row_pooled is not None
+
+    # BINDING (this landing -- register FIX-1 option C): c2 stays on the
+    # equal-weight value so the signed-off decision is not retroactively altered
+    # by an unverifiable recompute. To flip the binding to the protocol estimand
+    # after the offline Drive reconciliation confirms the sign, change the next
+    # line to `pooled_delta = pooled_delta_row_pooled if row_pooled_available
+    # else pooled_delta_equal_weight` and set "pooled_delta_estimand" below to
+    # reflect which estimand was used.
+    pooled_delta = pooled_delta_equal_weight
 
     c1 = positive_period_count >= min_pos_periods
     c2 = pooled_delta > 0
@@ -973,6 +1125,10 @@ def _aggregate_and_judge(
         "decision": decision,
         "positive_period_count": positive_period_count,
         "pooled_delta": pooled_delta,
+        "pooled_delta_estimand": "equal_weight",
+        "pooled_delta_equal_weight": pooled_delta_equal_weight,
+        "pooled_delta_row_pooled": pooled_delta_row_pooled,
+        "pooled_delta_row_pooled_available": row_pooled_available,
         "period_mean_deltas": period_mean_deltas,
         "criteria_met": {
             "positive_period_count": c1,
@@ -1178,6 +1334,14 @@ def _write_result(
     )
     paths["predictions"] = predictions_path
 
+    baseline_predictions_path = output_dir / str(outputs.get(
+        "baseline_predictions", "v2_1_baseline_predictions.csv"
+    ))
+    _concat_baseline_predictions(ledger.baseline_prediction_frames).to_csv(
+        baseline_predictions_path, index=False
+    )
+    paths["baseline_predictions"] = baseline_predictions_path
+
     registry = _build_period_registry(config, data_context.metadata)
     registry_path = output_dir / str(outputs.get(
         "period_registry", "v2_1_period_registry.json"
@@ -1211,6 +1375,12 @@ def _write_result(
         ),
         "positive_period_count": judgement["positive_period_count"],
         "pooled_delta": judgement["pooled_delta"],
+        "pooled_delta_estimand": judgement.get("pooled_delta_estimand"),
+        "pooled_delta_equal_weight": judgement.get("pooled_delta_equal_weight"),
+        "pooled_delta_row_pooled": judgement.get("pooled_delta_row_pooled"),
+        "pooled_delta_row_pooled_available": judgement.get(
+            "pooled_delta_row_pooled_available"
+        ),
         "criteria_met": judgement["criteria_met"],
         "decision": judgement["decision"],
         "readout_complete": ledger.readout_complete,

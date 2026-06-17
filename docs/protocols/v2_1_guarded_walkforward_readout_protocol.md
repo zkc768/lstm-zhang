@@ -48,6 +48,29 @@ Revision record:
 - 2026-06-10: initial pre-registration draft (zero V2.1 contact events have
   occurred; the V2 chain 00-03 is frozen; Stage 04 bundle implemented and
   awaiting its one Colab execution).
+- 2026-06-17: pooled_delta code-conformance erratum (the frozen section 8
+  definition is UNCHANGED; this is not a section 2-12 revision). The section 8
+  definition of `pooled_delta` (lines 508-511) -- macro-F1 delta on the
+  row-union of all scored period rows per seed, then mean over seeds
+  (row-pooled) -- stands and remains the criterion-2 estimand. The shipped code
+  of completed run 20260617_051047_321730 (`src/lst_models/guarded_walkforward.py`
+  `_aggregate_and_judge`) instead computed an equal-weight-per-period mean of the
+  per-(period, seed) cell deltas, which is NOT the section 8 definition.
+  Resolution: the corrected code now computes and EMITS BOTH -- the row-pooled
+  section 8 value as a disclosed companion (`pooled_delta_row_pooled`) alongside
+  the equal-weight value (`pooled_delta_equal_weight`), with a
+  `pooled_delta_estimand` label recording which estimand criterion 2 binds. For
+  this landing criterion 2 stays bound to the equal-weight value so the
+  signed-off decision is not altered by an unverifiable recompute; the row-pooled
+  value is the estimand criterion 2 SHOULD bind, and the binding flip is gated on
+  an offline reconciliation of the completed run from the Drive
+  `v2_1_predictions.csv` plus re-derived per-period stratified-dummy predictions
+  (the dummy predictions are not in the model-row dump). The completed run's
+  reported `pooled_delta = +0.005439` is the equal-weight quantity and is PENDING
+  RECOMPUTE; `positive_period_count = 5` and the
+  `met_predeclared_guarded_stability_criteria` decision are unaffected by this
+  erratum but must be re-confirmed once the row-pooled value is recomputed. This
+  is a recompute over already-scored predictions, not a new scoring event.
 
 ## 1. Implementation Gate
 

@@ -8,6 +8,7 @@ from lst_models.guarded_walkforward import (
     READOUT_TIER,
     PER_TICKER_READOUT_COLUMNS,
     PREDICTION_COLUMNS,
+    BASELINE_PREDICTION_COLUMNS,
     RESUME_CHECKPOINT_FILES,
     SCOPE,
     V21Result,

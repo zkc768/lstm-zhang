@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from lst_models.stages.guarded_walkforward_readout import (  # noqa: E402
     PER_TICKER_READOUT_COLUMNS,
     PREDICTION_COLUMNS,
+    BASELINE_PREDICTION_COLUMNS,
     REQUIRED_V2_1_ARTIFACTS,
     RESUME_CHECKPOINT_FILES,
     SCOPE,
@@ -252,6 +253,98 @@ def test_aggregate_and_judge_none_deltas_ignored() -> None:
     })
     result = _aggregate_and_judge(ledger, MINIMAL_CONFIG)
     assert result["positive_period_count"] == 0
+
+
+def _add_judged_prediction_frames(
+    ledger: _WalkforwardLedger,
+    period_rows: dict[str, int],
+    seeds: list[int],
+) -> None:
+    """Attach candidate + baseline per-row prediction frames for the judged row
+    so _aggregate_and_judge can compute the protocol row-pooled pooled_delta.
+    The candidate is perfect on each union and the dummy is half-wrong, so the
+    row-pooled delta is clearly positive and differs from the equal-weight value
+    derived from the readout-row deltas.
+    """
+    for pid, n in period_rows.items():
+        y_true = np.array([1, 0] * (n // 2), dtype=int)
+        cand_pred = y_true.copy()
+        dummy_pred = np.array([1, 1, 0, 0] * (n // 4), dtype=int)
+        for seed in seeds:
+            sample_ids = [f"{pid}_{seed}_{i}" for i in range(n)]
+            ledger.prediction_frames.append(pd.DataFrame({
+                "table_row_id": "tcn_frozen_primary",
+                "candidate_id": "cand",
+                "model_family": "tcn",
+                "hpo_profile_id": "p",
+                "period_id": pid,
+                "seed": seed,
+                "sample_id": sample_ids,
+                "ticker": "AAA",
+                "target_timestamp": "2020-01-01",
+                "trading_day": "2020-01-01",
+                "y_true": y_true,
+                "p_up": 0.6,
+                "y_pred": cand_pred,
+                "scope": SCOPE,
+                "readout_tier": READOUT_TIER,
+            })[list(PREDICTION_COLUMNS)])
+            ledger.baseline_prediction_frames.append(pd.DataFrame({
+                "baseline_id": "stratified_dummy_train_prior",
+                "period_id": pid,
+                "seed": seed,
+                "sample_id": sample_ids,
+                "ticker": "AAA",
+                "target_timestamp": "2020-01-01",
+                "trading_day": "2020-01-01",
+                "y_true": y_true,
+                "p_up": 0.5,
+                "y_pred": dummy_pred,
+                "scope": SCOPE,
+                "readout_tier": READOUT_TIER,
+            })[list(BASELINE_PREDICTION_COLUMNS)])
+
+
+def test_aggregate_and_judge_emits_row_pooled_companion_without_binding() -> None:
+    ledger = _make_ledger_with_results(
+        deltas=[0.01, 0.01, 0.01, 0.01],
+        period_ids=["wf_p1", "wf_p2"],
+        seeds=[101, 202],
+    )
+    _add_judged_prediction_frames(
+        ledger, period_rows={"wf_p1": 4, "wf_p2": 8}, seeds=[101, 202],
+    )
+    result = _aggregate_and_judge(ledger, MINIMAL_CONFIG, is_resumed=False)
+    # Equal-weight stays the bound estimand for this landing (FIX-1 option C).
+    assert result["pooled_delta_estimand"] == "equal_weight"
+    assert result["pooled_delta"] == result["pooled_delta_equal_weight"]
+    # The protocol row-pooled value is computed and disclosed as a companion.
+    assert result["pooled_delta_row_pooled_available"] is True
+    assert result["pooled_delta_row_pooled"] is not None
+    # The two estimands genuinely differ (the divergence FIX-1 is about).
+    assert abs(
+        result["pooled_delta_row_pooled"] - result["pooled_delta_equal_weight"]
+    ) > 1e-9
+    # Binding behaviour is unchanged vs the legacy equal-weight computation.
+    assert result["pooled_delta"] > 0
+    assert result["decision"] == "met_predeclared_guarded_stability_criteria"
+
+
+def test_aggregate_and_judge_row_pooled_suppressed_on_resume() -> None:
+    ledger = _make_ledger_with_results(
+        deltas=[0.01, 0.01, 0.01, 0.01],
+        period_ids=["wf_p1", "wf_p2"],
+        seeds=[101, 202],
+    )
+    _add_judged_prediction_frames(
+        ledger, period_rows={"wf_p1": 4, "wf_p2": 8}, seeds=[101, 202],
+    )
+    # On a resumed run the baseline frames may cover only post-resume periods,
+    # so the row-union would be coverage-mismatched: row-pooled is suppressed.
+    result = _aggregate_and_judge(ledger, MINIMAL_CONFIG, is_resumed=True)
+    assert result["pooled_delta_row_pooled_available"] is False
+    assert result["pooled_delta_row_pooled"] is None
+    assert result["pooled_delta"] == result["pooled_delta_equal_weight"]
 
 
 def test_build_comparison_table_structure() -> None:
