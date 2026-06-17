@@ -13,6 +13,8 @@ CURRENT_STAGE00_RUN_ID = "20260610_051705_347450"
 CURRENT_STAGE01_RUN_ID = "20260610_075002"
 CURRENT_STAGE02_RUN_ID = "20260610_082130_797479"
 CURRENT_STAGE03_RUN_ID = "20260610_133305_716174"
+CURRENT_STAGE04_RUN_ID = "20260610_232623_326133"
+EXPECTED_PROJECT_REPO_COMMIT = "c9e01b6f5a7f3e3ac00cdaf3bc7d08a988df65d5"
 SUPERSEDED_STAGE02_RUN_IDS = '["20260609_100637_704705", "20260610_010019_507648"]'
 
 
@@ -26,6 +28,10 @@ def _full_text(notebook: nbformat.NotebookNode) -> str:
 
 def _code_text(notebook: nbformat.NotebookNode) -> str:
     return "\n".join(cell.source for cell in notebook.cells if cell.cell_type == "code")
+
+
+def _code_cells(notebook: nbformat.NotebookNode) -> list[str]:
+    return [cell.source for cell in notebook.cells if cell.cell_type == "code"]
 
 
 def test_v2_1_notebook_parses_and_has_empty_outputs() -> None:
@@ -44,6 +50,10 @@ def test_v2_1_notebook_control_constants_and_pins() -> None:
     assert "RUN_PROJECT_BOOTSTRAP = True" in text
     assert 'PROJECT_BOOTSTRAP_MODE = "github_commit"' in text
     assert 'PROJECT_REPO_URL = "https://github.com/zkc768/lstm-zhang.git"' in text
+    assert f'PROJECT_REPO_COMMIT = "{EXPECTED_PROJECT_REPO_COMMIT}"' in text
+    assert "<FILL_WITH_FULL_BUNDLE_COMMIT>" not in text
+    assert "fill PROJECT_REPO_COMMIT with the V2.1 full-bundle commit" in text
+    assert "actual_commit == PROJECT_REPO_COMMIT" in text
     assert "RUN_V2_1 = False" in text
     assert "RUN_STAGE00_DRIVE_SYNC = True" in text
     assert "RUN_STAGE01_DRIVE_SYNC = True" in text
@@ -57,6 +67,7 @@ def test_v2_1_notebook_control_constants_and_pins() -> None:
     assert f'STAGE01_RUN_ID = "{CURRENT_STAGE01_RUN_ID}"' in text
     assert f'STAGE02_RUN_ID = "{CURRENT_STAGE02_RUN_ID}"' in text
     assert f'STAGE03_RUN_ID = "{CURRENT_STAGE03_RUN_ID}"' in text
+    assert f'STAGE04_RUN_ID = "{CURRENT_STAGE04_RUN_ID}"' in text
     assert f"SUPERSEDED_STAGE02_RUN_IDS = {SUPERSEDED_STAGE02_RUN_IDS}" in text
     assert "FROZEN_SEEDS = [101, 202]" in text
 
@@ -88,11 +99,37 @@ def test_v2_1_notebook_config_contract_check() -> None:
 
 
 def test_v2_1_notebook_drive_backup_guards() -> None:
-    code = _code_text(_notebook())
+    notebook = _notebook()
+    code = _code_text(notebook)
+    code_cells = _code_cells(notebook)
+    run_cell_index = next(
+        i for i, source in enumerate(code_cells)
+        if "result = run_stage(v2_1_config)" in source
+    )
+    backup_cell_index = next(
+        i for i, source in enumerate(code_cells)
+        if "REQUIRED_V2_1_ARTIFACTS" in source and "RUN_DRIVE_BACKUP and RUN_V2_1" in source
+    )
+    assert backup_cell_index == run_cell_index + 1
+    backup_cell = code_cells[backup_cell_index]
+    assert (
+        "from lst_models.stages.guarded_walkforward_readout import REQUIRED_V2_1_ARTIFACTS"
+        in backup_cell
+    )
+    assert "missing_required_artifacts" in backup_cell
+    assert "Missing required V2.1 artifacts before Drive backup" in backup_cell
+    assert "FileNotFoundError" in backup_cell
     assert 'holdout_contact_tier' in code
     assert 'clean_test_claim' in code
+    assert 'no_final_model_selected' in code
+    assert 'official_validation_scoring_events' in code
     assert "drive_backup_manifest.json" in code
+    assert '"bytes": None' in code
+    assert '"self_reference": True' in code
     assert "V2_1_DRIVE_RESULT_PATH_PARTS" in code
+    assert 'print("stage_run_id:"' in code
+    assert 'print("drive_path:"' in code
+    assert 'print("drive_folder_id:"' in code
 
 
 def test_v2_1_notebook_validates_before_drive_or_raw_sync() -> None:
@@ -151,6 +188,8 @@ def test_v2_1_notebook_runtime_injection() -> None:
 
 def test_v2_1_notebook_checkpoint_mirror() -> None:
     code = _code_text(_notebook())
+    assert "from lst_models.stages.guarded_walkforward_readout import RESUME_CHECKPOINT_FILES" in code
+    assert "RESUME_REQUIRED_CHECKPOINT_FILES = list(RESUME_CHECKPOINT_FILES)" in code
     assert "start_v2_1_checkpoint_mirror" in code
     assert "stop_v2_1_checkpoint_mirror" in code
     assert "CHECKPOINT_DRIVE_BASE_PARTS" in code

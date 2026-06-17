@@ -48,7 +48,7 @@ inputs:
     - run_manifest.json
     - artifact_inventory.csv
     - 03_decision_record.json
-  stage04_run_id: "<FILL_STAGE04_RUN_ID>"
+  stage04_run_id: "20260610_232623_326133"
   stage04_ordering: stage04_first
   stage04_ordering_override_reason: null
   raw_data_manifest: configs/lst_models_data.yaml

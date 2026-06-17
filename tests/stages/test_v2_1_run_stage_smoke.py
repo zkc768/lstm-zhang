@@ -12,11 +12,13 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from lst_models.stages.guarded_walkforward_readout import (  # noqa: E402
-    V21Result,
-    WALKFORWARD_READOUT_COLUMNS,
     PER_TICKER_READOUT_COLUMNS,
     PREDICTION_COLUMNS,
+    REQUIRED_V2_1_ARTIFACTS,
+    RESUME_CHECKPOINT_FILES,
     SCOPE,
+    V21Result,
+    WALKFORWARD_READOUT_COLUMNS,
     READOUT_TIER,
     _validate_config,
     _aggregate_and_judge,
@@ -166,6 +168,16 @@ def test_column_contracts_non_empty() -> None:
 def test_scope_and_tier_constants() -> None:
     assert SCOPE == "guarded_walkforward_readout"
     assert READOUT_TIER == "guarded_historically_contacted"
+
+
+def test_drive_and_resume_artifact_contract_constants() -> None:
+    assert "run_manifest.json" in REQUIRED_V2_1_ARTIFACTS
+    assert "artifact_inventory.csv" in REQUIRED_V2_1_ARTIFACTS
+    assert "v2_1_predictions.csv" in REQUIRED_V2_1_ARTIFACTS
+    assert "drive_backup_manifest.json" not in REQUIRED_V2_1_ARTIFACTS
+    assert "checkpoint_manifest.json" in RESUME_CHECKPOINT_FILES
+    assert "v2_1_ledger_state_partial.json" in RESUME_CHECKPOINT_FILES
+    assert "v2_1_predictions_partial.csv" in RESUME_CHECKPOINT_FILES
 
 
 def _make_ledger_with_results(

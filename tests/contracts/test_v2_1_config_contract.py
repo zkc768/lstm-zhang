@@ -33,7 +33,7 @@ def test_upstream_run_ids_pinned() -> None:
     assert inputs["stage01_run_id"] == "20260610_075002"
     assert inputs["stage02_run_id"] == "20260610_082130_797479"
     assert inputs["stage03_run_id"] == "20260610_133305_716174"
-    assert inputs["stage04_run_id"] == "<FILL_STAGE04_RUN_ID>"
+    assert inputs["stage04_run_id"] == "20260610_232623_326133"
     assert inputs["stage04_ordering"] == "stage04_first"
     assert inputs["stage04_ordering_override_reason"] is None
     assert inputs["stage00_run_id"] in inputs["stage00_runtime_run_dir"]
