@@ -470,6 +470,7 @@ def _execute_walkforward(
 
     meta = data_context.metadata
     ledger = resume_state.ledger if resume_state is not None else _WalkforwardLedger()
+    completed_baseline_periods = {r["period_id"] for r in ledger.baseline_rows}
 
     for period in periods:
         pid = period["period_id"]
@@ -510,13 +511,15 @@ def _execute_walkforward(
         for bl_id in baseline_ids:
             bl = metrics.score_registry_baseline(bl_id, y_train, y_test, seed=seeds[0])
             period_baselines[bl_id] = bl
-            ledger.baseline_rows.append({
-                "period_id": pid, "baseline_id": bl_id,
-                "n_train": n_train, "n_eval": n_test,
-                "macro_f1": bl["macro_f1"],
-                "balanced_accuracy": bl["balanced_accuracy"],
-                "scope": SCOPE, "readout_tier": READOUT_TIER,
-            })
+            if pid not in completed_baseline_periods:
+                ledger.baseline_rows.append({
+                    "period_id": pid, "baseline_id": bl_id,
+                    "n_train": n_train, "n_eval": n_test,
+                    "macro_f1": bl["macro_f1"],
+                    "balanced_accuracy": bl["balanced_accuracy"],
+                    "scope": SCOPE, "readout_tier": READOUT_TIER,
+                })
+        completed_baseline_periods.add(pid)
 
         dummy_preds = period_baselines["stratified_dummy_train_prior"]["predictions"]
 
