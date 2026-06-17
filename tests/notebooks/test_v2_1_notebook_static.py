@@ -45,8 +45,12 @@ def test_v2_1_notebook_control_constants_and_pins() -> None:
     assert 'PROJECT_BOOTSTRAP_MODE = "github_commit"' in text
     assert 'PROJECT_REPO_URL = "https://github.com/zkc768/lstm-zhang.git"' in text
     assert "RUN_V2_1 = False" in text
-    assert "RUN_UPSTREAM_DRIVE_SYNC = True" in text
+    assert "RUN_STAGE00_DRIVE_SYNC = True" in text
+    assert "RUN_STAGE01_DRIVE_SYNC = True" in text
+    assert "RUN_STAGE02_DRIVE_SYNC = True" in text
+    assert "RUN_STAGE03_DRIVE_SYNC = True" in text
     assert "RUN_RAW_DATA_SYNC = True" in text
+    assert "RUN_V2_1_CHECKPOINT_MIRROR = True" in text
     assert "RUN_DRIVE_BACKUP = True" in text
     assert "RUN_ARTIFACT_DISPLAY = False" in text
     assert f'STAGE00_RUN_ID = "{CURRENT_STAGE00_RUN_ID}"' in text
@@ -70,16 +74,16 @@ def test_v2_1_notebook_stage03_sync() -> None:
     code = _code_text(_notebook())
     assert "STAGE03_OUTPUT_DIR" in code
     assert "STAGE03_DRIVE_PATH_PARTS" in code
-    assert "required_s03" in code
-    assert "require_artifacts(STAGE03_OUTPUT_DIR, required_s03)" in code
+    assert "required_stage03_artifacts" in code
+    assert "require_artifacts(STAGE03_OUTPUT_DIR, required_stage03_artifacts)" in code
 
 
 def test_v2_1_notebook_config_contract_check() -> None:
     code = _code_text(_notebook())
-    assert 'v2_1_config["holdout_test_contact"] is True' in code
-    assert 'v2_1_config["holdout_contact_tier"] == "guarded_historically_contacted"' in code
-    assert 'v2_1_config["clean_test_claim"] is False' in code
-    assert 'v2_1_config["no_final_model_selected"] is True' in code
+    assert 'v2_1_config["holdout_test_contact"] is HOLDOUT_TEST_CONTACT' in code
+    assert 'v2_1_config["holdout_contact_tier"] == HOLDOUT_CONTACT_TIER' in code
+    assert 'v2_1_config["clean_test_claim"] is CLEAN_TEST_CLAIM' in code
+    assert 'v2_1_config["no_final_model_selected"] is NO_FINAL_MODEL_SELECTED' in code
     assert '"clean test" in v2_1_config["forbidden"]["wording"]' in code
 
 
@@ -133,6 +137,23 @@ def test_v2_1_notebook_forbidden_active_patterns_absent() -> None:
     )
     assert "FORBIDDEN wording" in markdown_text
     assert "guarded" in markdown_text.lower()
+
+
+def test_v2_1_notebook_runtime_injection() -> None:
+    code = _code_text(_notebook())
+    assert 'stage_outputs["output_dir"] = str(OUTPUT_DIR)' in code
+    assert 'stage_inputs["raw_data_dir"] = str(RAW_DATA_DIR)' in code
+    assert 'stage_checkpointing["checkpoint_dir"] = str(CHECKPOINT_ROOT)' in code
+    assert 'Path(stage_outputs["output_dir"]) == OUTPUT_DIR' in code
+    assert 'Path(stage_inputs["raw_data_dir"]) == RAW_DATA_DIR' in code
+    assert 'Path(stage_checkpointing["checkpoint_dir"]) == CHECKPOINT_ROOT' in code
+
+
+def test_v2_1_notebook_checkpoint_mirror() -> None:
+    code = _code_text(_notebook())
+    assert "start_v2_1_checkpoint_mirror" in code
+    assert "stop_v2_1_checkpoint_mirror" in code
+    assert "CHECKPOINT_DRIVE_BASE_PARTS" in code
 
 
 def test_v2_1_notebook_walkforward_period_table() -> None:
