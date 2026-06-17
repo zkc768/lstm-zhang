@@ -212,7 +212,7 @@ def _validate_config(config: Mapping[str, Any]) -> None:
     signoff = require_mapping(config.get("sign_off"), "sign_off")
     if signoff.get("status") != "complete":
         raise ValueError("sign_off.status must be complete before running V2.1")
-    for key in ("user_sign_off_date", "ian_confirmation_reference"):
+    for key in ("user_sign_off_date", "advisor_confirmation_reference"):
         value = str(signoff.get(key, ""))
         if not value or "<" in value:
             raise ValueError(f"fill sign_off.{key} before running V2.1")

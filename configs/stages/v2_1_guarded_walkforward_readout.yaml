@@ -59,7 +59,7 @@ inputs:
 sign_off:
   status: pending
   user_sign_off_date: null
-  ian_confirmation_reference: null
+  advisor_confirmation_reference: null
   resolved_open_decisions:
     OD-A_period_count_k: 7
     OD-B_period_length_months: 12

@@ -48,7 +48,7 @@ def test_signoff_and_coverage_probe_placeholders_are_explicit() -> None:
     signoff = CONFIG["sign_off"]
     assert signoff["status"] == "pending"
     assert signoff["user_sign_off_date"] is None
-    assert signoff["ian_confirmation_reference"] is None
+    assert signoff["advisor_confirmation_reference"] is None
     assert signoff["resolved_open_decisions"]["OD-E_stage04_ordering"] == "stage04_first"
 
     coverage = CONFIG["coverage_probe"]

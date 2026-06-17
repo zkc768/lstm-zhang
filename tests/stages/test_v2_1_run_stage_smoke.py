@@ -57,7 +57,7 @@ MINIMAL_CONFIG = {
     "sign_off": {
         "status": "complete",
         "user_sign_off_date": "2026-06-16",
-        "ian_confirmation_reference": "ian-msg-test",
+        "advisor_confirmation_reference": "advisor-msg-test",
         "resolved_open_decisions": {
             "OD-A_period_count_k": 2,
             "OD-B_period_length_months": 12,
