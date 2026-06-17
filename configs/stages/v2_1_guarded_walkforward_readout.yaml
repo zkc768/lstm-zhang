@@ -1,0 +1,265 @@
+stage_name: v2_1_guarded_walkforward_readout
+route: lst_models
+scope: guarded_walkforward_readout
+holdout_test_contact: true
+holdout_contact_tier: guarded_historically_contacted
+clean_test_claim: false
+official_validation_contact: false
+official_validation_scoring_events: 0
+official_validation_for_selection: false
+no_final_model_selected: true
+v2_frozen_selection_unchanged: true
+
+inputs:
+  stage00_run_id: "20260610_051705_347450"
+  stage00_runtime_run_dir: /content/lst_models_results/00_data_split_label_freeze/20260610_051705_347450
+  stage00_drive_path_parts: [lst_models, results, 00_data_split_label_freeze, "20260610_051705_347450"]
+  required_stage00_artifacts:
+    - raw_data_manifest.json
+    - split_freeze.json
+    - label_policy.json
+    - baseline_registry.json
+    - sample_event_index.csv
+    - run_manifest.json
+    - artifact_inventory.csv
+  stage01_run_id: "20260610_075002"
+  stage01_runtime_run_dir: /content/lst_models_results/01_feature_window_search/20260610_075002
+  stage01_drive_path_parts: [lst_models, results, 01_feature_window_search, "20260610_075002"]
+  required_stage01_artifacts:
+    - run_manifest.json
+    - artifact_inventory.csv
+    - 01_candidate_inputs.json
+    - 01_feature_window_search_summary.csv
+  stage02_run_id: "20260610_082130_797479"
+  stage02_runtime_run_dir: /content/lst_models_results/02_model_hpo_train_inner/20260610_082130_797479
+  stage02_drive_path_parts: [lst_models, results, 02_model_hpo_train_inner, "20260610_082130_797479"]
+  superseded_stage02_run_ids: ["20260609_100637_704705", "20260610_010019_507648"]
+  required_stage02_artifacts:
+    - run_manifest.json
+    - artifact_inventory.csv
+    - 02_model_hpo_train_inner_summary.csv
+    - 02_hpo_summary.csv
+    - 02_best_params_by_family.json
+    - 02_stage03_handoff.json
+  stage03_run_id: "20260610_133305_716174"
+  stage03_runtime_run_dir: /content/lst_models_results/03_frozen_validation_readout/20260610_133305_716174
+  stage03_drive_path_parts: [lst_models, results, 03_frozen_validation_readout, "20260610_133305_716174"]
+  required_stage03_artifacts:
+    - run_manifest.json
+    - artifact_inventory.csv
+    - 03_decision_record.json
+  stage04_run_id: "<FILL_STAGE04_RUN_ID>"
+  stage04_ordering: stage04_first
+  stage04_ordering_override_reason: null
+  raw_data_manifest: configs/lst_models_data.yaml
+  raw_data_dir: /content/lst_models_raw_stock_data
+  notebook_path: notebooks/v2_1_guarded_walkforward_readout_colab.ipynb
+  protocol_path: docs/protocols/v2_1_guarded_walkforward_readout_protocol.md
+
+sign_off:
+  status: pending
+  user_sign_off_date: null
+  ian_confirmation_reference: null
+  resolved_open_decisions:
+    OD-A_period_count_k: 7
+    OD-B_period_length_months: 12
+    OD-C_candidate_input_policy: A_family_best_verbatim
+    OD-D_ablation_rows_included: false
+    OD-E_stage04_ordering: stage04_first
+    OD-F_criteria_accepted: "yes"
+
+coverage_probe:
+  authorization: pending
+  artifact: v2_1_coverage_probe.json
+  artifact_sha256: null
+  probe_timestamp_utc: null
+
+outputs:
+  output_dir: /content/lst_models_results/v2_1_guarded_walkforward_readout
+  manifest: run_manifest.json
+  artifact_inventory: artifact_inventory.csv
+  walkforward_readout: v2_1_walkforward_readout.csv
+  per_ticker_readout: v2_1_per_ticker_readout.csv
+  period_summary: v2_1_period_summary.csv
+  comparison_table: v2_1_comparison_table.csv
+  same_row_baselines: v2_1_same_row_baselines.csv
+  predictions: v2_1_predictions.csv
+  decision_record: v2_1_decision_record.json
+  period_registry: v2_1_period_registry.json
+
+walkforward:
+  seeds: [101, 202]
+  refit_rows: all_eligible_rows_before_period_start
+  scoring_rows: all_eligible_rows_in_period
+  score_each_period_model_seed_exactly_once: true
+  max_materialized_train_bytes: 2000000000
+  period_count: 7
+  period_length_months: 12
+  closed_boundary: "2017-01-25"
+  minimum_trading_days_for_final_period: 120
+
+  periods:
+    - period_id: wf_p1
+      start: "2017-01-25"
+      end_exclusive: "2018-01-25"
+    - period_id: wf_p2
+      start: "2018-01-25"
+      end_exclusive: "2019-01-25"
+    - period_id: wf_p3
+      start: "2019-01-25"
+      end_exclusive: "2020-01-25"
+    - period_id: wf_p4
+      start: "2020-01-25"
+      end_exclusive: "2021-01-25"
+    - period_id: wf_p5
+      start: "2021-01-25"
+      end_exclusive: "2022-01-25"
+    - period_id: wf_p6
+      start: "2022-01-25"
+      end_exclusive: "2023-01-25"
+    - period_id: wf_p7
+      start: "2023-01-25"
+      end_exclusive: "2024-04-19"
+
+model_roster:
+  candidate_input:
+    candidate_id: price_volume_time_w20
+    feature_set: price_volume_time
+    window_size: 20
+
+  baseline_rows:
+    - table_row_id: stratified_dummy_train_prior
+      source: baseline_registry
+    - table_row_id: majority_train_prior
+      source: baseline_registry
+    - table_row_id: constant_up
+      source: baseline_registry
+    - table_row_id: constant_down
+      source: baseline_registry
+
+  model_rows:
+    - table_row_id: tcn_frozen_primary
+      model_family: tcn
+      probe_id: tcn_tiny
+      hpo_profile_id: tcn_p01
+      params_source: "03_decision_record.json -> primary_candidate.hpo_profile_params"
+      hpo_profile_params:
+        channels: [16, 16]
+        kernel_size: 2
+        dropout: 0.0
+        learning_rate: 0.001
+        weight_decay: 0.0001
+    - table_row_id: lightgbm_family_best
+      model_family: lightgbm
+      probe_id: lightgbm_small
+      hpo_profile_id: lgbm_p03
+      params_source: "02_best_params_by_family.json -> best_params_by_family[lightgbm]"
+      hpo_profile_params:
+        n_estimators: 300
+        learning_rate: 0.02
+        max_depth: 8
+        num_leaves: 63
+        min_child_samples: 100
+        subsample: 0.9
+        colsample_bytree: 0.9
+        reg_lambda: 5.0
+        class_weight: balanced
+    - table_row_id: standard_dlinear_family_best
+      model_family: standard_dlinear
+      probe_id: standard_dlinear_tiny
+      hpo_profile_id: dlinear_p03
+      params_source: "02_best_params_by_family.json -> best_params_by_family[standard_dlinear]"
+      hpo_profile_params:
+        moving_avg_kernel: 7
+        dropout: 0.10
+        learning_rate: 0.0003
+        weight_decay: 0.0001
+    - table_row_id: ms_dlinear_tcn_family_best
+      model_family: ms_dlinear_tcn
+      probe_id: ms_dlinear_tcn_tiny
+      hpo_profile_id: msdt_p01
+      params_source: "02_best_params_by_family.json -> best_params_by_family[ms_dlinear_tcn]"
+      hpo_profile_params:
+        moving_avg_kernels: [3, 5, 9]
+        tcn_channels: [16, 16]
+        tcn_kernel_size: 3
+        dropout: 0.10
+        learning_rate: 0.001
+        weight_decay: 0.0001
+
+predeclared_criteria:
+  judged_row: tcn_frozen_primary
+  aggregate: mean_over_seeds
+  positive_period_count_minimum: 2
+  pooled_delta_positive: true
+
+label_policy:
+  label_config_id: h09_bps3p0
+  operator: endpoint_cumulative_return
+  horizon_k: 9
+  no_trade_band_bps: 3.0
+  up_label: 1
+  down_label: 0
+
+baseline_controls:
+  mandatory:
+    - stratified_dummy_train_prior
+    - majority_train_prior
+    - constant_up
+    - constant_down
+
+lightgbm_training_defaults:
+  eval_metric: binary_logloss
+  early_stopping_rounds: 25
+  early_stopping_validation_source: inner_train_chronological_tail
+  early_stopping_validation_fraction: 0.2
+  minimum_early_stopping_train_samples: 128
+  minimum_early_stopping_validation_samples: 128
+
+probe_training_defaults:
+  torch:
+    epochs: 64
+    batch_size: 1024
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    device: auto
+    require_gpu: false
+    optimizer: AdamW
+    loss: class_weighted_cross_entropy
+    early_stopping: inner_train_chronological_tail
+    early_stopping_validation_fraction: 0.2
+    minimum_early_stopping_train_samples: 128
+    minimum_early_stopping_validation_samples: 128
+    early_stopping_patience: 8
+    early_stopping_min_delta: 0.0
+    gradient_clip_norm: 1.0
+
+checkpointing:
+  enabled: true
+  checkpoint_after_each_period_model: true
+  checkpoint_dir: /content/lst_models_checkpoints/v2_1_guarded_walkforward_readout
+
+resume:
+  enabled: false
+  run_id: null
+  checkpoint_dir: null
+
+forbidden:
+  wording:
+    - final model
+    - official validation winner
+    - holdout winner
+    - test winner
+    - proved best model
+    - generalization proven
+    - profitable
+    - holdout-ready
+    - selected by official validation
+    - chosen threshold
+    - clean test
+    - clean holdout
+    - untouched test
+    - untouched holdout
+    - final evidence
+    - out-of-sample proof
+    - walk-forward winner
