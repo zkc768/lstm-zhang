@@ -65,6 +65,7 @@ outputs:
   selective_summary: 04_selective_summary.csv
   robustness_slices: 04_robustness_slices.csv
   failure_slices: 04_failure_slices.csv
+  sentinel_summary: 04_sentinel_summary.csv
   ablation_plan_ledger: 04_ablation_plan_ledger.csv
   ablation_trial_ledger: 04_ablation_trial_ledger.csv
   ablation_summary: 04_ablation_summary.csv
@@ -105,6 +106,13 @@ diagnostics:
     slice_axes: [ticker_hour, ticker_trading_day, activity_tercile, calendar_month]
     minimum_slice_rows: 200
     top_k_per_axis: 25
+  # Leakage negative-control sentinels (label-shuffle + time-reverse) over the
+  # frozen dump. Frozen here so the permutation test is reproducible: n_perm is
+  # also echoed per row in 04_sentinel_summary.csv, and permutation_seed parallels
+  # bootstrap.seed (both captured in the run manifest via config_sha256).
+  sentinel:
+    n_perm: 200
+    permutation_seed: 20260617
   bootstrap:
     device: trading_day_block_bootstrap
     block_id: ticker_trading_day

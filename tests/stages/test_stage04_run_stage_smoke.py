@@ -139,6 +139,7 @@ class Stage04Dirs:
                 "selective_summary": "04_selective_summary.csv",
                 "robustness_slices": "04_robustness_slices.csv",
                 "failure_slices": "04_failure_slices.csv",
+                "sentinel_summary": "04_sentinel_summary.csv",
                 "ablation_plan_ledger": "04_ablation_plan_ledger.csv",
                 "ablation_trial_ledger": "04_ablation_trial_ledger.csv",
                 "ablation_summary": "04_ablation_summary.csv",

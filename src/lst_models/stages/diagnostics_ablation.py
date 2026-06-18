@@ -47,7 +47,7 @@ STAGE04_ROW_SCOPE = "validation_only"
 HOLDOUT_BOUNDARY = pd.Timestamp("2017-01-25")
 DIAGNOSTIC_FRAME_KEYS = (
     "calibration_summary", "reliability_bins", "risk_coverage_curve",
-    "selective_summary", "robustness_slices", "failure_slices",
+    "selective_summary", "robustness_slices", "failure_slices", "sentinel_summary",
 )
 CONTROL_PROBE_BY_ID = {
     "tcn_only": "tcn_tiny", "dlinear_only": "ms_dlinear_only_tiny",
@@ -65,7 +65,7 @@ REQUIRED_STAGE04_ARTIFACTS = [
     "run_manifest.json", "artifact_inventory.csv",
     "04_calibration_summary.csv", "04_reliability_bins.csv",
     "04_risk_coverage_curve.csv", "04_selective_summary.csv",
-    "04_robustness_slices.csv", "04_failure_slices.csv",
+    "04_robustness_slices.csv", "04_failure_slices.csv", "04_sentinel_summary.csv",
     "04_ablation_plan_ledger.csv", "04_ablation_trial_ledger.csv",
     "04_ablation_summary.csv", "04_diagnostics_report.json",
 ]

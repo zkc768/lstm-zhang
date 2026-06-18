@@ -19,6 +19,7 @@ from lst_models.guarded_walkforward import (
     _build_period_registry,
     _checkpoint_manifest_payload,
     _protocol_provenance_fields,
+    _score_seed_dummies,
     _validate_config,
     run_guarded_walkforward,
 )

@@ -28,6 +28,7 @@ from lst_models.stages.guarded_walkforward_readout import (  # noqa: E402
     _build_period_registry,
     _checkpoint_manifest_payload,
     _protocol_provenance_fields,
+    _score_seed_dummies,
 )
 
 
@@ -305,7 +306,23 @@ def _add_judged_prediction_frames(
             })[list(BASELINE_PREDICTION_COLUMNS)])
 
 
-def test_aggregate_and_judge_emits_row_pooled_companion_without_binding() -> None:
+def test_score_seed_dummies_uses_per_seed_draw() -> None:
+    # F10 fix: the stratified dummy is scored PER SEED, so each candidate seed's
+    # delta uses its own dummy draw rather than the seeds[0] draw reused for all.
+    rng = np.random.default_rng(0)
+    y_train = rng.integers(0, 2, size=400)
+    y_test = rng.integers(0, 2, size=400)
+    seed_dummies = _score_seed_dummies(y_train, y_test, [101, 202])
+    assert set(seed_dummies) == {101, 202}
+    p101 = np.asarray(seed_dummies[101]["predictions"])
+    p202 = np.asarray(seed_dummies[202]["predictions"])
+    assert not np.array_equal(p101, p202), "distinct seeds must draw distinct dummies"
+    # Reproducible: re-scoring with the same seed yields the same draw.
+    again = _score_seed_dummies(y_train, y_test, [101])
+    assert np.array_equal(np.asarray(again[101]["predictions"]), p101)
+
+
+def test_aggregate_and_judge_binds_row_pooled_on_fresh_run() -> None:
     ledger = _make_ledger_with_results(
         deltas=[0.01, 0.01, 0.01, 0.01],
         period_ids=["wf_p1", "wf_p2"],
@@ -314,18 +331,16 @@ def test_aggregate_and_judge_emits_row_pooled_companion_without_binding() -> Non
     _add_judged_prediction_frames(
         ledger, period_rows={"wf_p1": 4, "wf_p2": 8}, seeds=[101, 202],
     )
+    # Fresh single-pass run -> the protocol section-8 row-pooled estimand is
+    # computed and BINDS criterion 2 (register FIX-1, applied).
     result = _aggregate_and_judge(ledger, MINIMAL_CONFIG, is_resumed=False)
-    # Equal-weight stays the bound estimand for this landing (FIX-1 option C).
-    assert result["pooled_delta_estimand"] == "equal_weight"
-    assert result["pooled_delta"] == result["pooled_delta_equal_weight"]
-    # The protocol row-pooled value is computed and disclosed as a companion.
     assert result["pooled_delta_row_pooled_available"] is True
-    assert result["pooled_delta_row_pooled"] is not None
+    assert result["pooled_delta_estimand"] == "row_pooled"
+    assert result["pooled_delta"] == result["pooled_delta_row_pooled"]
     # The two estimands genuinely differ (the divergence FIX-1 is about).
     assert abs(
         result["pooled_delta_row_pooled"] - result["pooled_delta_equal_weight"]
     ) > 1e-9
-    # Binding behaviour is unchanged vs the legacy equal-weight computation.
     assert result["pooled_delta"] > 0
     assert result["decision"] == "met_predeclared_guarded_stability_criteria"
 
@@ -344,6 +359,8 @@ def test_aggregate_and_judge_row_pooled_suppressed_on_resume() -> None:
     result = _aggregate_and_judge(ledger, MINIMAL_CONFIG, is_resumed=True)
     assert result["pooled_delta_row_pooled_available"] is False
     assert result["pooled_delta_row_pooled"] is None
+    # Binding falls back to the equal-weight companion, clearly labelled.
+    assert result["pooled_delta_estimand"] == "equal_weight"
     assert result["pooled_delta"] == result["pooled_delta_equal_weight"]
 
 

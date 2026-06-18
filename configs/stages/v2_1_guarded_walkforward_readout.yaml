@@ -56,6 +56,16 @@ inputs:
   notebook_path: notebooks/v2_1_guarded_walkforward_readout_colab.ipynb
   protocol_path: docs/protocols/v2_1_guarded_walkforward_readout_protocol.md
 
+# The committed config is intentionally UN-ARMED: sign_off + coverage_probe stay
+# pending/null so the repo config cannot execute without the user consciously
+# filling them at runtime (notebook V2_1_SIGN_OFF / V2_1_COVERAGE_PROBE). The
+# real values that produced run 20260617_051047_321730 live in the notebook and
+# the Drive decision record, NOT here -- so there is no provenance "drift" to fix
+# (FIX-2 retracted). Enforced by tests/contracts/test_v2_1_config_contract.py
+# ::test_signoff_and_coverage_probe_placeholders_are_explicit.
+# OD-A_period_count_k = 7 is the period design, formalized by Amendment A1
+# (protocol §5.1/§7/§8/§16 + §17; see
+# docs/protocols/v2_1_OD-A_k7_amendment_decision_20260617.md).
 sign_off:
   status: pending
   user_sign_off_date: null

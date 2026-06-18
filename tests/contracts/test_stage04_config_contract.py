@@ -101,6 +101,12 @@ def test_diagnostics_measure_only_flags() -> None:
     assert diag["bootstrap"]["seed"] == 12345
 
 
+def test_sentinel_params_frozen() -> None:
+    sentinel = CONFIG["diagnostics"]["sentinel"]
+    assert sentinel["n_perm"] == 200
+    assert sentinel["permutation_seed"] == 20260617
+
+
 def test_required_artifact_list_closes_with_runner_constant() -> None:
     from lst_models.stages.diagnostics_ablation import REQUIRED_STAGE04_ARTIFACTS
 
@@ -109,7 +115,7 @@ def test_required_artifact_list_closes_with_runner_constant() -> None:
         value for key, value in outputs.items() if key != "output_dir"
     )
     assert sorted(REQUIRED_STAGE04_ARTIFACTS) == stage_artifacts
-    assert len(REQUIRED_STAGE04_ARTIFACTS) == 12
+    assert len(REQUIRED_STAGE04_ARTIFACTS) == 13  # +04_sentinel_summary.csv (leakage sentinel)
     assert "drive_backup_manifest.json" not in REQUIRED_STAGE04_ARTIFACTS
 
 

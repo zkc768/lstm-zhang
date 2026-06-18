@@ -74,6 +74,57 @@ def test_block_bootstrap_separates_real_signal_from_noise() -> None:
     assert noise["lcb"] <= 0.0 <= noise["ucb"]  # identical-to-baseline straddles zero
 
 
+def test_minimum_detectable_effect_is_bootstrap_half_width() -> None:
+    rng = np.random.default_rng(3)
+    days = np.repeat(np.arange(20), 15)
+    y_true = rng.integers(0, 2, days.size)
+    baseline = rng.integers(0, 2, days.size)
+    out = metrics.minimum_detectable_effect(y_true, y_true, baseline, days, n_boot=300, seed=2)
+    ci = metrics.block_bootstrap_macro_f1_delta(y_true, y_true, baseline, days, n_boot=300, seed=2)
+    # MDE = lower half-width (mean - lcb); reference symmetric = (ucb - lcb)/2.
+    assert out["mde"] == pytest.approx(ci["mean"] - ci["lcb"])
+    assert out["mde_symmetric"] == pytest.approx((ci["ucb"] - ci["lcb"]) / 2.0)
+    assert out["mde"] >= 0.0
+    assert out["clears_zero"] is True  # perfect signal vs random baseline
+    # Reproducible (seeded bootstrap).
+    again = metrics.minimum_detectable_effect(y_true, y_true, baseline, days, n_boot=300, seed=2)
+    assert again["mde"] == out["mde"]
+    # Fewer than two blocks -> no spread -> MDE collapses to 0.
+    one_block = np.zeros(days.size, dtype=int)
+    degen = metrics.minimum_detectable_effect(y_true, y_true, baseline, one_block, n_boot=50, seed=2)
+    assert degen["mde"] == pytest.approx(0.0)
+    assert degen["n_blocks"] == 1
+
+
+def test_same_row_delta_sentinels_collapse_under_shuffle() -> None:
+    rng = np.random.default_rng(5)
+    days = np.repeat(np.arange(12), 10)
+    y_true = rng.integers(0, 2, days.size)
+    y_pred = y_true.copy()                     # perfect row-level signal
+    baseline = rng.integers(0, 2, days.size)   # random baseline
+    out = metrics.same_row_delta_sentinels(y_true, y_pred, baseline, days, n_perm=200, seed=7)
+    assert out["observed_delta"] > 0.3
+    # Within-block label shuffle destroys the row-level match -> null collapses.
+    assert out["label_shuffle_mean"] < out["observed_delta"] - 0.25
+    assert out["label_shuffle_p_value"] <= 0.02       # observed exceeds the null band
+    # Time-reversing predictions also breaks the perfect alignment.
+    assert out["time_reverse_delta"] < out["observed_delta"]
+    assert out["n_blocks"] == 12 and out["n_perm"] == 200
+
+
+def test_same_row_delta_sentinels_zero_when_model_equals_baseline() -> None:
+    rng = np.random.default_rng(6)
+    days = np.repeat(np.arange(8), 8)
+    y_true = rng.integers(0, 2, days.size)
+    preds = rng.integers(0, 2, days.size)
+    out = metrics.same_row_delta_sentinels(y_true, preds, preds, days, n_perm=50, seed=1)
+    # model == baseline -> delta is identically 0 under every permutation.
+    assert out["observed_delta"] == pytest.approx(0.0)
+    assert out["label_shuffle_mean"] == pytest.approx(0.0)
+    again = metrics.same_row_delta_sentinels(y_true, preds, preds, days, n_perm=50, seed=1)
+    assert again["label_shuffle_p_value"] == out["label_shuffle_p_value"]  # reproducible
+
+
 def test_compute_metric_lcb_small_sample() -> None:
     assert metrics.compute_metric_lcb([0.2]) == 0.2
     lcb = metrics.compute_metric_lcb([0.10, 0.12, 0.11])
@@ -145,6 +196,20 @@ def test_risk_coverage_and_aurc_golden() -> None:
     assert out["oracle_aurc"] == pytest.approx(0.0625)
     assert out["e_aurc"] == pytest.approx(out["aurc"] - 0.0625)
     assert out["full_coverage_risk"] == pytest.approx(0.25)
+
+
+def test_augrc_golden() -> None:
+    # Same canonical example as the AURC golden above.
+    correct = np.array([1, 1, 0, 1], dtype=bool)
+    confidence = np.array([0.9, 0.8, 0.7, 0.6])
+    # generalized risk per prefix = selective_risk * coverage
+    #   = [0*0.25, 0*0.5, (1/3)*0.75, 0.25*1.0] = [0, 0, 0.25, 0.25]
+    #   = errors_in_prefix / n_total = [0/4, 0/4, 1/4, 1/4]
+    # AUGRC = mean = 0.125
+    assert metrics.augrc(confidence, correct) == pytest.approx(0.125)
+    # Generalized risk <= selective risk pointwise (coverage <= 1) -> AUGRC <= AURC.
+    aurc = metrics.aurc_metrics(confidence, correct)["aurc"]
+    assert metrics.augrc(confidence, correct) <= aurc + 1e-12
 
 
 def test_risk_coverage_tie_break_is_deterministic() -> None:

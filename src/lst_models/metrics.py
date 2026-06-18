@@ -160,6 +160,113 @@ def block_bootstrap_macro_f1_delta(
     }
 
 
+def minimum_detectable_effect(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    baseline_pred: np.ndarray,
+    block_ids: np.ndarray,
+    *,
+    n_boot: int = 1000,
+    seed: int = 12345,
+) -> dict[str, float]:
+    """Smallest macro-F1 delta the trading-day block bootstrap distinguishes
+    from zero -- the noise floor of the same-row delta estimate.
+
+    Reuses :func:`block_bootstrap_macro_f1_delta`. ``mde`` is the LOWER
+    half-width of the 95% block-bootstrap CI (``mean - lcb``): holding the
+    block-resampling noise structure fixed, an observed pooled delta must be at
+    least this large for its one-sided lower bound to clear zero, so a reported
+    delta below the MDE is within bootstrap noise. ``mde_symmetric`` is the
+    two-sided half-width ``(ucb - lcb) / 2`` for reference. With fewer than two
+    blocks there is no spread and the MDE is 0. Descriptive only -- NOT a
+    significance test (cf. F8: the project makes no "statistically significant"
+    claim and uses sign/LCB signals, not p-values).
+    """
+    ci = block_bootstrap_macro_f1_delta(
+        y_true, y_pred, baseline_pred, block_ids, n_boot=n_boot, seed=seed
+    )
+    return {
+        "mde": float(ci["mean"] - ci["lcb"]),
+        "mde_symmetric": float((ci["ucb"] - ci["lcb"]) / 2.0),
+        "point_delta": float(ci["point"]),
+        "lcb": float(ci["lcb"]),
+        "ucb": float(ci["ucb"]),
+        "n_blocks": int(ci["n_blocks"]),
+        "clears_zero": bool(ci["lcb"] > 0.0),
+    }
+
+
+def same_row_delta_sentinels(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    baseline_pred: np.ndarray,
+    block_ids: np.ndarray,
+    *,
+    n_perm: int = 200,
+    seed: int = 20260617,
+) -> dict[str, float]:
+    """Negative-control sentinels for the same-row macro-F1 delta (model minus
+    baseline) -- a verification complement to the leakage hunt (register F11).
+
+    * label-shuffle: permute ``y_true`` WITHIN each block over ``n_perm`` draws
+      and recompute the delta. Permutation preserves per-block class marginals
+      but destroys the row-level label/prediction correspondence, so a genuine
+      row-level edge collapses toward the permutation null while a marginal-only
+      artifact does not. Reports the null mean / sd / p95 and the permutation
+      p-value (add-one-smoothed share of permuted deltas >= observed).
+    * time-reverse: reverse ``y_pred`` WITHIN each block (each prediction matched
+      to a different bar's label) and recompute the delta; a genuine edge drops.
+
+    Measure-only: no fit, no operating point. The permutation p-value is a
+    descriptive negative-control statistic, NOT a headline significance test
+    (cf. F8 -- no 'statistically significant' claim is built on it). Assumes
+    ``n_perm >= 1``.
+    """
+    y_true = np.asarray(y_true, dtype=int)
+    y_pred = np.asarray(y_pred, dtype=int)
+    baseline_pred = np.asarray(baseline_pred, dtype=int)
+    block_ids = np.asarray(block_ids)
+    observed = float(
+        binary_macro_f1(y_true, y_pred) - binary_macro_f1(y_true, baseline_pred)
+    )
+    unique_blocks = np.unique(block_ids)
+    if len(y_true) == 0:
+        nan = float("nan")
+        return {
+            "observed_delta": nan, "label_shuffle_mean": nan,
+            "label_shuffle_sd": nan, "label_shuffle_p95": nan,
+            "label_shuffle_p_value": nan, "time_reverse_delta": nan,
+            "n_blocks": 0, "n_perm": int(n_perm),
+        }
+    index_by_block = [np.flatnonzero(block_ids == block) for block in unique_blocks]
+    rng = np.random.default_rng(seed)
+    perm_deltas = np.empty(int(n_perm), dtype=float)
+    for draw in range(int(n_perm)):
+        perm_y = y_true.copy()
+        for idx in index_by_block:
+            perm_y[idx] = rng.permutation(y_true[idx])
+        perm_deltas[draw] = (
+            binary_macro_f1(perm_y, y_pred) - binary_macro_f1(perm_y, baseline_pred)
+        )
+    rev_pred = y_pred.copy()
+    for idx in index_by_block:
+        rev_pred[idx] = y_pred[idx][::-1]
+    time_reverse_delta = float(
+        binary_macro_f1(y_true, rev_pred) - binary_macro_f1(y_true, baseline_pred)
+    )
+    exceed = int(np.sum(perm_deltas >= observed))
+    return {
+        "observed_delta": observed,
+        "label_shuffle_mean": float(perm_deltas.mean()),
+        "label_shuffle_sd": float(perm_deltas.std(ddof=1)) if int(n_perm) > 1 else 0.0,
+        "label_shuffle_p95": float(np.percentile(perm_deltas, 95)),
+        "label_shuffle_p_value": float((1 + exceed) / (int(n_perm) + 1)),
+        "time_reverse_delta": time_reverse_delta,
+        "n_blocks": int(len(unique_blocks)),
+        "n_perm": int(n_perm),
+    }
+
+
 def compute_metric_lcb(values: np.ndarray) -> float:
     """Small-sample one-sided 97.5% (lower endpoint of the two-sided 95%
     Student-t interval) lower confidence bound (Student t).
@@ -505,3 +612,26 @@ def aurc_metrics(
         "e_aurc": aurc - oracle_aurc,
         "full_coverage_risk": float(curve["selective_risk"].iloc[-1]),
     }
+
+
+def augrc(
+    confidence: np.ndarray,
+    correct: np.ndarray,
+    *,
+    tie_break: np.ndarray | None = None,
+) -> float:
+    """Area Under the Generalized Risk-Coverage curve (Traub et al. 2024).
+
+    The *generalized* risk at coverage ``c`` is the UNCONDITIONAL error
+    contribution ``E[1{accepted} . wrong]`` = (errors among the ``c`` most
+    confident) / n_total = ``selective_risk(c) * c`` -- in contrast to AURC's
+    selective (conditional) risk ``errors / n_covered``. AUGRC is its mean over
+    the full-resolution per-row curve. Lower is better; it is far less dominated
+    by the tiny-coverage tail than AURC, the flaw Traub et al. (2024) raise.
+    Measure-only: describes the whole curve, marks no operating point.
+    """
+    curve = risk_coverage_curve(confidence, correct, tie_break=tie_break)
+    generalized_risk = (
+        curve["selective_risk"].to_numpy() * curve["coverage"].to_numpy()
+    )
+    return float(generalized_risk.mean())

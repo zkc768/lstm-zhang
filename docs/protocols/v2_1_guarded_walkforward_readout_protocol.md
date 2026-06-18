@@ -300,7 +300,12 @@ Periods are carved from the closed segment by rule, not by inspection:
 - Nominal period length: 12 calendar months (OD-B). Period i spans
   `[start_i, start_i + 12 months)`, start-inclusive, end-exclusive;
   `start_1 = 2017-01-25`.
-- Period count: k = 3 (OD-A default; k = 2 is the predeclared reduction).
+- Period count: **k = 7** (OD-A, **Amendment A1, 2026-06-17**) — the full-coverage
+  design: all consecutive 12-month periods, earliest-first, through the last
+  fully-covered trading day (2024-04-19). k = 3 is retained as the pre-Amendment
+  default and k = 2 as its reduction; **k = 7 is the active design.** The
+  earliest-first + all-periods-to-data-end rule is unchanged, so no period is
+  selected for regime.
 - Truncation rule: the final period is truncated at the end of the last
   trading day fully covered by all five raw ticker files. If the truncated
   final period contains fewer than 120 covered trading days (about half the
@@ -309,19 +314,25 @@ Periods are carved from the closed segment by rule, not by inspection:
 - Rows at or after the final period's end-exclusive boundary remain closed
   and untouched.
 
-Resulting default table (k=3, pending coverage verification):
+Active table (k=7, **Amendment A1 2026-06-17**; coverage-verified):
 
 | period_id | start (inclusive) | end (exclusive) | note |
 |---|---|---|---|
 | `wf_p1` | 2017-01-25 | 2018-01-25 | fixed by rule |
 | `wf_p2` | 2018-01-25 | 2019-01-25 | fixed by rule |
-| `wf_p3` | 2019-01-25 | 2020-01-25 | end truncates to verified coverage |
+| `wf_p3` | 2019-01-25 | 2020-01-25 | fixed by rule |
+| `wf_p4` | 2020-01-25 | 2021-01-25 | COVID crash + recovery |
+| `wf_p5` | 2021-01-25 | 2022-01-25 | post-COVID rally |
+| `wf_p6` | 2022-01-25 | 2023-01-25 | 2022 bear |
+| `wf_p7` | 2023-01-25 | 2024-04-19 | ~15 months; truncates to verified coverage |
 
-Honest regime note: the earliest-first rule means a k=3 / 12-month design
-covers 2017-2020 and stops before the 2020 COVID regime because those are the
-first rows after the boundary, not because a favorable regime was selected.
-Rows beyond the final boundary stay closed; a later regime-stress extension
-would require its own pre-registered revision.
+(The pre-Amendment k=3 default table was `wf_p1`..`wf_p3`, 2017-2020.)
+
+Honest regime note (Amendment A1): k = 7 intentionally spans the full post-2017
+coverage — normal (P1-P3), COVID crash + recovery (P4), post-COVID rally (P5),
+2022 bear (P6), 2023 rally + 2024 Q1 (P7). This is regime-stress coverage by
+using ALL available post-boundary rows under the earliest-first rule, NOT a
+favorable-regime selection. Rows beyond 2024-04-19 stay closed.
 
 ### 5.2 Pre-declared coverage probe (the only pre-execution contact)
 
@@ -508,7 +519,8 @@ Scoring-event budget (frozen formula):
 
 ```text
 guarded_scoring_events = k periods x 4 model rows x 2 seeds
-  k=3 -> 24 events; k=2 -> 16 events
+  k=7 -> 56 events  (Amendment A1, 2026-06-17, active full-coverage design)
+  k=3 -> 24 events; k=2 -> 16 events  (pre-Amendment default / reduction)
   (+ k x 4 x 2 additional events only if OD-D opts the ablation rows in)
 coverage_probe -> 1 metadata contact event (non-scoring)
 official_validation_scoring_events -> 0
@@ -537,8 +549,8 @@ pooled_delta = mean over seeds of pooled_delta(s)
 Criteria (both must hold):
 
 1. `positive_period_count >= 2`, where a period counts as positive when
-   `period_delta(p) > 0`. With k=3 this is "at least 2 of 3"; with k=2 it is
-   "both".
+   `period_delta(p) > 0`. With k=7 (Amendment A1) this is "at least 2 of 7";
+   with k=3 it is "at least 2 of 3"; with k=2 it is "both".
 2. `pooled_delta > 0`.
 
 Judged decision strings (exactly one, for any run with at least one completed
@@ -888,7 +900,7 @@ External method anchors (all already in the project knowledge base):
 
 ```text
 open_decisions:
-  OD-A period_count_k: <2 | 3>            (default 3)
+  OD-A period_count_k: <2 | 3 | 7>        (default 3; 7 = Amendment A1 full-coverage)
   OD-B period_length_months: <12 | other> (default 12)
   OD-C candidate_input_policy: <A_family_best_verbatim | B_pin_primary_input>
                                            (default A; see §7)
@@ -924,3 +936,18 @@ ian_confirmation:
   gmail_message_id: <id>
   confirmed_items: <periods / roster / guarded framing / (ablation rows)>
 ```
+
+## 17. Revision Log
+
+- **Amendment A1 (2026-06-17): OD-A extended to admit k = 7** (full-coverage
+  design, 56 guarded scoring events). Revised §5.1 (period count + active period
+  table + regime note), §7 (budget formula), §8 (criteria scope note), and the
+  §16 OD-A template accordingly. Pre-registered before the planned guarded
+  re-run's first scoring event. **Authorization: user-authorized 2026-06-17;
+  user to notify Ian separately** (advisor confirmation reference for the prior
+  k=7 run: `gmail:19ebe45fd75d7f8b`). The original k=7 run
+  `20260617_051047_321730` predated this protocol-text revision and is disclosed
+  as such. Decision record + rationale:
+  `docs/protocols/v2_1_OD-A_k7_amendment_decision_20260617.md`. The §8 criteria
+  still bind ONLY the `tcn_frozen_primary` row; the V2 frozen selection is
+  unchanged and no final model is selected.

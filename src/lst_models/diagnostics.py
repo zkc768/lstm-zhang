@@ -57,6 +57,12 @@ FAILURE_SLICES_COLUMNS = [
     "n_rows", "error_count", "error_rate", "error_rate_lift_vs_seed_pooled",
     "support_up", "support_down", "scope",
 ]
+SENTINEL_SUMMARY_COLUMNS = [
+    "candidate_role", "candidate_id", "seed", "n_rows", "n_blocks",
+    "observed_delta", "label_shuffle_mean", "label_shuffle_p95",
+    "label_shuffle_p_value", "time_reverse_delta", "n_perm",
+    "sentinel_status", "scope",
+]
 
 
 def gate_and_derive_dump(
@@ -558,6 +564,60 @@ def concentration_summary(robustness: pd.DataFrame) -> dict[str, list[str]]:
     }
 
 
+def sentinel_frames(
+    dump: pd.DataFrame,
+    recon: dict[int, np.ndarray] | None,
+    recon_status: str,
+    sentinel: Mapping[str, Any],
+) -> pd.DataFrame:
+    """Per-seed leakage-control sentinels (negative controls) for the same-row
+    macro-F1 delta over the frozen dump. Measure-only: uses the reconstructed
+    stratified dummy as the baseline and never re-scores. If reconstruction did
+    not verify, rows are marked not_computed (a sentinel against the wrong
+    baseline would be meaningless, per the reconstruction-or-nothing rule)."""
+    identity = identity_fields(dump)
+    n_perm = int(sentinel.get("n_perm", 200))
+    perm_seed = int(sentinel.get("permutation_seed", 20260617))
+    verified = recon is not None and recon_status == "verified_identical"
+    rows: list[dict[str, Any]] = []
+    for seed, seed_dump in dump.groupby(dump["seed"].astype(int)):
+        base = {
+            **identity, "seed": str(seed), "n_rows": int(len(seed_dump)),
+            "n_perm": n_perm, "scope": ROW_SCOPE,
+        }
+        if not verified:
+            rows.append({
+                **base, "n_blocks": 0, "observed_delta": np.nan,
+                "label_shuffle_mean": np.nan, "label_shuffle_p95": np.nan,
+                "label_shuffle_p_value": np.nan, "time_reverse_delta": np.nan,
+                "sentinel_status": NOT_COMPUTED,
+            })
+            continue
+        blocks = (
+            seed_dump["ticker"].astype(str) + "|" + seed_dump["trading_day"].astype(str)
+        ).to_numpy()
+        out = metrics.same_row_delta_sentinels(
+            seed_dump["y_true"].to_numpy(dtype=int),
+            seed_dump["y_pred"].to_numpy(dtype=int),
+            np.asarray(recon[int(seed)], dtype=int),
+            blocks,
+            n_perm=n_perm,
+            seed=perm_seed,
+        )
+        rows.append({
+            **base, "n_blocks": int(out["n_blocks"]),
+            "observed_delta": float(out["observed_delta"]),
+            "label_shuffle_mean": float(out["label_shuffle_mean"]),
+            "label_shuffle_p95": float(out["label_shuffle_p95"]),
+            "label_shuffle_p_value": float(out["label_shuffle_p_value"]),
+            "time_reverse_delta": float(out["time_reverse_delta"]),
+            "sentinel_status": "computed",
+        })
+    if not rows:
+        return pd.DataFrame(columns=SENTINEL_SUMMARY_COLUMNS)
+    return pd.DataFrame(rows)[SENTINEL_SUMMARY_COLUMNS]
+
+
 def run_diagnostics(
     dump: pd.DataFrame,
     train_labels: np.ndarray,
@@ -598,6 +658,9 @@ def run_diagnostics(
         "selective_summary": selective_summary,
         "robustness_slices": robustness,
         "failure_slices": failures,
+        "sentinel_summary": sentinel_frames(
+            dump, recon, recon_status, diagnostics_config.get("sentinel", {})
+        ),
         "baseline_reconstruction_status": recon_status,
         "reconstructed_dummy": recon,
     }

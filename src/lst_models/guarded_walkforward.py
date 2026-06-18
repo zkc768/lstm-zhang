@@ -44,6 +44,7 @@ from lst_models.windows import (
 
 SCOPE = "guarded_walkforward_readout"
 READOUT_TIER = "guarded_historically_contacted"
+DUMMY_BASELINE_ID = "stratified_dummy_train_prior"
 
 WALKFORWARD_READOUT_COLUMNS = [
     "table_row_id", "row_kind",
@@ -79,10 +80,9 @@ PREDICTION_COLUMNS = [
 # Per-row baseline (stratified_dummy_train_prior) predictions for the judged
 # row, captured so the protocol row-pooled pooled_delta (§8 lines 508-511 --
 # candidate + per-period baseline predictions concatenated across periods per
-# seed) is reproducible from artifacts. The dummy is scored once at seeds[0]
-# and reused for every candidate seed (finding F10); one baseline frame is
-# emitted per (period, seed) the judged row is scored on so the per-seed
-# row-union lines up 1:1 with the candidate rows.
+# seed) is reproducible from artifacts. The dummy is scored PER SEED (finding
+# F10 fixed): each candidate seed's baseline frame uses its own dummy draw, so
+# the per-seed row-union lines up 1:1 with that seed's candidate rows.
 BASELINE_PREDICTION_COLUMNS = [
     "baseline_id", "period_id", "seed", "sample_id", "ticker",
     "target_timestamp", "trading_day", "y_true", "p_up", "y_pred",
@@ -526,7 +526,28 @@ def _execute_walkforward(
             str(b) for b in
             require_mapping(config["baseline_controls"], "baseline_controls")["mandatory"]
         ]
+        # The stratified dummy is the only seed-dependent registry baseline
+        # (predict_stratified_dummy seeds an rng). Score it once PER SEED so each
+        # candidate seed's delta / per-ticker / row-pooled baseline uses its OWN
+        # draw (finding F10 fix), not the seeds[0] draw reused for all seeds.
+        # Majority / constant baselines are seed-independent: scored once. The
+        # period baseline_rows summary records the mean-over-seeds dummy macro-F1.
+        seed_dummies = _score_seed_dummies(y_train, y_test, seeds)
         for bl_id in baseline_ids:
+            if bl_id == DUMMY_BASELINE_ID:
+                if pid not in completed_baseline_periods:
+                    ledger.baseline_rows.append({
+                        "period_id": pid, "baseline_id": bl_id,
+                        "n_train": n_train, "n_eval": n_test,
+                        "macro_f1": float(np.mean(
+                            [sd["macro_f1"] for sd in seed_dummies.values()]
+                        )),
+                        "balanced_accuracy": float(np.mean(
+                            [sd["balanced_accuracy"] for sd in seed_dummies.values()]
+                        )),
+                        "scope": SCOPE, "readout_tier": READOUT_TIER,
+                    })
+                continue
             bl = metrics.score_registry_baseline(bl_id, y_train, y_test, seed=seeds[0])
             period_baselines[bl_id] = bl
             if pid not in completed_baseline_periods:
@@ -538,8 +559,6 @@ def _execute_walkforward(
                     "scope": SCOPE, "readout_tier": READOUT_TIER,
                 })
         completed_baseline_periods.add(pid)
-
-        dummy_preds = period_baselines["stratified_dummy_train_prior"]["predictions"]
 
         for model in model_rows:
             rid = model["table_row_id"]
@@ -568,7 +587,8 @@ def _execute_walkforward(
                     "event_kind": "guarded_scoring",
                 })
 
-                bl_dummy = period_baselines["stratified_dummy_train_prior"]["macro_f1"]
+                seed_dummy = seed_dummies[int(seed)]
+                bl_dummy = seed_dummy["macro_f1"]
                 bl_majority = period_baselines["majority_train_prior"]["macro_f1"]
                 macro_f1 = result.get("macro_f1") if fit_ok else None
 
@@ -629,7 +649,7 @@ def _execute_walkforward(
                     scores = result["scores"]
                     _record_per_ticker(
                         ledger, rid, pid, seed, test_meta,
-                        predictions, dummy_preds,
+                        predictions, seed_dummy["predictions"],
                     )
                     _record_predictions(
                         ledger, rid, candidate_id, family,
@@ -638,11 +658,9 @@ def _execute_walkforward(
                     )
                     if rid == judged_row:
                         _record_baseline_predictions(
-                            ledger, "stratified_dummy_train_prior", pid, seed,
-                            test_meta, dummy_preds,
-                            period_baselines[
-                                "stratified_dummy_train_prior"
-                            ]["scores"],
+                            ledger, DUMMY_BASELINE_ID, pid, seed,
+                            test_meta, seed_dummy["predictions"],
+                            seed_dummy["scores"],
                         )
 
                 ledger.refit_records.append({
@@ -875,9 +893,9 @@ def _record_baseline_predictions(
 ) -> None:
     """Persist per-period baseline per-row predictions for the row-pooled
     pooled_delta. y_true/sample_id come from the SAME eval_meta the candidate
-    cell used, so concatenation across periods per seed aligns 1:1. The dummy
-    is seed-independent (scored at seeds[0]; finding F10), so per-seed frames
-    are identical apart from the recorded ``seed`` column.
+    cell used, so concatenation across periods per seed aligns 1:1. Each seed's
+    frame uses its OWN stratified-dummy draw (finding F10 fixed), so the per-seed
+    row-union compares that seed's candidate against that seed's dummy.
     """
     frame = pd.DataFrame({
         "baseline_id": baseline_id,
@@ -900,6 +918,25 @@ def _concat_baseline_predictions(frames: list[pd.DataFrame]) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame(columns=BASELINE_PREDICTION_COLUMNS)
     return pd.concat(frames, ignore_index=True)[BASELINE_PREDICTION_COLUMNS]
+
+
+def _score_seed_dummies(
+    y_train: np.ndarray, y_test: np.ndarray, seeds: list[int],
+) -> dict[int, dict[str, Any]]:
+    """Per-seed stratified-dummy baselines (finding F10 fix).
+
+    The stratified dummy is the only seed-dependent registry baseline
+    (``predict_stratified_dummy`` seeds an rng). Scoring it once per seed makes
+    each candidate seed's ``delta = model(seed) - dummy(seed)`` use its own draw
+    instead of reusing the ``seeds[0]`` draw for every seed. Deterministic per
+    seed, so the row-pooled estimand stays reproducible from the dump.
+    """
+    return {
+        int(s): metrics.score_registry_baseline(
+            DUMMY_BASELINE_ID, y_train, y_test, seed=int(s)
+        )
+        for s in seeds
+    }
 
 
 def _row_pooled_pooled_delta(
@@ -1105,14 +1142,21 @@ def _aggregate_and_judge(
     )
     row_pooled_available = pooled_delta_row_pooled is not None
 
-    # BINDING (this landing -- register FIX-1 option C): c2 stays on the
-    # equal-weight value so the signed-off decision is not retroactively altered
-    # by an unverifiable recompute. To flip the binding to the protocol estimand
-    # after the offline Drive reconciliation confirms the sign, change the next
-    # line to `pooled_delta = pooled_delta_row_pooled if row_pooled_available
-    # else pooled_delta_equal_weight` and set "pooled_delta_estimand" below to
-    # reflect which estimand was used.
-    pooled_delta = pooled_delta_equal_weight
+    # BINDING (register FIX-1, applied): criterion 2 binds the protocol
+    # section-8 row-pooled estimand whenever it is available. A fresh single-pass
+    # run captures the per-period baseline frames the row-union needs, so
+    # row_pooled_available is True and binds. On a RESUMED run the baseline
+    # frames may cover only post-resume periods (coverage-mismatched), so
+    # row-pooled is None and the binding falls back to the equal-weight companion
+    # -- recorded in pooled_delta_estimand. A protocol-conformant readout
+    # therefore REQUIRES a fresh single-pass run; resume yields a
+    # clearly-labelled equal_weight fallback, not a row-pooled decision.
+    if row_pooled_available:
+        pooled_delta = pooled_delta_row_pooled
+        pooled_delta_estimand = "row_pooled"
+    else:
+        pooled_delta = pooled_delta_equal_weight
+        pooled_delta_estimand = "equal_weight"
 
     c1 = positive_period_count >= min_pos_periods
     c2 = pooled_delta > 0
@@ -1125,7 +1169,7 @@ def _aggregate_and_judge(
         "decision": decision,
         "positive_period_count": positive_period_count,
         "pooled_delta": pooled_delta,
-        "pooled_delta_estimand": "equal_weight",
+        "pooled_delta_estimand": pooled_delta_estimand,
         "pooled_delta_equal_weight": pooled_delta_equal_weight,
         "pooled_delta_row_pooled": pooled_delta_row_pooled,
         "pooled_delta_row_pooled_available": row_pooled_available,
