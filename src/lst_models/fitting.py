@@ -67,7 +67,10 @@ class ProbeFitResult:
 
 
 def probe_defaults(config: Mapping[str, Any], probe_id: str) -> Mapping[str, Any]:
-    probe_config = require_mapping(config["lightweight_probes"][probe_id], f"lightweight_probes.{probe_id}")
+    probes = require_mapping(config.get("lightweight_probes", {}), "lightweight_probes")
+    if probe_id not in probes:
+        raise ValueError(f"unknown lightweight probe id: {probe_id!r}")
+    probe_config = require_mapping(probes[probe_id], f"lightweight_probes.{probe_id}")
     return require_mapping(probe_config.get("fixed_defaults", {}), f"lightweight_probes.{probe_id}.fixed_defaults")
 
 

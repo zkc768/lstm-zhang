@@ -1,12 +1,13 @@
 # V2.1 Guarded Walk-Forward Readout Protocol (Pre-Registration)
 
-Status: pre-registration DRAFT, awaiting user + Ian sign-off. No V2.1 contact
+Status: pre-registration SIGNED OFF (section 16 recorded 2026-06-17). No V2.1 contact
 with rows at or after `2017-01-25` — not even a metadata read — may occur
 before section 16 records (a) user sign-off on the open decisions OD-A..OD-F,
 and (b) the coverage-probe authorization. No guarded scoring event may occur
 before section 16 additionally records (c) the filled period table from the
 coverage probe and (d) Ian's confirmation of the period design and model
-roster. Once the first guarded scoring event has occurred, sections 2-12 are
+roster. As of 2026-06-17 section 16 records all of (a)-(d); execution is
+unblocked. Once the first guarded scoring event has occurred, sections 2-12 are
 frozen; changing any of them afterwards requires a new pre-registered protocol
 revision and a fresh run, recorded as such (Stage 03 precedent).
 
@@ -900,41 +901,63 @@ External method anchors (all already in the project knowledge base):
 
 ```text
 open_decisions:
-  OD-A period_count_k: <2 | 3 | 7>        (default 3; 7 = Amendment A1 full-coverage)
-  OD-B period_length_months: <12 | other> (default 12)
-  OD-C candidate_input_policy: <A_family_best_verbatim | B_pin_primary_input>
-                                           (default A; see §7)
-  OD-D ablation_rows_included: <false | true> (default false)
-  OD-E stage04_ordering: <stage04_first | override_with_reason>
-                                           (default stage04_first)
-  OD-F criteria_accepted: <yes | revised-before-signoff>
+  OD-A period_count_k: 7   (pre-design decision; supersedes the earlier
+                            <2 | 3> placeholder — see §5 period design and
+                            config walkforward.period_count)
+  OD-B period_length_months: 12
+  OD-C candidate_input_policy: A_family_best_verbatim
+  OD-D ablation_rows_included: false
+  OD-E stage04_ordering: stage04_first
+  OD-F criteria_accepted: yes
 
 user_sign_off:
-  date: <YYYY-MM-DD>
-  note: <approval wording>
+  date: 2026-06-17
+  note: user authorized sign-off on OD-A..OD-F as resolved above and on the
+        coverage-probe authorization; recorded value is mirrored by the
+        notebook V2_1_SIGN_OFF control block. The committed stage config
+        intentionally stays sign_off.status=pending (runtime-stamp guard);
+        this section is the durable pre-registration record.
 
 coverage_probe:
-  executed_utc: <timestamp>
+  authorization: approved_after_sign_off
+  executed_utc: 2026-06-17T07:54:29.717476+00:00
   artifact: v2_1_coverage_probe.json
-  artifact_sha256: <sha256>
-  per_ticker_last_full_trading_day:
-    CSCO: <date>  JPM: <date>  KO: <date>  MSFT: <date>  WMT: <date>
+  artifact_sha256: 890a44d5455d4dfe14127adad3004f68e0c068a740067bf97afb31535fb8bf00
+  per_ticker_last_full_trading_day: recorded in v2_1_coverage_probe.json
+    (sha256 above); per-ticker dates not transcribed here to avoid a
+    second, drift-prone copy of the probe artifact.
 
 frozen_period_table:
   wf_p1: 2017-01-25 -> 2018-01-25 (end exclusive)
   wf_p2: 2018-01-25 -> 2019-01-25 (end exclusive)
-  wf_p3: 2019-01-25 -> <filled from probe per §5.1> (or dropped per rule)
+  wf_p3: 2019-01-25 -> 2020-01-25 (end exclusive)
+  wf_p4: 2020-01-25 -> 2021-01-25 (end exclusive)
+  wf_p5: 2021-01-25 -> 2022-01-25 (end exclusive)
+  wf_p6: 2022-01-25 -> 2023-01-25 (end exclusive)
+  wf_p7: 2023-01-25 -> 2024-04-19 (end exclusive; truncated at data end)
 
 resolved_roster:
-  tcn_frozen_primary: <candidate_id / hpo_profile_id / params echo>
-  lightgbm_family_best: <...>
-  standard_dlinear_family_best: <...>
-  ms_dlinear_tcn_family_best: <...>
+  candidate_input (shared, OD-C A-family best): price_volume_time_w20
+    (feature_set=price_volume_time, window_size=20, label_horizon_k=9,
+    label_band_bps=3.0)
+  tcn_frozen_primary: hpo_profile_id=tcn_p01 / channels=[16,16],
+    kernel_size=2, dropout=0.0, learning_rate=0.001, weight_decay=0.0001
+  lightgbm_family_best: hpo_profile_id=lgbm_p03 / n_estimators=300,
+    learning_rate=0.02, max_depth=8, num_leaves=63, min_child_samples=100,
+    subsample=0.9, colsample_bytree=0.9, reg_lambda=5.0,
+    class_weight=balanced
+  standard_dlinear_family_best: hpo_profile_id=dlinear_p03 /
+    moving_avg_kernel=7, dropout=0.10, learning_rate=0.0003,
+    weight_decay=0.0001
+  ms_dlinear_tcn_family_best: hpo_profile_id=msdt_p01 /
+    moving_avg_kernels=[3,5,9], tcn_channels=[16,16], tcn_kernel_size=3,
+    dropout=0.10, learning_rate=0.001, weight_decay=0.0001
 
 ian_confirmation:
-  date: <YYYY-MM-DD>
-  gmail_message_id: <id>
-  confirmed_items: <periods / roster / guarded framing / (ablation rows)>
+  date: 2026-06-17
+  gmail_message_id: 19ebe45fd75d7f8b
+  confirmed_items: periods (k=7 walk-forward design), model roster,
+    guarded historically-contacted framing, ablation rows excluded
 ```
 
 ## 17. Revision Log
