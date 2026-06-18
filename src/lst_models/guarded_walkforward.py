@@ -663,16 +663,9 @@ def _execute_walkforward(
                             seed_dummy["scores"],
                         )
 
-                ledger.refit_records.append({
-                    "table_row_id": rid, "period_id": pid, "seed": seed,
-                    "fit_status": result.get("fit_status"),
-                    "best_iteration": result.get("best_iteration"),
-                    "early_stopping_source": result.get("early_stopping_source"),
-                    "early_stopping_reason": result.get("early_stopping_reason"),
-                    "early_stopping_used": result.get("early_stopping_used"),
-                    "train_sample_id_hash": train_hash,
-                    "eval_sample_id_hash": eval_hash,
-                })
+                ledger.refit_records.append(
+                    _refit_record(rid, pid, seed, result, train_hash, eval_hash)
+                )
 
                 ledger.completed_units.append(unit_key)
 
@@ -1260,6 +1253,30 @@ def _build_period_registry(
         "stage_name": "v2_1_guarded_walkforward_readout",
         "period_count": len(periods),
         "periods": entries,
+    }
+
+
+def _refit_record(
+    rid: str, pid: str, seed: int, result: Mapping[str, Any],
+    train_hash: str, eval_hash: str,
+) -> dict[str, Any]:
+    """Per-fit refit record. The device fields are carried from the fit result
+    so ``_readout_device_fields`` can surface the real resolved device in the
+    manifest. (Regression guard: these three device keys were previously omitted
+    here, so the manifest reported ``resolved_device='not_resolved'`` /
+    ``cuda_available=False`` even when the run actually fit on cuda.)"""
+    return {
+        "table_row_id": rid, "period_id": pid, "seed": seed,
+        "fit_status": result.get("fit_status"),
+        "best_iteration": result.get("best_iteration"),
+        "early_stopping_source": result.get("early_stopping_source"),
+        "early_stopping_reason": result.get("early_stopping_reason"),
+        "early_stopping_used": result.get("early_stopping_used"),
+        "train_sample_id_hash": train_hash,
+        "eval_sample_id_hash": eval_hash,
+        "requested_device": result.get("requested_device"),
+        "resolved_device": result.get("resolved_device"),
+        "device_fallback_reason": result.get("device_fallback_reason"),
     }
 
 

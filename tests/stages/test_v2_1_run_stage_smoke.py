@@ -428,3 +428,39 @@ def test_protocol_provenance_fields_echo_guarded_gate_values() -> None:
         "sign_off_date": "2026-06-16",
     }
     assert fields["official_validation_used_as_training_rows"] is True
+
+
+def test_refit_record_carries_device_fields_to_manifest_aggregation() -> None:
+    # Regression (manifest device-field bug): each per-fit refit record must carry
+    # the resolved device so _readout_device_fields surfaces it in the manifest
+    # instead of defaulting to 'not_resolved' (the device keys used to be dropped).
+    from lst_models.guarded_walkforward import _refit_record, _readout_device_fields
+
+    cuda_fit = {
+        "fit_status": "completed", "requested_device": "auto",
+        "resolved_device": "cuda", "device_fallback_reason": "",
+    }
+    cpu_fit = {
+        "fit_status": "completed", "requested_device": "cpu",
+        "resolved_device": "cpu", "device_fallback_reason": "not_gpu_capable_trial",
+    }
+    rec_cuda = _refit_record("tcn_frozen_primary", "wf_p1", 101, cuda_fit, "h_tr", "h_ev")
+    rec_cpu = _refit_record("lightgbm_family_best", "wf_p1", 101, cpu_fit, "h_tr", "h_ev")
+    assert rec_cuda["resolved_device"] == "cuda"
+    assert rec_cuda["requested_device"] == "auto"
+    assert rec_cpu["device_fallback_reason"] == "not_gpu_capable_trial"
+
+    agg = _readout_device_fields([rec_cuda, rec_cpu])
+    assert agg["resolved_device"] == "cpu,cuda"
+    assert agg["requested_device"] == "auto,cpu"
+    assert agg["cuda_available"] is True
+    assert agg["resolved_device"] != "not_resolved"
+
+
+def test_readout_device_fields_not_resolved_only_without_completed_fits() -> None:
+    # The genuine 'not_resolved' case: no completed refit at all.
+    from lst_models.guarded_walkforward import _readout_device_fields
+
+    agg = _readout_device_fields([{"fit_status": "failed_exception"}])
+    assert agg["resolved_device"] == "not_resolved"
+    assert agg["device_fallback_reason"] == "no_refits_completed"
