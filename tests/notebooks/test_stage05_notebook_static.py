@@ -12,7 +12,7 @@ NOTEBOOK = ROOT / "notebooks" / "05_thesis_synthesis_colab.ipynb"
 # Two-step exact-commit pin (AGENTS.md section 5): this constant and the notebook
 # PROJECT_REPO_COMMIT are re-pinned together to the Stage 05 full-bundle commit in
 # the pin commit that follows each bundle change.
-EXPECTED_PROJECT_REPO_COMMIT = "50af24cf2fe916038249693a5c3b1aa426b759b8"
+EXPECTED_PROJECT_REPO_COMMIT = "2dc1a950a33564cbe4e026f5f29e5241c583c48d"
 CURRENT_STAGE03_RUN_ID = "20260610_133305_716174"
 CURRENT_STAGE04_RUN_ID = "20260618_234011_838683"
 CURRENT_V2_1_RUN_ID = "20260618_063559_889276"
