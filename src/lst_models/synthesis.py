@@ -58,6 +58,15 @@ GUARDED_ACTIVITY_TERCILE_COLUMNS = [
     "macro_f1", "accuracy", "dummy_macro_f1", "delta_vs_dummy",
     "below_random_prior", "note",
 ]
+GUARDED_BASE_RATE_COLUMNS = [
+    "scope", "slice", "seed", "n_rows", "up_rate",
+    "dummy_macro_f1", "candidate_macro_f1", "delta_vs_dummy", "note",
+]
+GUARDED_SENTINEL_COLUMNS = [
+    "activity_tercile", "n_rows", "observed_macro_f1", "dummy_macro_f1",
+    "observed_delta_vs_dummy", "shuffled_macro_f1_mean", "shuffled_macro_f1_max",
+    "shuffled_delta_mean", "shuffled_delta_max", "n_perms", "observed_exceeds_shuffle_max", "note",
+]
 _ACTIVITY_TERCILE_ORDER = ("low", "mid", "high")
 
 _FIELD_MISSING = object()
@@ -918,8 +927,6 @@ def build_guarded_activity_tercile(
     no fit, no scoring, no selection. Descriptive conditional map -- never an operating
     point or a tradeability claim (register F1/F4).
     """
-    if activity_tercile_fn is None:
-        from lst_models.diagnostics import activity_terciles as activity_tercile_fn
     need_c = {family_axis, ticker_axis, trading_day_axis, seed_axis, "y_true", "y_pred"}
     need_b = {ticker_axis, trading_day_axis, seed_axis, "y_true", "y_pred"}
     for name, frame, need in (
@@ -940,21 +947,11 @@ def build_guarded_activity_tercile(
             raise ValueError(
                 f"guarded_activity_tercile: expected {expected_ticker_count} tickers, found {n_tickers}"
             )
-    cand["activity_tercile"] = activity_tercile_fn(cand).astype(str)
-    # Carry the SAME (ticker, trading_day) -> tercile assignment onto the baseline
-    # rows so both sides are binned identically (they score the same eval rows).
-    day_map = (
-        cand.groupby([ticker_axis, trading_day_axis])["activity_tercile"].first().reset_index()
+    cand, base = _guarded_tercile_assign(
+        cand, baseline_predictions, ticker_axis=ticker_axis,
+        trading_day_axis=trading_day_axis, activity_tercile_fn=activity_tercile_fn,
+        context="guarded_activity_tercile",
     )
-    base = baseline_predictions.drop(columns=["activity_tercile"], errors="ignore").merge(
-        day_map, on=[ticker_axis, trading_day_axis], how="left"
-    )
-    if bool(base["activity_tercile"].isna().any()):
-        n_missing = int(base["activity_tercile"].isna().sum())
-        raise ValueError(
-            f"guarded_activity_tercile: {n_missing} baseline rows have no (ticker, trading_day) "
-            "match in the candidate tercile map; candidate and baseline eval rows must align"
-        )
     present = set(cand["activity_tercile"])
     terciles = ["all"] + [t for t in _ACTIVITY_TERCILE_ORDER if t in present]
     seeds = sorted({int(s) for s in cand[seed_axis].tolist()})
@@ -1086,3 +1083,224 @@ def build_row_pooled_multiplicity_discount(
         ).strip(),
     })
     return pd.DataFrame(rows)[MULTIPLICITY_DISCOUNT_COLUMNS]
+
+
+def _guarded_tercile_assign(
+    cand: pd.DataFrame,
+    base: pd.DataFrame,
+    *,
+    ticker_axis: str,
+    trading_day_axis: str,
+    activity_tercile_fn: Any = None,
+    context: str = "guarded",
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Assign the activity tercile to candidate rows (reusing the provenance-hashed
+    ``diagnostics.activity_terciles`` proxy verbatim) and carry the SAME
+    (ticker, trading_day) -> tercile map onto the baseline rows, so candidate and
+    baseline (which score the same eval rows) are binned identically. Shared by the
+    guarded activity-tercile / base-rate / sentinel builders."""
+    if activity_tercile_fn is None:
+        from lst_models.diagnostics import activity_terciles as activity_tercile_fn
+    cand = cand.copy()
+    cand["activity_tercile"] = activity_tercile_fn(cand).astype(str)
+    day_map = (
+        cand.groupby([ticker_axis, trading_day_axis])["activity_tercile"].first().reset_index()
+    )
+    base = base.drop(columns=["activity_tercile"], errors="ignore").merge(
+        day_map, on=[ticker_axis, trading_day_axis], how="left"
+    )
+    if bool(base["activity_tercile"].isna().any()):
+        n_missing = int(base["activity_tercile"].isna().sum())
+        raise ValueError(
+            f"{context}: {n_missing} baseline rows have no (ticker, trading_day) match in the "
+            "candidate tercile map; candidate and baseline eval rows must align"
+        )
+    return cand, base
+
+
+def _macro_f1_delta_row(
+    scope: str, slice_val: str, seed: str, cand: pd.DataFrame, base: pd.DataFrame
+) -> dict[str, Any]:
+    """One (scope, slice, seed) base-rate cell: support, up-rate, dummy floor, delta."""
+    nan = float("nan")
+    head = {"scope": scope, "slice": slice_val, "seed": seed}
+    if len(cand) == 0 or len(base) == 0:
+        return {**head, "n_rows": int(len(cand)), "up_rate": nan, "dummy_macro_f1": nan,
+                "candidate_macro_f1": nan, "delta_vs_dummy": nan, "note": ""}
+    yt = cand["y_true"].to_numpy(dtype=int)
+    cm = float(metrics.binary_macro_f1(yt, cand["y_pred"].to_numpy(dtype=int)))
+    dm = float(metrics.binary_macro_f1(
+        base["y_true"].to_numpy(dtype=int), base["y_pred"].to_numpy(dtype=int)
+    ))
+    return {**head, "n_rows": int(len(cand)), "up_rate": float(yt.mean()),
+            "dummy_macro_f1": dm, "candidate_macro_f1": cm, "delta_vs_dummy": cm - dm, "note": ""}
+
+
+def _base_rate_seed_mean(scope: str, slice_val: str, seed_rows: list[dict[str, Any]], note: str) -> dict[str, Any]:
+    cols = ["n_rows", "up_rate", "dummy_macro_f1", "candidate_macro_f1", "delta_vs_dummy"]
+    agg: dict[str, Any] = {}
+    for col in cols:
+        finite = [float(r[col]) for r in seed_rows if _finite(r[col])]
+        agg[col] = float(np.mean(finite)) if finite else float("nan")
+    agg["n_rows"] = int(round(agg["n_rows"])) if _finite(agg["n_rows"]) else 0
+    return {"scope": scope, "slice": slice_val, "seed": "seed_mean", **agg, "note": str(note)}
+
+
+def build_guarded_base_rates(
+    primary_predictions: pd.DataFrame,
+    baseline_predictions: pd.DataFrame,
+    *,
+    primary_model: str,
+    family_axis: str = "table_row_id",
+    ticker_axis: str = "ticker",
+    trading_day_axis: str = "trading_day",
+    period_axis: str = "period_id",
+    seed_axis: str = "seed",
+    activity_tercile_fn: Any = None,
+    descriptive_note: str = "",
+) -> pd.DataFrame:
+    """#5 regime composition + class balance over the guarded era (measure-only):
+    per walk-forward PERIOD and per ACTIVITY TERCILE, the support, base rate
+    (``up_rate`` = mean y_true), same-row stratified-dummy macro-F1 floor, candidate
+    macro-F1, and delta (plus a seed-mean). Makes the COVID / bear-period composition
+    visible (register: the structural-break year drags the edge down) and shows the
+    per-tercile dummy floor / base rate are ~constant, so the calm-bar edge is not a
+    class-balance artifact (register E). Descriptive only -- no operating point."""
+    need_c = {family_axis, ticker_axis, trading_day_axis, period_axis, seed_axis, "y_true", "y_pred"}
+    need_b = {ticker_axis, trading_day_axis, period_axis, seed_axis, "y_true", "y_pred"}
+    for name, frame, need in (
+        ("primary_predictions", primary_predictions, need_c),
+        ("baseline_predictions", baseline_predictions, need_b),
+    ):
+        missing = sorted(need - set(frame.columns))
+        if missing:
+            raise ValueError(f"guarded_base_rates: {name} missing columns {missing}")
+    cand = primary_predictions[
+        primary_predictions[family_axis].astype(str) == str(primary_model)
+    ].copy()
+    if cand.empty:
+        raise ValueError(f"guarded_base_rates: no rows for primary model {primary_model!r}")
+    cand, base = _guarded_tercile_assign(
+        cand, baseline_predictions, ticker_axis=ticker_axis,
+        trading_day_axis=trading_day_axis, activity_tercile_fn=activity_tercile_fn,
+        context="guarded_base_rates",
+    )
+    seeds = sorted({int(s) for s in cand[seed_axis].tolist()})
+    terciles = [t for t in _ACTIVITY_TERCILE_ORDER if t in set(cand["activity_tercile"])]
+    periods = sorted(set(cand[period_axis].astype(str)))
+    rows: list[dict[str, Any]] = []
+    for scope, axis, values in (("period", period_axis, periods), ("activity_tercile", "activity_tercile", terciles)):
+        for val in values:
+            seed_rows: list[dict[str, Any]] = []
+            for seed in seeds:
+                c = cand[cand[seed_axis].astype(int) == int(seed)]
+                b = base[base[seed_axis].astype(int) == int(seed)]
+                c = c[c[axis].astype(str) == val]
+                b = b[b[axis].astype(str) == val]
+                row = _macro_f1_delta_row(scope, val, str(int(seed)), c, b)
+                rows.append(row)
+                seed_rows.append(row)
+            rows.append(_base_rate_seed_mean(scope, val, seed_rows, descriptive_note))
+    return pd.DataFrame(rows)[GUARDED_BASE_RATE_COLUMNS]
+
+
+def _shuffle_within_groups(values: np.ndarray, codes: np.ndarray, base_order: np.ndarray, rng) -> np.ndarray:
+    """Vectorized within-group permutation: return ``values`` permuted within each
+    group (group id = ``codes``); deterministic given ``rng``. lexsort primary key is
+    the group, secondary key is a random draw -> random order within each group."""
+    r = rng.random(values.shape[0])
+    order = np.lexsort((r, codes))
+    out = np.empty_like(values)
+    out[base_order] = values[order]
+    return out
+
+
+def build_guarded_label_shuffle_sentinel(
+    primary_predictions: pd.DataFrame,
+    baseline_predictions: pd.DataFrame,
+    *,
+    primary_model: str,
+    family_axis: str = "table_row_id",
+    ticker_axis: str = "ticker",
+    trading_day_axis: str = "trading_day",
+    seed_axis: str = "seed",
+    n_perms: int = 50,
+    base_seed: int = 0,
+    activity_tercile_fn: Any = None,
+    descriptive_note: str = "",
+) -> pd.DataFrame:
+    """E within-day label-shuffle negative control (measure-only leakage sentinel,
+    register Tier 1). Permute y_true WITHIN each (ticker, trading_day) and recompute
+    the frozen candidate's per-tercile macro-F1 over ``n_perms`` permutations; a
+    genuine, leakage-free edge must NOT survive the shuffle -- the observed macro-F1
+    must exceed the per-tercile shuffled null (``observed_exceeds_shuffle_max`` =
+    observed > worst shuffle). NOTE the shuffled null can fall BELOW the
+    stratified-dummy floor, because the candidate's prediction class-balance differs
+    from the dummy's, so the correct test is 'observed edge clears the permutation
+    null', not 'shuffled delta == 0'. The candidate's predictions are fixed; only the
+    labels are permuted, so an observed edge that did NOT clear the null would
+    indicate within-day leakage or a base-rate / construction artifact. Deterministic
+    given ``base_seed``. Descriptive negative control -- never a significance test."""
+    need_c = {family_axis, ticker_axis, trading_day_axis, seed_axis, "y_true", "y_pred"}
+    need_b = {ticker_axis, trading_day_axis, seed_axis, "y_true", "y_pred"}
+    for name, frame, need in (
+        ("primary_predictions", primary_predictions, need_c),
+        ("baseline_predictions", baseline_predictions, need_b),
+    ):
+        missing = sorted(need - set(frame.columns))
+        if missing:
+            raise ValueError(f"guarded_sentinel: {name} missing columns {missing}")
+    if int(n_perms) < 1:
+        raise ValueError("guarded_sentinel: n_perms must be >= 1")
+    cand = primary_predictions[
+        primary_predictions[family_axis].astype(str) == str(primary_model)
+    ].copy()
+    if cand.empty:
+        raise ValueError(f"guarded_sentinel: no rows for primary model {primary_model!r}")
+    cand, base = _guarded_tercile_assign(
+        cand, baseline_predictions, ticker_axis=ticker_axis,
+        trading_day_axis=trading_day_axis, activity_tercile_fn=activity_tercile_fn,
+        context="guarded_sentinel",
+    )
+    seeds = sorted({int(s) for s in cand[seed_axis].tolist()})
+    terciles = ["all"] + [t for t in _ACTIVITY_TERCILE_ORDER if t in set(cand["activity_tercile"])]
+    obs: dict[str, list[float]] = {t: [] for t in terciles}
+    dum: dict[str, list[float]] = {t: [] for t in terciles}
+    shuf: dict[str, list[float]] = {t: [] for t in terciles}
+    nrows: dict[str, list[int]] = {t: [] for t in terciles}
+    for seed in seeds:
+        cs = cand[cand[seed_axis].astype(int) == int(seed)]
+        bs = base[base[seed_axis].astype(int) == int(seed)]
+        yt = cs["y_true"].to_numpy(dtype=int)
+        yp = cs["y_pred"].to_numpy(dtype=int)
+        terc = cs["activity_tercile"].to_numpy(dtype=str)
+        codes = pd.factorize(cs[ticker_axis].astype(str) + "\x00" + cs[trading_day_axis].astype(str))[0]
+        base_order = np.argsort(codes, kind="stable")
+        byt = bs["y_true"].to_numpy(dtype=int)
+        byp = bs["y_pred"].to_numpy(dtype=int)
+        bterc = bs["activity_tercile"].to_numpy(dtype=str)
+        for t in terciles:
+            m = np.ones(len(yt), dtype=bool) if t == "all" else (terc == t)
+            bm = np.ones(len(byt), dtype=bool) if t == "all" else (bterc == t)
+            obs[t].append(float(metrics.binary_macro_f1(yt[m], yp[m])))
+            dum[t].append(float(metrics.binary_macro_f1(byt[bm], byp[bm])))
+            nrows[t].append(int(m.sum()))
+        for k in range(int(n_perms)):
+            rng = np.random.default_rng(int(base_seed) + k * 100003 + int(seed))
+            sh = _shuffle_within_groups(yt, codes, base_order, rng)
+            for t in terciles:
+                m = np.ones(len(yt), dtype=bool) if t == "all" else (terc == t)
+                shuf[t].append(float(metrics.binary_macro_f1(yp[m], sh[m])))
+    rows: list[dict[str, Any]] = []
+    for t in terciles:
+        om = float(np.mean(obs[t])); dm = float(np.mean(dum[t]))
+        sm = float(np.mean(shuf[t])); smax = float(np.max(shuf[t]))
+        rows.append({
+            "activity_tercile": t, "n_rows": int(round(float(np.mean(nrows[t])))),
+            "observed_macro_f1": om, "dummy_macro_f1": dm, "observed_delta_vs_dummy": om - dm,
+            "shuffled_macro_f1_mean": sm, "shuffled_macro_f1_max": smax,
+            "shuffled_delta_mean": sm - dm, "shuffled_delta_max": smax - dm,
+            "n_perms": int(n_perms), "observed_exceeds_shuffle_max": bool(om > smax),
+            "note": str(descriptive_note) if t == "all" else "",
+        })
+    return pd.DataFrame(rows)[GUARDED_SENTINEL_COLUMNS]

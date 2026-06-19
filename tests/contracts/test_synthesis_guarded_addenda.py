@@ -152,3 +152,59 @@ def test_row_pooled_multiplicity_fails_closed() -> None:
         synthesis.build_row_pooled_multiplicity_discount(
             dropped, baseline, expected_family_count=4, expected_period_count=3,
         )
+
+
+# --- build_guarded_base_rates (#5) ----------------------------------------
+
+def test_guarded_base_rates_schema_and_arithmetic() -> None:
+    primary, baseline = _fixture()
+    out = synthesis.build_guarded_base_rates(primary, baseline, primary_model="tcn_frozen_primary")
+    assert list(out.columns) == synthesis.GUARDED_BASE_RATE_COLUMNS
+    assert set(out["scope"]) == {"period", "activity_tercile"}
+    # both views carry the 3 periods / 3 terciles + seed_mean rows
+    assert set(out[out["scope"] == "period"]["slice"]) == {"wf_p1", "wf_p2", "wf_p3"}
+    assert set(out[out["scope"] == "activity_tercile"]["slice"]) == {"low", "mid", "high"}
+    fin = out[out["candidate_macro_f1"].notna()]
+    for _, r in fin.iterrows():
+        assert 0.0 <= r["up_rate"] <= 1.0
+        assert r["delta_vs_dummy"] == pytest.approx(r["candidate_macro_f1"] - r["dummy_macro_f1"])
+    assert (out["seed"] == "seed_mean").any()
+
+
+# --- build_guarded_label_shuffle_sentinel (E) -----------------------------
+
+def test_guarded_sentinel_edge_does_not_survive_shuffle() -> None:
+    primary, baseline = _fixture()
+    out = synthesis.build_guarded_label_shuffle_sentinel(
+        primary, baseline, primary_model="tcn_frozen_primary", n_perms=12, base_seed=0,
+    )
+    assert list(out.columns) == synthesis.GUARDED_SENTINEL_COLUMNS
+    assert set(out["activity_tercile"]) == {"all", "low", "mid", "high"}
+    # fixture is ~80% aligned -> a real edge that clears the within-day-shuffle null
+    assert bool(out["observed_exceeds_shuffle_max"].all())
+    allrow = out[out["activity_tercile"] == "all"].iloc[0]
+    assert allrow["observed_delta_vs_dummy"] > 0.10
+    assert allrow["observed_delta_vs_dummy"] > allrow["shuffled_delta_max"]
+
+
+def test_guarded_sentinel_is_deterministic() -> None:
+    primary, baseline = _fixture()
+    a = synthesis.build_guarded_label_shuffle_sentinel(
+        primary, baseline, primary_model="tcn_frozen_primary", n_perms=8, base_seed=7,
+    )
+    b = synthesis.build_guarded_label_shuffle_sentinel(
+        primary, baseline, primary_model="tcn_frozen_primary", n_perms=8, base_seed=7,
+    )
+    pd.testing.assert_frame_equal(a, b)
+
+
+def test_guarded_addenda_fail_closed_on_missing_columns() -> None:
+    primary, baseline = _fixture()
+    with pytest.raises(ValueError, match="missing columns"):
+        synthesis.build_guarded_base_rates(
+            primary.drop(columns=["period_id"]), baseline, primary_model="tcn_frozen_primary",
+        )
+    with pytest.raises(ValueError, match="missing columns"):
+        synthesis.build_guarded_label_shuffle_sentinel(
+            primary, baseline.drop(columns=["trading_day"]), primary_model="tcn_frozen_primary",
+        )
