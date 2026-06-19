@@ -7,6 +7,23 @@ Stage 03 / Stage 04 / V2.1 artifacts and emits synthesis tables. It performs
 
 Revision record:
 
+- 2026-06-19 (B8): built the FIX-1 minimal analysis package (measure-only, small
+  aggregates only). `05_estimand_contrast.csv` — the 2×2 {evidence domain} ×
+  {aggregation} headline macro-F1 delta surface: the two guarded estimands READ
+  from the frozen V2.1 record (row-pooled binding + equal-weight-over-periods
+  companion), the two official-validation estimands READ from the intra-stage
+  selective autopsy frame (row-pooled = pooled `all`/seed-mean delta; equal-weight
+  = regime-balanced mean over activity terciles), each row naming its `weight_unit`
+  because the equal-weight unit differs by domain (period vs tercile — not
+  cross-domain comparable). `05_loo_robustness.csv` — EQUAL-WEIGHT leave-one-out
+  of the guarded delta on the frozen primary: LOO-period (drop each walk-forward
+  period) + LOO-ticker (drop each ticker), with per-sweep `loo_sign_flip`. The
+  binding estimand is row-pooled and macro-F1 is non-linear across rows, so a true
+  row-pooled LOO needs the raw `v2_1_predictions.csv` (Drive-only); it is recorded
+  as a deferred marker row, never silently equated with the equal-weight LOO. New
+  inputs gated: `v2_1_period_summary.csv`, `v2_1_per_ticker_readout.csv`.
+  Descriptive estimand/robustness surface only — no estimand promoted to "the"
+  result. Still deferred: the row-pooled LOO from the raw dump.
 - 2026-06-18 (B7): built the selective- and calibration-aware autopsy over the
   frozen Stage 03 validation dump → `05_selective_autopsy.csv`. Per activity
   tercile × seed: model macro-F1 / accuracy, whole-curve AURC / e-AURC / AUGRC
@@ -220,19 +237,26 @@ results/05_thesis_synthesis/<run_id>/
   05_multiplicity_discount.csv        (B6: descriptive CSCV PBO + min_family_lcb)
   05_selective_autopsy.csv            (B7: AURC/e-AURC/AUGRC + abstention x
                                        activity-tercile + delta-vs-dummy MDE)
+  05_estimand_contrast.csv            (B8: 2x2 {domain} x {aggregation} headline
+                                       delta surface; weight_unit named per row)
+  05_loo_robustness.csv               (B8: equal-weight LOO-period + LOO-ticker of
+                                       the guarded delta; row-pooled LOO deferred)
   05_thesis_synthesis_report.json     (decision summary, estimand surface,
-                                       multiplicity + selective summaries,
-                                       guardrails, deferred_synthesis_items)
+                                       multiplicity + selective + estimand/LOO
+                                       summaries, guardrails, deferred items)
   run_manifest.json
   artifact_inventory.csv
 ```
 
-Execution status (2026-06-18): the Stage 05 bundle (runner, config, B6, B7) and
-its tests are committed, but Stage 05 has NOT yet been executed on Colab — there
-is no real `05_*` run artifact yet. The low/high MDE and per-tercile numbers in
-the tests are SYNTHETIC fixtures exercising the computation path, NOT a verified
-result. No real Stage 05 finding may be claimed until an actual run is frozen and
-its artifacts are checked in/mirrored with sha256.
+Execution status (2026-06-19): the B5/B6/B7 bundle WAS executed on Colab — run
+`20260619_053750_244288` (code commit `96e91ab`), mirrored in-repo with sha256 at
+`artifacts/05_thesis_synthesis/20260619_053750_244288/` (the 7 B5-B7 outputs +
+manifests). B8 (`05_estimand_contrast.csv`, `05_loo_robustness.csv`) is committed
+as code + tests but its TWO artifacts require a NEW Stage 05 run to be frozen —
+the run ...244288 predates B8. The B8 numbers in the smoke tests are SYNTHETIC
+fixtures exercising the computation path, NOT a verified result; the real B8
+numbers are previewed from the frozen V2.1 small aggregates but become claimable
+only once the B8 re-run is frozen and mirrored with sha256.
 
 `run_manifest.json` records: `scope=synthesis_measure_only`,
 `holdout_test_contact=false`, `official_validation_contact=read_frozen_artifacts_only`,
@@ -277,4 +301,5 @@ required list).
 | Wording drift / overclaim | forbidden-wording gate over every statement + the report (§S5.5); `no_final_model_selected=true` carried into every output |
 | Reading a stale / wrong upstream run | run-id chain gate (§2); `require_artifacts` inventory hash check |
 | Mixing evidence domains | every row tagged with one of three domains (§3); register rejects unknown domains |
-| Silent omission of the heavier analyses | `deferred_synthesis_items` names B6/B7/B8 explicitly in the report |
+| Silent omission of the heavier analyses | `deferred_synthesis_items` names every still-deferred analysis explicitly in the report (B6/B7/B8 now built; the row-pooled raw-dump LOO remains listed) |
+| Equating equal-weight LOO with the binding row-pooled estimand | B8 LOO is labeled `equal_weight_over_*`; the row-pooled LOO is a `<deferred>` marker row (macro-F1 non-linear across rows → needs raw `v2_1_predictions.csv`) |

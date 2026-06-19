@@ -407,6 +407,11 @@ def stage05_synthesis_code_sha256() -> str:
         "collect_pooled_delta_estimands": inspect.getsource(
             synthesis_module.collect_pooled_delta_estimands
         ),
+        "build_estimand_contrast": inspect.getsource(
+            synthesis_module.build_estimand_contrast
+        ),
+        "build_loo_robustness": inspect.getsource(synthesis_module.build_loo_robustness),
+        "_loo_sweep": inspect.getsource(synthesis_module._loo_sweep),
         "cscv_pbo": inspect.getsource(metrics_module.cscv_pbo),
         "augrc": inspect.getsource(metrics_module.augrc),
         "aggregate_family_delta_cis": inspect.getsource(

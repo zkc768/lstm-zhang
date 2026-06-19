@@ -43,6 +43,8 @@ inputs:
     - v2_1_decision_record.json
     - v2_1_comparison_table.csv
     - v2_1_walkforward_readout.csv
+    - v2_1_period_summary.csv
+    - v2_1_per_ticker_readout.csv
   notebook_path: notebooks/05_thesis_synthesis_colab.ipynb
   protocol_path: docs/protocols/05_thesis_synthesis_protocol.md
 
@@ -62,6 +64,8 @@ outputs:
   expectation_calibration: 05_expectation_calibration.csv
   multiplicity_discount: 05_multiplicity_discount.csv
   selective_autopsy: 05_selective_autopsy.csv
+  estimand_contrast: 05_estimand_contrast.csv
+  loo_robustness: 05_loo_robustness.csv
   synthesis_report: 05_thesis_synthesis_report.json
 
 # The three canonical evidence domains (protocol §3). Every synthesized row is
@@ -274,6 +278,36 @@ selective_autopsy:
   no_operating_point: true
   descriptive_note: "Selective metrics are accuracy-based (no cost/return); abstention is a diagnostic, not an operating point or a tradeability claim (register F4). e-AURC/AUGRC describe whole curves and mark no operating point; MDE is extracted from the frozen Stage 04 per-trading-day block bootstrap (delta minus lcb). The abstention cross is read with register F1: the edge sits in low-activity bars and is below the random prior on high-activity bars."
 
+# B8 / FIX-1 four-estimand contrast: the headline macro-F1 delta under both
+# aggregation choices (row-pooled vs equal-weight) in both reportable evidence
+# domains, side by side (register F9). Guarded estimands are read from the frozen
+# V2.1 record; validation estimands from the intra-stage selective autopsy frame.
+# Optional block -- the runner uses defaults when absent.
+estimand_contrast:
+  metric_kind: macro_f1_delta_vs_stratified_dummy_train_prior
+  validation_terciles: [low, mid, high]
+
+# B8 equal-weight leave-one-out robustness of the guarded pooled delta over the
+# frozen primary model: drop each walk-forward period / each ticker, re-average,
+# check the sign survives. Reads the SMALL V2.1 aggregates (period_summary,
+# per_ticker_readout). The binding estimand is row-pooled, and macro-F1 is
+# non-linear across rows, so a true row-pooled LOO needs the raw
+# v2_1_predictions.csv (Drive-only) and is recorded as a deferred marker, not
+# silently equated with the equal-weight LOO. Descriptive robustness only.
+loo_robustness:
+  source_key: v2_1
+  period_artifact: v2_1_period_summary.csv
+  per_ticker_artifact: v2_1_per_ticker_readout.csv
+  primary_model: tcn_frozen_primary
+  family_axis: table_row_id
+  period_axis: period_id
+  ticker_axis: ticker
+  period_delta_field: mean_delta_vs_dummy
+  ticker_delta_field: delta_macro_f1_vs_stratified_dummy_train_prior
+  expected_period_count: 7
+  expected_ticker_count: 5
+  descriptive_note: "Equal-weight LOO is descriptive robustness, not a significance test; the binding estimand is row-pooled and its LOO is deferred to a raw-dump (v2_1_predictions.csv) pass."
+
 # S5.5 KB wording guardrails carried into the synthesis report DO-NOT list.
 kb_wording_guardrails:
   - "Do not call DLinear-classification a published standard."
@@ -284,9 +318,11 @@ kb_wording_guardrails:
   - "Never assert the model is well-calibrated (low resolution)."
 
 # Measure-only synthesis names the heavier analyses this home unblocks; the runner
-# echoes them in the report as deferred_synthesis_items (no silent omission).
+# echoes them in the report as deferred_synthesis_items (no silent omission). B8's
+# four-estimand contrast + equal-weight LOO-period/LOO-ticker are now BUILT; what
+# remains is the true row-pooled LOO (needs the raw v2_1_predictions.csv, Drive-only).
 deferred_synthesis_items:
-  - four_estimand_recompute_and_leave_one_period_out_and_leave_one_ticker_out
+  - row_pooled_leave_one_period_out_and_leave_one_ticker_out_from_raw_v2_1_predictions
 
 forbidden:
   wording:

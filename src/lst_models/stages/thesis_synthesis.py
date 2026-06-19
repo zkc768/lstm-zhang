@@ -48,6 +48,8 @@ REQUIRED_STAGE05_ARTIFACTS = [
     "05_expectation_calibration.csv",
     "05_multiplicity_discount.csv",
     "05_selective_autopsy.csv",
+    "05_estimand_contrast.csv",
+    "05_loo_robustness.csv",
     "05_thesis_synthesis_report.json",
 ]
 
@@ -58,6 +60,8 @@ _FRAME_OUTPUTS = {
     "expectation_calibration": synthesis.EXPECTATION_CALIBRATION_COLUMNS,
     "multiplicity_discount": synthesis.MULTIPLICITY_DISCOUNT_COLUMNS,
     "selective_autopsy": synthesis.SELECTIVE_AUTOPSY_COLUMNS,
+    "estimand_contrast": synthesis.ESTIMAND_CONTRAST_COLUMNS,
+    "loo_robustness": synthesis.LOO_ROBUSTNESS_COLUMNS,
 }
 
 
@@ -111,6 +115,7 @@ def _validate_config(config: Mapping[str, Any]) -> None:
     require_mapping(config["expectation_calibration"], "expectation_calibration")
     require_mapping(config["multiplicity_discount"], "multiplicity_discount")
     require_mapping(config["selective_autopsy"], "selective_autopsy")
+    require_mapping(config["loo_robustness"], "loo_robustness")
     if not list(config.get("evidence_domains", [])):
         raise ValueError("Stage 05 requires a non-empty evidence_domains list")
     require_mapping(config["required_upstream_decisions"], "required_upstream_decisions")
@@ -331,12 +336,16 @@ def _build_frames(
         descriptive_note=str(multiplicity_cfg.get("descriptive_note", "")),
     )
     autopsy = _build_selective_autopsy(config, inputs)
+    estimand_contrast = _build_estimand_contrast(config, inputs, autopsy)
+    loo = _build_loo_robustness(config, inputs)
     return {
         "validation_budget_ledger": budget,
         "claim_boundary_register": register,
         "expectation_calibration": expectation,
         "multiplicity_discount": multiplicity,
         "selective_autopsy": autopsy,
+        "estimand_contrast": estimand_contrast,
+        "loo_robustness": loo,
     }
 
 
@@ -364,6 +373,46 @@ def _build_selective_autopsy(config: Mapping[str, Any], inputs: Stage05Inputs) -
         activity_axis=str(cfg.get("activity_axis", "activity_tercile")),
         mde_seed_slice_axis=str(cfg.get("mde_seed_slice_axis", "seed")),
         mde_tercile_slice_axis=str(cfg.get("mde_tercile_slice_axis", "activity_tercile")),
+    )
+
+
+def _build_estimand_contrast(
+    config: Mapping[str, Any], inputs: Stage05Inputs, autopsy: pd.DataFrame
+) -> pd.DataFrame:
+    # B8/FIX-1: the guarded estimands come from the frozen V2.1 record; the
+    # validation estimands come from the intra-stage selective autopsy frame.
+    cfg = config.get("estimand_contrast") or {}
+    kwargs: dict[str, Any] = {}
+    if cfg.get("metric_kind"):
+        kwargs["metric_kind"] = str(cfg["metric_kind"])
+    if cfg.get("validation_terciles"):
+        kwargs["validation_terciles"] = [str(t) for t in cfg["validation_terciles"]]
+    return synthesis.build_estimand_contrast(
+        inputs.records_by_key["v2_1"], autopsy, **kwargs
+    )
+
+
+def _build_loo_robustness(config: Mapping[str, Any], inputs: Stage05Inputs) -> pd.DataFrame:
+    cfg = require_mapping(config["loo_robustness"], "loo_robustness")
+    source_key = str(cfg["source_key"])
+    period_summary = pd.read_csv(inputs.stage_paths[source_key][str(cfg["period_artifact"])])
+    per_ticker = pd.read_csv(inputs.stage_paths[source_key][str(cfg["per_ticker_artifact"])])
+    v2_1_record = inputs.records_by_key["v2_1"]
+    return synthesis.build_loo_robustness(
+        period_summary,
+        per_ticker,
+        primary_model=str(cfg["primary_model"]),
+        family_axis=str(cfg.get("family_axis", "table_row_id")),
+        period_axis=str(cfg.get("period_axis", "period_id")),
+        ticker_axis=str(cfg.get("ticker_axis", "ticker")),
+        period_delta_field=str(cfg.get("period_delta_field", "mean_delta_vs_dummy")),
+        ticker_delta_field=str(
+            cfg.get("ticker_delta_field", "delta_macro_f1_vs_stratified_dummy_train_prior")
+        ),
+        expected_period_count=cfg.get("expected_period_count"),
+        expected_ticker_count=cfg.get("expected_ticker_count"),
+        row_pooled_available=bool(v2_1_record.get("pooled_delta_row_pooled_available", False)),
+        descriptive_note=str(cfg.get("descriptive_note", "")),
     )
 
 
@@ -431,6 +480,36 @@ def _selective_autopsy_summary(frame: pd.DataFrame, note: str) -> dict[str, Any]
     return summary
 
 
+def _estimand_contrast_summary(frame: pd.DataFrame) -> dict[str, Any]:
+    """The 2x2 {domain} x {aggregation} delta surface, keyed for the report so the
+    estimand divergence is machine-readable (register FIX-1 / F9)."""
+    out: dict[str, Any] = {"descriptive_only": True, "no_final_model_selected": True}
+    for _, row in frame.iterrows():
+        key = f"{row['evidence_domain']}__{row['aggregation']}"
+        value = row["pooled_delta"]
+        out[key] = None if pd.isna(value) else float(value)
+    return out
+
+
+def _loo_robustness_summary(frame: pd.DataFrame) -> dict[str, Any]:
+    """Per-sweep loo_sign_flip from the summary rows: did the baseline sign
+    survive every single-unit leave-out? (descriptive robustness, not a test)."""
+    summaries = frame[frame["left_out"].eq("<all:summary>")]
+    sign_survives: dict[str, bool] = {}
+    baselines: dict[str, float] = {}
+    for _, row in summaries.iterrows():
+        estimand = str(row["estimand"])
+        sign_survives[estimand] = bool(row["sign_after_drop"])
+        baselines[estimand] = float(row["baseline_delta"])
+    return {
+        "descriptive_only": True,
+        "sign_survives_all_drops": sign_survives,
+        "baseline_delta": baselines,
+        "row_pooled_loo_deferred": True,
+        "row_pooled_loo_reason": "macro-F1 non-linear across rows; needs raw v2_1_predictions.csv",
+    }
+
+
 def _synthesis_report(
     config: Mapping[str, Any],
     inputs: Stage05Inputs,
@@ -454,6 +533,8 @@ def _synthesis_report(
         # same Stage 03; the divergence is recorded, not hidden.
         "v2_1_source_stage04_run_id": str(v2_1_record.get("source_stage04_run_id")),
         "v2_1_pooled_delta_estimands": synthesis.collect_pooled_delta_estimands(v2_1_record),
+        "estimand_contrast": _estimand_contrast_summary(frames["estimand_contrast"]),
+        "loo_robustness": _loo_robustness_summary(frames["loo_robustness"]),
         "multiplicity_discount": _multiplicity_summary(frames["multiplicity_discount"]),
         "selective_autopsy": _selective_autopsy_summary(
             frames["selective_autopsy"],

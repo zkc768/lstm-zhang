@@ -45,6 +45,14 @@ SELECTIVE_AUTOPSY_COLUMNS = [
     "aurc", "e_aurc", "augrc", "full_coverage_risk",
     "delta_vs_dummy", "mde_vs_dummy", "delta_clears_mde",
 ]
+ESTIMAND_CONTRAST_COLUMNS = [
+    "evidence_domain", "aggregation", "weight_unit", "pooled_delta",
+    "metric_kind", "value_source", "note",
+]
+LOO_ROBUSTNESS_COLUMNS = [
+    "estimand", "weight_unit", "left_out", "n_units_remaining",
+    "delta_after_drop", "baseline_delta", "delta_shift", "sign_after_drop", "note",
+]
 _ACTIVITY_TERCILE_ORDER = ("low", "mid", "high")
 
 _FIELD_MISSING = object()
@@ -494,3 +502,223 @@ def collect_pooled_delta_estimands(v2_1_record: Mapping[str, Any]) -> dict[str, 
         "pooled_delta_row_pooled_available": v2_1_record.get("pooled_delta_row_pooled_available"),
         "positive_period_count": v2_1_record.get("positive_period_count"),
     }
+
+
+def build_estimand_contrast(
+    v2_1_record: Mapping[str, Any],
+    selective_autopsy: pd.DataFrame,
+    *,
+    metric_kind: str = "macro_f1_delta_vs_stratified_dummy_train_prior",
+    validation_terciles: Sequence[str] = _ACTIVITY_TERCILE_ORDER,
+    seed_mean_label: str = "seed_mean",
+) -> pd.DataFrame:
+    """B8 / FIX-1 four-estimand contrast: the headline macro-F1 delta under both
+    aggregation choices (row-pooled vs equal-weight) in both reportable evidence
+    domains, side by side, so no single number is read as THE number (register
+    FIX-1 / F9).
+
+    The two guarded walk-forward estimands are READ from the frozen V2.1 decision
+    record (row-pooled = binding for the met-criteria claim; equal-weight over the
+    7 periods = companion). The two official-validation estimands are READ from
+    the intra-stage selective autopsy frame: row-pooled = the pooled ('all')
+    seed-mean delta-vs-dummy; equal-weight = the mean of the per-activity-tercile
+    seed-mean deltas (regime-balanced). Each row names its ``weight_unit`` because
+    the equal-weight unit DIFFERS by domain (walk-forward period vs activity
+    tercile) -- the columns are each-vs-its-own-row-pooled, not cross-domain
+    comparable. Descriptive estimand surface only; no estimand is promoted to
+    'the' result (``no_final_model_selected`` stays true).
+    """
+    g_row = resolve_record_field(v2_1_record, "pooled_delta_row_pooled")
+    g_eq = resolve_record_field(v2_1_record, "pooled_delta_equal_weight")
+    if g_row is None or g_eq is None:
+        raise ValueError(
+            "estimand_contrast: V2.1 record is missing a pooled-delta estimand "
+            "(pooled_delta_row_pooled / pooled_delta_equal_weight); a resumed run "
+            "without the native row-pooled value cannot form the contrast"
+        )
+
+    def _autopsy_delta(tercile: str) -> float:
+        sub = selective_autopsy[
+            (selective_autopsy["activity_tercile"].astype(str) == tercile)
+            & (selective_autopsy["seed"].astype(str) == seed_mean_label)
+        ]
+        if sub.empty:
+            raise ValueError(
+                f"estimand_contrast: selective autopsy missing the "
+                f"{tercile!r}/{seed_mean_label!r} row needed for the validation estimand"
+            )
+        return float(sub.iloc[0]["delta_vs_dummy"])
+
+    v_row = _autopsy_delta("all")
+    tercile_deltas = [_autopsy_delta(str(t)) for t in validation_terciles]
+    v_eq = float(np.mean(tercile_deltas))
+    tercile_src = ",".join(str(t) for t in validation_terciles)
+    rows = [
+        {
+            "evidence_domain": "guarded_walkforward", "aggregation": "row_pooled",
+            "weight_unit": "row", "pooled_delta": float(g_row), "metric_kind": metric_kind,
+            "value_source": "v2_1_decision_record.json:pooled_delta_row_pooled",
+            "note": "binding estimand for the guarded met-criteria claim (C4)",
+        },
+        {
+            "evidence_domain": "guarded_walkforward", "aggregation": "equal_weight",
+            "weight_unit": "walkforward_period", "pooled_delta": float(g_eq),
+            "metric_kind": metric_kind,
+            "value_source": "v2_1_decision_record.json:pooled_delta_equal_weight",
+            "note": "equal weight over the 7 walk-forward periods (companion, not binding)",
+        },
+        {
+            "evidence_domain": "official_validation", "aggregation": "row_pooled",
+            "weight_unit": "row", "pooled_delta": v_row, "metric_kind": metric_kind,
+            "value_source": f"05_selective_autopsy.csv:all/{seed_mean_label}:delta_vs_dummy",
+            "note": "pooled over all validation rows (seed-mean of n=2 seeds)",
+        },
+        {
+            "evidence_domain": "official_validation", "aggregation": "equal_weight",
+            "weight_unit": "activity_tercile", "pooled_delta": v_eq, "metric_kind": metric_kind,
+            "value_source": (
+                f"05_selective_autopsy.csv:mean({tercile_src})/{seed_mean_label}:delta_vs_dummy"
+            ),
+            "note": (
+                "regime-balanced: equal weight over activity terciles -- a different unit "
+                "from the guarded period equal-weight, so compare each only to its own row-pooled"
+            ),
+        },
+    ]
+    return pd.DataFrame(rows)[ESTIMAND_CONTRAST_COLUMNS]
+
+
+def _loo_sweep(
+    deltas: Mapping[str, float], *, estimand: str, weight_unit: str
+) -> list[dict[str, Any]]:
+    """Equal-weight leave-one-out over ``deltas`` (unit -> delta): drop each unit,
+    re-average the rest, flag whether the baseline sign survives every drop."""
+    labels = list(deltas)
+    values = np.array([float(deltas[k]) for k in labels], dtype=float)
+    n = int(values.size)
+    if n < 3:
+        raise ValueError(f"loo_robustness: need >= 3 {weight_unit} units, found {n}")
+    baseline = float(values.mean())
+    after = {lab: float(np.delete(values, i).mean()) for i, lab in enumerate(labels)}
+    rows = [
+        {
+            "estimand": estimand, "weight_unit": weight_unit, "left_out": str(lab),
+            "n_units_remaining": n - 1, "delta_after_drop": after[lab],
+            "baseline_delta": baseline, "delta_shift": after[lab] - baseline,
+            "sign_after_drop": bool(after[lab] > 0.0), "note": "",
+        }
+        for lab in labels
+    ]
+    # baseline sign survives only if NO drop crosses zero (direction-aware)
+    if baseline > 0.0:
+        sign_flip = any(after[k] <= 0.0 for k in after)
+    elif baseline < 0.0:
+        sign_flip = any(after[k] >= 0.0 for k in after)
+    else:
+        sign_flip = True
+    worst = min(after, key=lambda k: after[k])
+    influential = max(after, key=lambda k: abs(after[k] - baseline))
+    rows.append({
+        "estimand": estimand, "weight_unit": weight_unit, "left_out": "<all:summary>",
+        "n_units_remaining": n, "delta_after_drop": baseline, "baseline_delta": baseline,
+        "delta_shift": 0.0, "sign_after_drop": bool(not sign_flip),
+        "note": (
+            f"equal-weight over {n} {weight_unit}s; loo_sign_flip={sign_flip}; "
+            f"worst_after={after[worst]:.6f} (drop {worst}); "
+            f"most_influential={influential} (delta_after={after[influential]:.6f})"
+        ),
+    })
+    return rows
+
+
+def build_loo_robustness(
+    period_summary: pd.DataFrame,
+    per_ticker: pd.DataFrame,
+    *,
+    primary_model: str,
+    family_axis: str = "table_row_id",
+    period_axis: str = "period_id",
+    ticker_axis: str = "ticker",
+    period_delta_field: str = "mean_delta_vs_dummy",
+    ticker_delta_field: str = "delta_macro_f1_vs_stratified_dummy_train_prior",
+    expected_period_count: int | None = None,
+    expected_ticker_count: int | None = None,
+    row_pooled_available: bool = False,
+    descriptive_note: str = "",
+) -> pd.DataFrame:
+    """B8 equal-weight leave-one-out robustness of the guarded pooled delta
+    (descriptive; measure-only; reads the frozen V2.1 small aggregates only).
+
+    Two leave-one-out sweeps on the frozen primary model:
+      * LOO-period -- drop each walk-forward period, re-average the remaining
+        per-period deltas (the equal-weight-over-periods estimand whose full value
+        equals ``pooled_delta_equal_weight``).
+      * LOO-ticker -- collapse the per-(period, seed, ticker) deltas to a
+        per-ticker mean, drop each ticker, re-average the remaining tickers.
+    Each row carries the recomputed delta, its shift from the sweep baseline, and
+    whether the sign survives the drop; a per-sweep summary row records
+    ``loo_sign_flip`` and the most influential unit.
+
+    The BINDING estimand is row-pooled, and macro-F1 is NOT linear across rows, so
+    a true row-pooled LOO must recompute pooled macro-F1 from the raw
+    ``v2_1_predictions.csv`` -- a deferred marker row records that gap (kept
+    measure-only here) rather than silently equating equal-weight LOO with it.
+    Descriptive robustness only -- never a significance test or a selection.
+    """
+    for name, frame, axes in (
+        ("period_summary", period_summary, (family_axis, period_axis, period_delta_field)),
+        ("per_ticker", per_ticker, (family_axis, ticker_axis, ticker_delta_field)),
+    ):
+        missing = sorted(set(axes) - set(frame.columns))
+        if missing:
+            raise ValueError(f"loo_robustness: {name} missing columns {missing}")
+
+    period_rows = period_summary[period_summary[family_axis].astype(str) == str(primary_model)]
+    if period_rows.empty:
+        raise ValueError(
+            f"loo_robustness: period_summary has no rows for primary model {primary_model!r}"
+        )
+    period_deltas = (
+        period_rows.groupby(period_axis)[period_delta_field].mean().sort_index().to_dict()
+    )
+    if expected_period_count is not None and len(period_deltas) != int(expected_period_count):
+        raise ValueError(
+            f"loo_robustness: expected {expected_period_count} periods for {primary_model!r}, "
+            f"found {len(period_deltas)} ({sorted(period_deltas)})"
+        )
+
+    ticker_rows = per_ticker[per_ticker[family_axis].astype(str) == str(primary_model)]
+    if ticker_rows.empty:
+        raise ValueError(
+            f"loo_robustness: per_ticker has no rows for primary model {primary_model!r}"
+        )
+    ticker_deltas = (
+        ticker_rows.groupby(ticker_axis)[ticker_delta_field].mean().sort_index().to_dict()
+    )
+    if expected_ticker_count is not None and len(ticker_deltas) != int(expected_ticker_count):
+        raise ValueError(
+            f"loo_robustness: expected {expected_ticker_count} tickers for {primary_model!r}, "
+            f"found {len(ticker_deltas)} ({sorted(ticker_deltas)})"
+        )
+
+    rows: list[dict[str, Any]] = []
+    rows.extend(_loo_sweep(
+        {str(k): float(v) for k, v in period_deltas.items()},
+        estimand="equal_weight_over_periods", weight_unit="walkforward_period",
+    ))
+    rows.extend(_loo_sweep(
+        {str(k): float(v) for k, v in ticker_deltas.items()},
+        estimand="equal_weight_over_tickers", weight_unit="ticker",
+    ))
+    rows.append({
+        "estimand": "row_pooled", "weight_unit": "row", "left_out": "<deferred>",
+        "n_units_remaining": None, "delta_after_drop": None, "baseline_delta": None,
+        "delta_shift": None, "sign_after_drop": None,
+        "note": (
+            "row-pooled LOO deferred: macro-F1 is non-linear across rows, so it must "
+            "recompute pooled macro-F1 from the raw v2_1_predictions.csv (Drive-only); "
+            "kept measure-only here. "
+            f"row_pooled_available_in_record={bool(row_pooled_available)}. {descriptive_note}"
+        ).strip(),
+    })
+    return pd.DataFrame(rows)[LOO_ROBUSTNESS_COLUMNS]

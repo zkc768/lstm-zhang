@@ -233,6 +233,8 @@ class Stage05Dirs:
                      {"Model": "LightGBM", "Mean delta vs Dummy": 0.0069}]
                 ),
                 "v2_1_walkforward_readout.csv": self._v2_1_readout(),
+                "v2_1_period_summary.csv": self._v2_1_period_summary(),
+                "v2_1_per_ticker_readout.csv": self._v2_1_per_ticker_readout(),
             },
         )
 
@@ -258,6 +260,43 @@ class Stage05Dirs:
                             base + period_offset + seed_jitter,
                         "fit_status": "completed",
                     })
+        return pd.DataFrame(rows)
+
+    def _v2_1_period_summary(self) -> pd.DataFrame:
+        # per-(family, period) seed-mean delta, mirroring the real artifact's
+        # columns; B8 LOO-period reads mean_delta_vs_dummy for the primary family.
+        readout = self._v2_1_readout()
+        grp = (
+            readout.groupby(["table_row_id", "period_id"])
+            ["delta_macro_f1_vs_stratified_dummy_train_prior"].mean().reset_index()
+            .rename(columns={"delta_macro_f1_vs_stratified_dummy_train_prior": "mean_delta_vs_dummy"})
+        )
+        grp["mean_macro_f1"] = 0.51
+        grp["mean_delta_vs_majority"] = 0.18
+        return grp[["table_row_id", "period_id", "mean_macro_f1",
+                    "mean_delta_vs_dummy", "mean_delta_vs_majority"]]
+
+    def _v2_1_per_ticker_readout(self) -> pd.DataFrame:
+        # 4 families x 7 periods x 2 seeds x 5 tickers; B8 LOO-ticker collapses to
+        # a per-ticker mean for the primary. Ticker offsets keep every leave-one-out
+        # positive (no sign flip) while making CSCO-like tickers the heaviest.
+        families = {
+            "tcn_frozen_primary": 0.0050, "lightgbm_family_best": 0.0069,
+            "standard_dlinear_family_best": 0.0042, "ms_dlinear_tcn_family_best": 0.0055,
+        }
+        tickers = {"AAA": 0.004, "BBB": -0.002, "CCC": 0.001, "DDD": -0.001, "EEE": 0.0}
+        rows = []
+        for family, base in families.items():
+            for period_index in range(7):
+                period_offset = (period_index - 3) * 0.0002
+                for seed in (101, 202):
+                    for ticker, t_off in tickers.items():
+                        rows.append({
+                            "table_row_id": family, "period_id": f"wf_p{period_index + 1}",
+                            "seed": seed, "ticker": ticker, "n_rows": 100,
+                            "delta_macro_f1_vs_stratified_dummy_train_prior":
+                                base + t_off + period_offset,
+                        })
         return pd.DataFrame(rows)
 
     # ----------------------------------------------------------- config ---
@@ -390,6 +429,7 @@ def test_no_forbidden_wording_in_any_output(stage_dirs: Stage05Dirs) -> None:
     run_dir = stage_dirs.single_run_dir()
     for name in ("05_claim_boundary_register.csv", "05_expectation_calibration.csv",
                  "05_multiplicity_discount.csv", "05_selective_autopsy.csv",
+                 "05_estimand_contrast.csv", "05_loo_robustness.csv",
                  "05_thesis_synthesis_report.json", "05_validation_budget_ledger.csv"):
         text = (run_dir / name).read_text(encoding="utf-8")
         assert not synthesis.find_forbidden_wording(text, forbidden), name
@@ -459,6 +499,71 @@ def test_multiplicity_discount_descriptive_pbo_and_min_family_lcb(stage_dirs: St
     assert md["pbo_method"] == "cscv_odd_block_floor_ceil_adaptation"
     assert md["seed_aggregation"] == "mean_over_seeds"
     assert md["min_family_lcb"] == pytest.approx(float(srow["min_family_lcb"]))
+
+
+def test_estimand_contrast_four_estimands_two_domains(stage_dirs: Stage05Dirs) -> None:
+    run_stage(stage_dirs.config())
+    run_dir = stage_dirs.single_run_dir()
+    table = pd.read_csv(run_dir / "05_estimand_contrast.csv")
+    assert list(table.columns) == synthesis.ESTIMAND_CONTRAST_COLUMNS
+    # 2 domains x 2 aggregations = 4 estimands, each tagged with its weight unit
+    assert len(table) == 4
+    assert set(table["evidence_domain"]) == {"guarded_walkforward", "official_validation"}
+    assert set(table["aggregation"]) == {"row_pooled", "equal_weight"}
+    keyed = {(r["evidence_domain"], r["aggregation"]): r for _, r in table.iterrows()}
+    # guarded estimands READ from the frozen V2.1 record (binding row-pooled + companion)
+    assert float(keyed[("guarded_walkforward", "row_pooled")]["pooled_delta"]) == pytest.approx(0.006362)
+    assert float(keyed[("guarded_walkforward", "equal_weight")]["pooled_delta"]) == pytest.approx(0.005439)
+    assert keyed[("guarded_walkforward", "row_pooled")]["weight_unit"] == "row"
+    assert keyed[("guarded_walkforward", "equal_weight")]["weight_unit"] == "walkforward_period"
+    # validation estimands READ from the intra-stage selective autopsy frame
+    assert keyed[("official_validation", "equal_weight")]["weight_unit"] == "activity_tercile"
+    autopsy = pd.read_csv(run_dir / "05_selective_autopsy.csv")
+    v_row = float(autopsy[(autopsy.activity_tercile.eq("all")) & (autopsy.seed.eq("seed_mean"))].iloc[0]["delta_vs_dummy"])
+    assert float(keyed[("official_validation", "row_pooled")]["pooled_delta"]) == pytest.approx(v_row)
+    terc = autopsy[(autopsy.seed.eq("seed_mean")) & (autopsy.activity_tercile.isin(["low", "mid", "high"]))]
+    assert float(keyed[("official_validation", "equal_weight")]["pooled_delta"]) == pytest.approx(
+        float(terc["delta_vs_dummy"].mean())
+    )
+    # report surface: machine-readable 2x2, descriptive only
+    report = json.loads(stage_dirs.read_output("05_thesis_synthesis_report.json"))
+    ec = report["estimand_contrast"]
+    assert ec["descriptive_only"] is True
+    assert ec["guarded_walkforward__row_pooled"] == pytest.approx(0.006362)
+
+
+def test_loo_robustness_equal_weight_sign_survives_and_rowpooled_deferred(
+    stage_dirs: Stage05Dirs,
+) -> None:
+    run_stage(stage_dirs.config())
+    run_dir = stage_dirs.single_run_dir()
+    table = pd.read_csv(run_dir / "05_loo_robustness.csv")
+    assert list(table.columns) == synthesis.LOO_ROBUSTNESS_COLUMNS
+    assert set(table["estimand"]) == {
+        "equal_weight_over_periods", "equal_weight_over_tickers", "row_pooled"
+    }
+    # LOO-period: 7 drops + 1 summary; LOO-ticker: 5 drops + 1 summary
+    periods = table[table["estimand"].eq("equal_weight_over_periods")]
+    tickers = table[table["estimand"].eq("equal_weight_over_tickers")]
+    assert len(periods[periods["left_out"].ne("<all:summary>")]) == 7
+    assert len(tickers[tickers["left_out"].ne("<all:summary>")]) == 5
+    # fixture is constructed so the sign survives every single-unit drop
+    for est in ("equal_weight_over_periods", "equal_weight_over_tickers"):
+        drops = table[(table["estimand"].eq(est)) & (table["left_out"].ne("<all:summary>"))]
+        assert drops["sign_after_drop"].all()
+        summary = table[(table["estimand"].eq(est)) & (table["left_out"].eq("<all:summary>"))].iloc[0]
+        assert bool(summary["sign_after_drop"]) is True  # no flip
+        assert "loo_sign_flip=False" in str(summary["note"])
+    # row-pooled LOO is a deferred marker (needs raw dump), never silently equated
+    rp = table[table["estimand"].eq("row_pooled")].iloc[0]
+    assert rp["left_out"] == "<deferred>"
+    assert pd.isna(rp["delta_after_drop"])
+    assert "raw v2_1_predictions.csv" in str(rp["note"])
+    # report surface
+    report = json.loads(stage_dirs.read_output("05_thesis_synthesis_report.json"))
+    loo = report["loo_robustness"]
+    assert loo["row_pooled_loo_deferred"] is True
+    assert loo["sign_survives_all_drops"]["equal_weight_over_periods"] is True
 
 
 def test_multiplicity_discount_fails_closed_on_missing_cell(stage_dirs: Stage05Dirs) -> None:

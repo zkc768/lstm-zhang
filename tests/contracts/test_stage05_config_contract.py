@@ -172,10 +172,31 @@ def test_guardrails_and_deferred_items_present() -> None:
     assert CONFIG["kb_wording_guardrails"], "KB wording guardrails must be present (S5.5)"
     deferred = CONFIG["deferred_synthesis_items"]
     joined = " ".join(deferred).lower()
-    # B6 (PBO/CSCV) and B7 (AUGRC/MDE/abstention) are now BUILT -> no longer deferred
+    # B6 (PBO/CSCV), B7 (AUGRC/MDE/abstention), and B8's four-estimand contrast +
+    # equal-weight LOO are now BUILT -> no longer deferred
     assert "pbo" not in joined and "min_family_lcb" not in joined
     assert "augrc" not in joined and "abstention" not in joined
-    assert "estimand" in joined and "leave_one_period_out" in joined  # B8 still deferred
+    assert "estimand" not in joined  # B8 estimand contrast is built, not deferred
+    # what remains deferred is only the ROW-POOLED LOO from the raw dump
+    assert "row_pooled" in joined and "leave_one_period_out" in joined
+    assert "raw" in joined and "v2_1_predictions" in joined
+
+
+def test_estimand_contrast_and_loo_blocks_well_formed() -> None:
+    loo = CONFIG["loo_robustness"]
+    assert loo["source_key"] == "v2_1"
+    assert loo["period_artifact"] == "v2_1_period_summary.csv"
+    assert loo["per_ticker_artifact"] == "v2_1_per_ticker_readout.csv"
+    assert loo["primary_model"] == "tcn_frozen_primary"
+    assert loo["expected_period_count"] == 7
+    assert loo["expected_ticker_count"] == 5
+    # the new B8 input aggregates are entry-gated required artifacts
+    inputs = CONFIG["inputs"]
+    assert "v2_1_period_summary.csv" in inputs["required_v2_1_artifacts"]
+    assert "v2_1_per_ticker_readout.csv" in inputs["required_v2_1_artifacts"]
+    # the contrast/LOO outputs close with the runner constant
+    assert CONFIG["outputs"]["estimand_contrast"] == "05_estimand_contrast.csv"
+    assert CONFIG["outputs"]["loo_robustness"] == "05_loo_robustness.csv"
 
 
 def test_selective_autopsy_block_well_formed() -> None:
