@@ -40,6 +40,12 @@ MULTIPLICITY_DISCOUNT_COLUMNS = [
     "pbo", "pbo_n_combinations", "pbo_n_trials", "pbo_n_blocks", "pbo_method",
     "seed_aggregation", "note",
 ]
+SELECTIVE_AUTOPSY_COLUMNS = [
+    "activity_tercile", "seed", "n_rows", "macro_f1", "accuracy",
+    "aurc", "e_aurc", "augrc", "full_coverage_risk",
+    "delta_vs_dummy", "mde_vs_dummy", "delta_clears_mde",
+]
+_ACTIVITY_TERCILE_ORDER = ("low", "mid", "high")
 
 _FIELD_MISSING = object()
 
@@ -340,6 +346,124 @@ def build_multiplicity_discount(
         "note": str(descriptive_note),
     })
     return pd.DataFrame(rows)[MULTIPLICITY_DISCOUNT_COLUMNS]
+
+
+def _mde_lookup(
+    robustness_slices: pd.DataFrame, seed_slice_axis: str, tercile_slice_axis: str
+) -> dict[tuple[str, str], tuple[float, float]]:
+    """(seed, tercile-or-'all') -> (delta, bootstrap_lcb) from the frozen Stage 04
+    per-trading-day block bootstrap; 'all' from the per-seed slice rows."""
+    lookup: dict[tuple[str, str], tuple[float, float]] = {}
+    if robustness_slices is None or robustness_slices.empty:
+        return lookup
+    delta_col = "delta_macro_f1_vs_stratified_dummy_train_prior"
+    needed = {"slice_axis", "slice_value", "seed", delta_col, "bootstrap_delta_lcb"}
+    if not needed.issubset(robustness_slices.columns):
+        return lookup
+    for record in robustness_slices.to_dict(orient="records"):
+        axis = str(record["slice_axis"])
+        seed = str(record["seed"])
+        delta = record[delta_col]
+        lcb = record["bootstrap_delta_lcb"]
+        if axis == seed_slice_axis and str(record["slice_value"]) == seed:
+            lookup[(seed, "all")] = (delta, lcb)
+        elif axis == tercile_slice_axis:
+            lookup[(seed, str(record["slice_value"]))] = (delta, lcb)
+    return lookup
+
+
+def _selective_autopsy_metrics(sub: pd.DataFrame) -> dict[str, Any]:
+    nan = float("nan")
+    if len(sub) == 0:
+        return {"n_rows": 0, "macro_f1": nan, "accuracy": nan, "aurc": nan,
+                "e_aurc": nan, "augrc": nan, "full_coverage_risk": nan}
+    y_true = sub["y_true"].to_numpy(dtype=int)
+    y_pred = sub["y_pred"].to_numpy(dtype=int)
+    confidence = sub["confidence"].to_numpy(dtype=float)
+    correct = sub["correct"].to_numpy(dtype=bool)
+    aurc = metrics.aurc_metrics(confidence, correct)
+    return {
+        "n_rows": int(len(sub)),
+        "macro_f1": float(metrics.binary_macro_f1(y_true, y_pred)),
+        "accuracy": float(correct.mean()),
+        "aurc": float(aurc["aurc"]),
+        "e_aurc": float(aurc["e_aurc"]),
+        "augrc": float(metrics.augrc(confidence, correct)),
+        "full_coverage_risk": float(aurc["full_coverage_risk"]),
+    }
+
+
+def _finite(value: Any) -> bool:
+    try:
+        return float(value) == float(value)
+    except (TypeError, ValueError):
+        return False
+
+
+def _selective_autopsy_seed_mean(seed_rows: list[dict[str, Any]], tercile: str) -> dict[str, Any]:
+    numeric = ["n_rows", "macro_f1", "accuracy", "aurc", "e_aurc", "augrc",
+               "full_coverage_risk", "delta_vs_dummy", "mde_vs_dummy"]
+    agg: dict[str, Any] = {}
+    for col in numeric:
+        finite = [float(r[col]) for r in seed_rows if _finite(r[col])]
+        agg[col] = float(np.mean(finite)) if finite else float("nan")
+    agg["n_rows"] = int(round(agg["n_rows"])) if _finite(agg["n_rows"]) else 0
+    clears = (
+        _finite(agg["delta_vs_dummy"]) and _finite(agg["mde_vs_dummy"])
+        and agg["delta_vs_dummy"] > agg["mde_vs_dummy"]
+    )
+    return {"activity_tercile": tercile, "seed": "seed_mean", **agg, "delta_clears_mde": bool(clears)}
+
+
+def build_selective_autopsy(
+    dump: pd.DataFrame,
+    robustness_slices: pd.DataFrame,
+    *,
+    seeds: Sequence[int],
+    activity_axis: str = "activity_tercile",
+    mde_seed_slice_axis: str = "seed",
+    mde_tercile_slice_axis: str = "activity_tercile",
+) -> pd.DataFrame:
+    """B7 selective- and calibration-aware autopsy (measure-only diagnostic).
+
+    On the gated/derived frozen Stage 03 validation dump, per activity tercile x
+    seed: model macro-F1 / accuracy, the whole-curve selective AURC / e-AURC /
+    AUGRC (Geifman & El-Yaniv 2017; Geifman et al. 2019; Traub et al. 2024) on
+    (confidence, correct), and the same-row delta-vs-dummy minimum-detectable
+    effect EXTRACTED from the frozen Stage 04 per-trading-day block bootstrap
+    (``mde = delta - lcb``; ``delta_clears_mde`` ⟺ lcb > 0). Selective metrics are
+    accuracy-based with NO cost/return component -- a diagnostic, never an
+    operating point or a tradeability claim (register F4). Wires the 0-call-site
+    ``augrc`` primitive; crosses abstention with the activity tercile (register
+    F1: the edge is in low-activity bars, below random on high-activity bars).
+    """
+    required = {"confidence", "correct", "y_true", "y_pred", "seed", activity_axis}
+    missing = sorted(required - set(dump.columns))
+    if missing:
+        raise ValueError(f"selective_autopsy: dump missing derived columns {missing}")
+    mde_lookup = _mde_lookup(robustness_slices, mde_seed_slice_axis, mde_tercile_slice_axis)
+    present = set(dump[activity_axis].astype(str))
+    terciles = ["all"] + [t for t in _ACTIVITY_TERCILE_ORDER if t in present]
+    rows: list[dict[str, Any]] = []
+    for tercile in terciles:
+        seed_rows: list[dict[str, Any]] = []
+        for seed in seeds:
+            sub = dump[dump["seed"].astype(int) == int(seed)]
+            if tercile != "all":
+                sub = sub[sub[activity_axis].astype(str) == tercile]
+            delta, lcb = mde_lookup.get((str(int(seed)), tercile), (float("nan"), float("nan")))
+            mde = float(delta) - float(lcb) if (_finite(delta) and _finite(lcb)) else float("nan")
+            row = {
+                "activity_tercile": tercile, "seed": str(int(seed)),
+                **_selective_autopsy_metrics(sub),
+                "delta_vs_dummy": float(delta) if _finite(delta) else float("nan"),
+                "mde_vs_dummy": mde,
+                "delta_clears_mde": bool(_finite(lcb) and float(lcb) > 0.0),
+            }
+            rows.append(row)
+            seed_rows.append(row)
+        rows.append(_selective_autopsy_seed_mean(seed_rows, tercile))
+    return pd.DataFrame(rows)[SELECTIVE_AUTOPSY_COLUMNS]
 
 
 def collect_pooled_delta_estimands(v2_1_record: Mapping[str, Any]) -> dict[str, Any]:

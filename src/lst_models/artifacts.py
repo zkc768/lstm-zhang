@@ -370,10 +370,14 @@ def stage05_synthesis_code_sha256() -> str:
         "build_multiplicity_discount": inspect.getsource(
             synthesis_module.build_multiplicity_discount
         ),
+        "build_selective_autopsy": inspect.getsource(
+            synthesis_module.build_selective_autopsy
+        ),
         "collect_pooled_delta_estimands": inspect.getsource(
             synthesis_module.collect_pooled_delta_estimands
         ),
         "cscv_pbo": inspect.getsource(metrics_module.cscv_pbo),
+        "augrc": inspect.getsource(metrics_module.augrc),
         "aggregate_family_delta_cis": inspect.getsource(
             metrics_module.aggregate_family_delta_cis
         ),

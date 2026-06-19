@@ -13,6 +13,7 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 import yaml
@@ -21,7 +22,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from lst_models import synthesis  # noqa: E402
+from lst_models import diagnostics, synthesis  # noqa: E402
 from lst_models.artifacts import write_artifact_inventory, write_json  # noqa: E402
 from lst_models.stages import thesis_synthesis as stage05  # noqa: E402
 from lst_models.stages.thesis_synthesis import run_stage  # noqa: E402
@@ -66,7 +67,7 @@ class Stage05Dirs:
             "holdout_test_contact": False,
             "official_validation_for_selection": False,
             "official_validation_scoring_events": 2,
-            "scoring_event_ledger": [{"seed": 101, "n_rows": 5}, {"seed": 202, "n_rows": 5}],
+            "scoring_event_ledger": [{"seed": 101, "n_rows": 24}, {"seed": 202, "n_rows": 24}],
             "source_stage00_run_id": "stage00",
             "source_stage01_run_id": "stage01",
             "source_stage02_run_id": "stage02",
@@ -139,11 +140,44 @@ class Stage05Dirs:
         write_artifact_inventory(run_dir, {name: run_dir / name for name in names})
 
     def _write_stage03(self) -> None:
-        self._write_folder("stage03", {
-            "run_manifest.json": {"holdout_test_contact": False,
-                                  "official_validation_for_selection": False},
-            "03_decision_record.json": self._stage03_record(),
-        })
+        self._write_folder(
+            "stage03",
+            {
+                "run_manifest.json": {"holdout_test_contact": False,
+                                      "official_validation_for_selection": False},
+                "03_decision_record.json": self._stage03_record(),
+            },
+            {"03_validation_predictions.csv": self._stage03_dump()},
+        )
+
+    def _stage03_dump(self) -> pd.DataFrame:
+        # 2 seeds x 2 tickers x 6 trading days x 2 rows = 24 rows/seed (48 total),
+        # >= 3 days/ticker so activity terciles populate low/mid/high.
+        rng = np.random.default_rng(11)
+        base = pd.Timestamp("2014-03-03")
+        rows = []
+        for seed in (101, 202):
+            for t_i, ticker in enumerate(("AAA", "BBB")):
+                for d in range(6):
+                    day = base + pd.Timedelta(days=d + 7 * t_i)
+                    for r in range(2):
+                        ts = day + pd.Timedelta(hours=10, minutes=5 * (d + r))
+                        y_true = int((d + r + t_i) % 2)
+                        correct = ((d * 2 + r + seed) % 3) != 0  # ~2/3 edge
+                        target = y_true if correct else 1 - y_true
+                        p_up = float(np.clip(
+                            0.5 + (0.30 if target == 1 else -0.30) + rng.normal(0, 0.04), 0.01, 0.99
+                        ))
+                        rows.append({
+                            "candidate_role": "primary", "candidate_id": "price_volume_time_w20",
+                            "model_family": "tcn", "hpo_profile_id": "tcn_p01", "seed": seed,
+                            "sample_id": f"{ticker}_{seed}_{d}_{r}", "ticker": ticker,
+                            "target_timestamp": ts.isoformat(),
+                            "trading_day": day.strftime("%Y-%m-%d"),
+                            "y_true": y_true, "p_up": p_up, "y_pred": int(p_up >= 0.5),
+                            "scope": "validation_only",
+                        })
+        return pd.DataFrame(rows)[diagnostics.DUMP_COLUMNS]
 
     def _write_stage04(self) -> None:
         self._write_folder(
@@ -156,12 +190,33 @@ class Stage05Dirs:
                 "04_sentinel_summary.csv": pd.DataFrame(
                     [{"sentinel": "label_shuffle", "label_shuffle_p_value": 0.004975}]
                 ),
-                "04_robustness_slices.csv": pd.DataFrame(
-                    [{"slice_axis": "activity_tercile", "slice_value": "low",
-                      "delta_macro_f1_vs_stratified_dummy_train_prior": 0.054}]
-                ),
+                "04_robustness_slices.csv": self._robustness_slices(),
             },
         )
+
+    def _robustness_slices(self) -> pd.DataFrame:
+        # per-seed + per-activity-tercile block-bootstrap rows (the B7 MDE source),
+        # mirroring register F1: low +0.054 clears, mid +0.019 borderline, high -0.015
+        # below random and does NOT clear its MDE.
+        tercile_ci = {
+            "low": (0.054, 0.030, 0.078),
+            "mid": (0.019, -0.005, 0.043),
+            "high": (-0.015, -0.040, 0.010),
+        }
+        rows = []
+        for seed in (101, 202):
+            rows.append({
+                "seed": seed, "slice_axis": "seed", "slice_value": str(seed),
+                "delta_macro_f1_vs_stratified_dummy_train_prior": 0.0169,
+                "bootstrap_delta_lcb": 0.011, "bootstrap_delta_ucb": 0.022,
+            })
+            for tercile, (delta, lcb, ucb) in tercile_ci.items():
+                rows.append({
+                    "seed": seed, "slice_axis": "activity_tercile", "slice_value": tercile,
+                    "delta_macro_f1_vs_stratified_dummy_train_prior": delta,
+                    "bootstrap_delta_lcb": lcb, "bootstrap_delta_ucb": ucb,
+                })
+        return pd.DataFrame(rows)
 
     def _write_v2_1(self) -> None:
         self._write_folder(
@@ -213,6 +268,8 @@ class Stage05Dirs:
             inputs[f"{key}_runtime_run_dir"] = str(self.dirs[key])
         inputs["notebook_path"] = str(self.notebook_path)
         config["outputs"]["output_dir"] = str(self.output_dir)
+        # fixture dump is tiny; align the gate's expected row count
+        config["selective_autopsy"]["expected_dump_rows"] = 48
         return config
 
     # --------------------------------------------------------- mutators ---
@@ -316,10 +373,38 @@ def test_no_forbidden_wording_in_any_output(stage_dirs: Stage05Dirs) -> None:
     run_stage(config)
     run_dir = stage_dirs.single_run_dir()
     for name in ("05_claim_boundary_register.csv", "05_expectation_calibration.csv",
-                 "05_multiplicity_discount.csv", "05_thesis_synthesis_report.json",
-                 "05_validation_budget_ledger.csv"):
+                 "05_multiplicity_discount.csv", "05_selective_autopsy.csv",
+                 "05_thesis_synthesis_report.json", "05_validation_budget_ledger.csv"):
         text = (run_dir / name).read_text(encoding="utf-8")
         assert not synthesis.find_forbidden_wording(text, forbidden), name
+
+
+def test_selective_autopsy_augrc_abstention_and_mde(stage_dirs: Stage05Dirs) -> None:
+    run_stage(stage_dirs.config())
+    run_dir = stage_dirs.single_run_dir()
+    table = pd.read_csv(run_dir / "05_selective_autopsy.csv")
+    assert list(table.columns) == synthesis.SELECTIVE_AUTOPSY_COLUMNS
+    # pooled + per-tercile, each with per-seed + seed_mean rows
+    assert set(table["activity_tercile"]) == {"all", "low", "mid", "high"}
+    assert "seed_mean" in set(table["seed"].astype(str))
+    # AUGRC (the wired 0-call-site primitive) present and <= AURC pointwise
+    assert table["augrc"].notna().all()
+    assert (table["augrc"] <= table["aurc"] + 1e-9).all()
+    assert (table["e_aurc"] >= -1e-9).all()
+    # MDE joined from the frozen Stage 04 bootstrap; register F1 ordering surfaces:
+    # low clears its MDE, high does not (below-random high-activity bars)
+    low = table[(table["activity_tercile"].eq("low")) & (table["seed"].eq("seed_mean"))].iloc[0]
+    high = table[(table["activity_tercile"].eq("high")) & (table["seed"].eq("seed_mean"))].iloc[0]
+    assert bool(low["delta_clears_mde"]) is True
+    assert bool(high["delta_clears_mde"]) is False
+    assert float(low["mde_vs_dummy"]) == pytest.approx(0.054 - 0.030)
+    # report surface: accuracy-basis caveat + per-tercile clears map
+    report = json.loads(stage_dirs.read_output("05_thesis_synthesis_report.json"))
+    autopsy = report["selective_autopsy"]
+    assert autopsy["descriptive_only"] is True
+    assert autopsy["selective_metric_basis"] == "accuracy_no_cost_or_return"
+    assert autopsy["delta_clears_mde_by_tercile"]["high"] is False
+    assert autopsy["pooled_augrc"] is not None
 
 
 def test_multiplicity_discount_descriptive_pbo_and_min_family_lcb(stage_dirs: Stage05Dirs) -> None:

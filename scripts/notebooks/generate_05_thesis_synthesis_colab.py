@@ -43,11 +43,16 @@ CELL_SPECS = [
         "`min_family_lcb` over the per-(family, period) guarded delta matrix -> "
         "`05_multiplicity_discount.csv`. Descriptive discounts only, never a "
         "significance claim.\n"
+        "- B7 (BUILT): a selective- and calibration-aware autopsy over the frozen "
+        "Stage 03 validation dump -- per activity tercile x seed AURC / e-AURC / "
+        "AUGRC on (confidence, correct) + the delta-vs-dummy MDE from the frozen "
+        "Stage 04 block bootstrap -> `05_selective_autopsy.csv`. Selective metrics "
+        "are accuracy-based (no cost/return); a diagnostic, never an operating "
+        "point.\n"
         "- The V2.1 record describes a guarded historically-contacted contact "
         "that ALREADY happened; Stage 05 itself makes no new contact "
         "(`holdout_test_contact=false`, `new_scoring_events=0`). Still "
-        "`deferred_synthesis_items`: AUGRC/MDE/abstention-by-activity (B7) and "
-        "the four-estimand recompute + LOO (B8).\n",
+        "`deferred_synthesis_items`: the four-estimand recompute + LOO (B8).\n",
     ),
     (
         "markdown",
@@ -59,6 +64,7 @@ CELL_SPECS = [
         "  05_claim_boundary_register.csv\n"
         "  05_expectation_calibration.csv\n"
         "  05_multiplicity_discount.csv\n"
+        "  05_selective_autopsy.csv\n"
         "  05_thesis_synthesis_report.json\n"
         "  run_manifest.json\n"
         "  artifact_inventory.csv\n"
@@ -398,7 +404,7 @@ CELL_SPECS = [
     (
         "markdown",
         "## Durable Drive Result Save\n\n"
-        "Immediately after `run_stage` returns, this cell validates the seven "
+        "Immediately after `run_stage` returns, this cell validates the eight "
         "required Stage 05 outputs (imported from the stage module, never "
         "retyped), refuses upload unless the run manifest records "
         "`new_scoring_events=0`, "
@@ -504,6 +510,7 @@ CELL_SPECS = [
         "        \"scoring_event_budget\": report.get(\"scoring_event_budget\"),\n"
         "        \"v2_1_pooled_delta_estimands\": report.get(\"v2_1_pooled_delta_estimands\"),\n"
         "        \"multiplicity_discount\": report.get(\"multiplicity_discount\"),\n"
+        "        \"selective_autopsy\": report.get(\"selective_autopsy\"),\n"
         "        \"claim_count\": report.get(\"claim_count\"),\n"
         "        \"limitation_count\": report.get(\"limitation_count\"),\n"
         "        \"deferred_synthesis_items\": report.get(\"deferred_synthesis_items\"),\n"
@@ -512,6 +519,7 @@ CELL_SPECS = [
         "    display(pd.read_csv(run_dir / \"05_claim_boundary_register.csv\"))\n"
         "    display(pd.read_csv(run_dir / \"05_expectation_calibration.csv\"))\n"
         "    display(pd.read_csv(run_dir / \"05_multiplicity_discount.csv\"))\n"
+        "    display(pd.read_csv(run_dir / \"05_selective_autopsy.csv\"))\n"
         "else:\n"
         "    print(\"RUN_ARTIFACT_DISPLAY=False; no Stage 05 artifacts displayed.\")\n",
     ),
@@ -537,11 +545,13 @@ CELL_SPECS = [
         "realized volume or liquidity.\n"
         "- A small macro-F1 delta is not evidence of tradeability; no economic "
         "analysis is performed or claimed.\n"
-        "- The descriptive multiplicity discount (CSCV PBO + `min_family_lcb`) "
-        "IS computed in this bundle (`05_multiplicity_discount.csv`); PBO/LCB are "
-        "descriptive discounts, never a significance claim, and PBO uses an "
-        "odd-block floor/ceil CSCV adaptation for the 7 periods. AUGRC/MDE and "
-        "the four-estimand recompute remain `deferred_synthesis_items`.\n",
+        "- The descriptive multiplicity discount (CSCV PBO + `min_family_lcb`, "
+        "`05_multiplicity_discount.csv`) and the selective autopsy (AUGRC / e-AURC "
+        "+ abstention-by-activity-tercile + MDE, `05_selective_autopsy.csv`) are "
+        "computed in this bundle. Both are descriptive diagnostics, never a "
+        "significance or operating-point claim; selective metrics are "
+        "accuracy-based with no cost/return. The four-estimand recompute + LOO "
+        "(B8) remains a `deferred_synthesis_items`.\n",
     ),
 ]
 

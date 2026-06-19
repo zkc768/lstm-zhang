@@ -7,6 +7,18 @@ Stage 03 / Stage 04 / V2.1 artifacts and emits synthesis tables. It performs
 
 Revision record:
 
+- 2026-06-18 (B7): built the selective- and calibration-aware autopsy over the
+  frozen Stage 03 validation dump → `05_selective_autopsy.csv`. Per activity
+  tercile × seed: model macro-F1 / accuracy, whole-curve AURC / e-AURC / AUGRC
+  (wires the 0-call-site `augrc` primitive) on (confidence, correct), and the
+  delta-vs-dummy MDE EXTRACTED from the frozen Stage 04 per-trading-day block
+  bootstrap (`delta − lcb`; the register mandates reusing the existing bootstrap
+  rather than re-deriving the train-prior baseline). Crosses abstention with the
+  activity tercile (register F1). Selective metrics are accuracy-based with no
+  cost/return — a diagnostic, never an operating point (register F4). Stage 05
+  now reads the frozen `03_validation_predictions.csv` (gated/derived via the
+  shared `diagnostics.gate_and_derive_dump`). Still deferred: B8 (four-estimand
+  + LOO).
 - 2026-06-18 (B6 + review hardening): built the descriptive multiplicity
   discount (CSCV PBO + worst-family `min_family_lcb`) over the
   per-(family, period) guarded delta matrix → `05_multiplicity_discount.csv`.

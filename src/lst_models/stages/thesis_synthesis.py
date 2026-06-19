@@ -16,7 +16,7 @@ from typing import Any, Mapping
 
 import pandas as pd
 
-from lst_models import synthesis
+from lst_models import diagnostics, synthesis
 from lst_models.artifacts import (
     git_commit_fields,
     make_run_id,
@@ -47,6 +47,7 @@ REQUIRED_STAGE05_ARTIFACTS = [
     "05_claim_boundary_register.csv",
     "05_expectation_calibration.csv",
     "05_multiplicity_discount.csv",
+    "05_selective_autopsy.csv",
     "05_thesis_synthesis_report.json",
 ]
 
@@ -56,6 +57,7 @@ _FRAME_OUTPUTS = {
     "claim_boundary_register": synthesis.CLAIM_BOUNDARY_REGISTER_COLUMNS,
     "expectation_calibration": synthesis.EXPECTATION_CALIBRATION_COLUMNS,
     "multiplicity_discount": synthesis.MULTIPLICITY_DISCOUNT_COLUMNS,
+    "selective_autopsy": synthesis.SELECTIVE_AUTOPSY_COLUMNS,
 }
 
 
@@ -108,6 +110,7 @@ def _validate_config(config: Mapping[str, Any]) -> None:
     require_mapping(config["claim_boundary_register"], "claim_boundary_register")
     require_mapping(config["expectation_calibration"], "expectation_calibration")
     require_mapping(config["multiplicity_discount"], "multiplicity_discount")
+    require_mapping(config["selective_autopsy"], "selective_autopsy")
     if not list(config.get("evidence_domains", [])):
         raise ValueError("Stage 05 requires a non-empty evidence_domains list")
     require_mapping(config["required_upstream_decisions"], "required_upstream_decisions")
@@ -325,12 +328,41 @@ def _build_frames(
         seed_aggregation=str(multiplicity_cfg.get("seed_aggregation", "mean_over_seeds")),
         descriptive_note=str(multiplicity_cfg.get("descriptive_note", "")),
     )
+    autopsy = _build_selective_autopsy(config, inputs)
     return {
         "validation_budget_ledger": budget,
         "claim_boundary_register": register,
         "expectation_calibration": expectation,
         "multiplicity_discount": multiplicity,
+        "selective_autopsy": autopsy,
     }
+
+
+def _build_selective_autopsy(config: Mapping[str, Any], inputs: Stage05Inputs) -> pd.DataFrame:
+    cfg = require_mapping(config["selective_autopsy"], "selective_autopsy")
+    seeds = [int(seed) for seed in cfg["expected_seeds"]]
+    dump_raw = pd.read_csv(
+        inputs.stage_paths[str(cfg["dump_source_key"])][str(cfg["dump_artifact"])]
+    )
+    ledger = inputs.records_by_key["stage03"].get("scoring_event_ledger", [])
+    gated_dump = diagnostics.gate_and_derive_dump(
+        dump_raw,
+        expected_seeds=seeds,
+        expected_rows=cfg.get("expected_dump_rows"),
+        ledger_rows=sum(int(event["n_rows"]) for event in ledger),
+        holdout_boundary=pd.Timestamp(HOLDOUT_BOUNDARY),
+    )
+    robustness = pd.read_csv(
+        inputs.stage_paths[str(cfg["mde_source_key"])][str(cfg["mde_artifact"])]
+    )
+    return synthesis.build_selective_autopsy(
+        gated_dump,
+        robustness,
+        seeds=seeds,
+        activity_axis=str(cfg.get("activity_axis", "activity_tercile")),
+        mde_seed_slice_axis=str(cfg.get("mde_seed_slice_axis", "seed")),
+        mde_tercile_slice_axis=str(cfg.get("mde_tercile_slice_axis", "activity_tercile")),
+    )
 
 
 def _source_run_id_fields(config: Mapping[str, Any]) -> dict[str, Any]:
@@ -368,6 +400,32 @@ def _multiplicity_summary(frame: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+def _selective_autopsy_summary(frame: pd.DataFrame, note: str) -> dict[str, Any]:
+    def _pick(tercile: str, seed: str) -> pd.Series | None:
+        sub = frame[(frame["activity_tercile"].eq(tercile)) & (frame["seed"].eq(seed))]
+        return None if sub.empty else sub.iloc[0]
+
+    def _num(value: Any) -> float | None:
+        return None if value is None or pd.isna(value) else float(value)
+
+    pooled = _pick("all", "seed_mean")
+    summary: dict[str, Any] = {
+        "descriptive_only": True,
+        "selective_metric_basis": "accuracy_no_cost_or_return",
+        "note": str(note),
+    }
+    if pooled is not None:
+        summary["pooled_augrc"] = _num(pooled["augrc"])
+        summary["pooled_e_aurc"] = _num(pooled["e_aurc"])
+        summary["pooled_full_coverage_risk"] = _num(pooled["full_coverage_risk"])
+    summary["delta_clears_mde_by_tercile"] = {
+        tercile: (None if (row := _pick(tercile, "seed_mean")) is None
+                  else bool(row["delta_clears_mde"]))
+        for tercile in ("low", "mid", "high")
+    }
+    return summary
+
+
 def _synthesis_report(
     config: Mapping[str, Any],
     inputs: Stage05Inputs,
@@ -388,6 +446,12 @@ def _synthesis_report(
         "v2_1_decision": str(v2_1_record.get("decision")),
         "v2_1_pooled_delta_estimands": synthesis.collect_pooled_delta_estimands(v2_1_record),
         "multiplicity_discount": _multiplicity_summary(frames["multiplicity_discount"]),
+        "selective_autopsy": _selective_autopsy_summary(
+            frames["selective_autopsy"],
+            str(require_mapping(config["selective_autopsy"], "selective_autopsy").get(
+                "descriptive_note", ""
+            )),
+        ),
         "scoring_event_budget": {
             str(row["stage_name"]): int(row["scoring_events"])
             for _, row in budget.iterrows()

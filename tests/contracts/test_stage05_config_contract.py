@@ -59,6 +59,7 @@ def test_required_upstream_artifacts_cover_decision_records() -> None:
     assert "04_robustness_slices.csv" in inputs["required_stage04_artifacts"]
     assert "v2_1_comparison_table.csv" in inputs["required_v2_1_artifacts"]
     assert "v2_1_walkforward_readout.csv" in inputs["required_v2_1_artifacts"]  # B6 delta matrix
+    assert "03_validation_predictions.csv" in inputs["required_stage03_artifacts"]  # B7 dump
     for key in UPSTREAM_KEYS:
         for name in ("run_manifest.json", "artifact_inventory.csv"):
             assert name in inputs[f"required_{key}_artifacts"]
@@ -88,7 +89,8 @@ def test_required_artifact_list_closes_with_runner_constant() -> None:
     assert sorted(REQUIRED_STAGE05_ARTIFACTS) == stage_artifacts
     assert "drive_backup_manifest.json" not in REQUIRED_STAGE05_ARTIFACTS
     for key in ("validation_budget_ledger", "claim_boundary_register",
-                "expectation_calibration", "multiplicity_discount", "synthesis_report"):
+                "expectation_calibration", "multiplicity_discount", "selective_autopsy",
+                "synthesis_report"):
         assert outputs[key].startswith("05_")
 
 
@@ -170,10 +172,23 @@ def test_guardrails_and_deferred_items_present() -> None:
     assert CONFIG["kb_wording_guardrails"], "KB wording guardrails must be present (S5.5)"
     deferred = CONFIG["deferred_synthesis_items"]
     joined = " ".join(deferred).lower()
-    # B6 (PBO/CSCV + min_family_lcb) is now BUILT, so it is no longer deferred
+    # B6 (PBO/CSCV) and B7 (AUGRC/MDE/abstention) are now BUILT -> no longer deferred
     assert "pbo" not in joined and "min_family_lcb" not in joined
-    assert "augrc" in joined and "abstention" in joined  # B7 still deferred
+    assert "augrc" not in joined and "abstention" not in joined
     assert "estimand" in joined and "leave_one_period_out" in joined  # B8 still deferred
+
+
+def test_selective_autopsy_block_well_formed() -> None:
+    block = CONFIG["selective_autopsy"]
+    assert block["dump_source_key"] == "stage03"
+    assert block["dump_artifact"] == "03_validation_predictions.csv"
+    assert block["mde_source_key"] == "stage04"
+    assert block["mde_artifact"] == "04_robustness_slices.csv"
+    assert block["activity_axis"] == "activity_tercile"
+    assert block["no_operating_point"] is True
+    assert block["expected_seeds"] == [101, 202]
+    # accuracy-based diagnostic, never an operating-point/tradeability claim
+    assert not synthesis.find_forbidden_wording(block["descriptive_note"], CONFIG["forbidden"]["wording"])
 
 
 def test_multiplicity_discount_block_well_formed() -> None:
