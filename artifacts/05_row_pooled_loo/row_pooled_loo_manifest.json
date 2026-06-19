@@ -1,0 +1,32 @@
+{
+  "analysis": "row_pooled_leave_one_out",
+  "binding_estimand": "row_pooled",
+  "scope": "synthesis_measure_only",
+  "computed": "local_measure_only_reaggregation_of_frozen_dump",
+  "git_commit": "ba77d3b6a6e0c2240daeb89dab65d39f239450b8",
+  "row_pooled_loo_code_sha256": "99318a0ded73d269c75067a9d7f3c198e6fa25f8d2d711cd8237779e4fa425dc",
+  "baseline_delta": 0.0063616023240048,
+  "baseline_reproduces_pooled_delta_row_pooled": true,
+  "loo_sign_flip": {
+    "row_pooled_over_periods": false,
+    "row_pooled_over_tickers": false
+  },
+  "primary_model": "tcn_frozen_primary",
+  "source_v2_1_run_id": "20260618_063559_889276",
+  "inputs": {
+    "v2_1_predictions.csv": {
+      "sha256": "6481f7958834b2c58cf3217ccbf7274ed25ec70cc176fd1b3955888317910300",
+      "bytes": 569232348,
+      "verified_against_run_inventory": true
+    },
+    "v2_1_baseline_predictions.csv": {
+      "sha256": "cd6925e1dfb0d5305b212586dfe84c2dde7d7cba244a036b3b61df7cac46fcdb",
+      "bytes": 117539889,
+      "verified_against_run_inventory": true
+    }
+  },
+  "new_scoring_events": 0,
+  "holdout_test_contact": false,
+  "no_final_model_selected": true,
+  "note": "Descriptive row-pooled LOO of the binding guarded estimand; baseline reproduces the native pooled_delta_row_pooled; both sweeps survive every single-period/ticker drop. Not a significance test."
+}

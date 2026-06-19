@@ -1,0 +1,15 @@
+estimand,weight_unit,left_out,n_units_remaining,delta_after_drop,baseline_delta,delta_shift,sign_after_drop,note
+row_pooled_over_periods,row,wf_p1,565740,0.00549860304558164,0.006361602324004845,-0.0008629992784232043,True,
+row_pooled_over_periods,row,wf_p2,561116,0.005383105756711526,0.006361602324004845,-0.0009784965672933188,True,
+row_pooled_over_periods,row,wf_p3,564606,0.0061813699875507555,0.006361602324004845,-0.0001802323364540892,True,
+row_pooled_over_periods,row,wf_p4,559142,0.007669757138846378,0.006361602324004845,0.0013081548148415334,True,
+row_pooled_over_periods,row,wf_p5,562250,0.006119308942398705,0.006361602324004845,-0.0002422933816061401,True,
+row_pooled_over_periods,row,wf_p6,557450,0.0075389580178760185,0.006361602324004845,0.0011773556938711738,True,
+row_pooled_over_periods,row,wf_p7,541300,0.0059781488857979515,0.006361602324004845,-0.00038345343820689326,True,
+row_pooled_over_periods,row,<all:summary>,651934,0.006361602324004845,0.006361602324004845,0.0,True,row-pooled (protocol §8 row-union) over 7 period_id values; baseline reproduces pooled_delta_row_pooled; loo_sign_flip=False; worst_after=0.005383 (drop wf_p2); most_influential=wf_p4 (delta_after=0.007670). raw v2_1_predictions.csv row-union; measure-only.
+row_pooled_over_tickers,row,CSCO,520296,0.005141390124143941,0.006361602324004845,-0.001220212199860904,True,
+row_pooled_over_tickers,row,JPM,519220,0.007417840674051768,0.006361602324004845,0.001056238350046923,True,
+row_pooled_over_tickers,row,KO,526690,0.007286492668268474,0.006361602324004845,0.0009248903442636291,True,
+row_pooled_over_tickers,row,MSFT,519402,0.005338945321587074,0.006361602324004845,-0.0010226570024177706,True,
+row_pooled_over_tickers,row,WMT,522128,0.0065798790167056476,0.006361602324004845,0.00021827669270080285,True,
+row_pooled_over_tickers,row,<all:summary>,651934,0.006361602324004845,0.006361602324004845,0.0,True,row-pooled (protocol §8 row-union) over 5 ticker values; baseline reproduces pooled_delta_row_pooled; loo_sign_flip=False; worst_after=0.005141 (drop CSCO); most_influential=CSCO (delta_after=0.005141). raw v2_1_predictions.csv row-union; measure-only.
