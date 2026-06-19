@@ -9,11 +9,10 @@ import nbformat
 ROOT = Path(__file__).resolve().parents[2]
 NOTEBOOK = ROOT / "notebooks" / "05_thesis_synthesis_colab.ipynb"
 
-# Two-step exact-commit pin (AGENTS.md section 5): the Stage 05 bundle is not yet
-# committed/pinned (commit is user-gated), so the notebook ships the placeholder.
-# When the user authorizes the bundle commit, update this constant and the
-# notebook PROJECT_REPO_COMMIT together in the pin commit.
-EXPECTED_PROJECT_REPO_COMMIT = "2148ff0aef51da354fbeb0905b7d5462b210095a"
+# Two-step exact-commit pin (AGENTS.md section 5): this constant and the notebook
+# PROJECT_REPO_COMMIT are re-pinned together to the Stage 05 full-bundle commit in
+# the pin commit that follows each bundle change.
+EXPECTED_PROJECT_REPO_COMMIT = "7d766e35b5b17046b87dfaa298cca7c642d7c862"
 CURRENT_STAGE03_RUN_ID = "20260610_133305_716174"
 CURRENT_STAGE04_RUN_ID = "20260618_234011_838683"
 CURRENT_V2_1_RUN_ID = "20260618_063559_889276"
