@@ -722,3 +722,121 @@ def build_loo_robustness(
         ).strip(),
     })
     return pd.DataFrame(rows)[LOO_ROBUSTNESS_COLUMNS]
+
+
+def _row_pooled_seed_mean_delta(
+    cand: pd.DataFrame, base: pd.DataFrame, *, seed_axis: str
+) -> float:
+    """Protocol §8 row-union estimand: mean over the seeds present in BOTH frames
+    of ``macro_F1(candidate rows) - macro_F1(baseline rows)`` (each pooled across
+    all rows of that seed). Mirrors ``guarded_walkforward._row_pooled_pooled_delta``
+    exactly -- the no-drop value reproduces ``pooled_delta_row_pooled``."""
+    seeds = sorted(set(cand[seed_axis].tolist()) & set(base[seed_axis].tolist()))
+    deltas: list[float] = []
+    for seed in seeds:
+        c = cand[cand[seed_axis] == seed]
+        b = base[base[seed_axis] == seed]
+        if c.empty or b.empty:
+            continue
+        cand_f1 = float(metrics.binary_macro_f1(
+            c["y_true"].to_numpy(dtype=int), c["y_pred"].to_numpy(dtype=int)
+        ))
+        base_f1 = float(metrics.binary_macro_f1(
+            b["y_true"].to_numpy(dtype=int), b["y_pred"].to_numpy(dtype=int)
+        ))
+        deltas.append(cand_f1 - base_f1)
+    if not deltas:
+        raise ValueError(
+            "row_pooled_loo: no common seed has both candidate and baseline rows"
+        )
+    return float(np.mean(deltas))
+
+
+def build_row_pooled_loo(
+    primary_predictions: pd.DataFrame,
+    baseline_predictions: pd.DataFrame,
+    *,
+    primary_model: str,
+    family_axis: str = "table_row_id",
+    period_axis: str = "period_id",
+    ticker_axis: str = "ticker",
+    seed_axis: str = "seed",
+    expected_period_count: int | None = None,
+    expected_ticker_count: int | None = None,
+    descriptive_note: str = "",
+) -> pd.DataFrame:
+    """The TRUE row-pooled leave-one-out of the BINDING guarded estimand
+    (protocol §8 row union), recomputed from the raw frozen predictions.
+
+    For each walk-forward period and each ticker: drop that slice's rows from BOTH
+    the primary candidate and the stratified-dummy baseline, then recompute the
+    row-pooled pooled_delta (:func:`_row_pooled_seed_mean_delta`). macro-F1 is
+    NON-linear across rows, so this -- unlike the equal-weight LOO -- cannot be
+    derived from the small per-period/per-ticker aggregates; it needs the row-level
+    ``v2_1_predictions.csv`` + ``v2_1_baseline_predictions.csv``. The no-drop
+    baseline reproduces ``pooled_delta_row_pooled``. Emits the same
+    ``LOO_ROBUSTNESS_COLUMNS`` schema as the equal-weight LOO (``weight_unit=row``,
+    ``n_units_remaining`` = rows surviving the drop). Descriptive robustness of the
+    binding estimand only -- never a significance test or a selection.
+    """
+    need_c = {family_axis, period_axis, ticker_axis, seed_axis, "y_true", "y_pred"}
+    need_b = {period_axis, ticker_axis, seed_axis, "y_true", "y_pred"}
+    for name, frame, need in (
+        ("primary_predictions", primary_predictions, need_c),
+        ("baseline_predictions", baseline_predictions, need_b),
+    ):
+        missing = sorted(need - set(frame.columns))
+        if missing:
+            raise ValueError(f"row_pooled_loo: {name} missing columns {missing}")
+    cand = primary_predictions[primary_predictions[family_axis].astype(str) == str(primary_model)]
+    if cand.empty:
+        raise ValueError(f"row_pooled_loo: no rows for primary model {primary_model!r}")
+    base = baseline_predictions
+    baseline_delta = _row_pooled_seed_mean_delta(cand, base, seed_axis=seed_axis)
+
+    rows: list[dict[str, Any]] = []
+    sweeps = (
+        ("row_pooled_over_periods", period_axis, expected_period_count),
+        ("row_pooled_over_tickers", ticker_axis, expected_ticker_count),
+    )
+    for estimand, axis, expected in sweeps:
+        values = sorted(set(cand[axis].astype(str)))
+        if expected is not None and len(values) != int(expected):
+            raise ValueError(
+                f"row_pooled_loo: expected {expected} {axis} values for {primary_model!r}, "
+                f"found {len(values)} ({values})"
+            )
+        after: dict[str, float] = {}
+        for value in values:
+            cc = cand[cand[axis].astype(str) != value]
+            bb = base[base[axis].astype(str) != value]
+            delta = _row_pooled_seed_mean_delta(cc, bb, seed_axis=seed_axis)
+            after[value] = delta
+            rows.append({
+                "estimand": estimand, "weight_unit": "row", "left_out": str(value),
+                "n_units_remaining": int(len(cc)), "delta_after_drop": delta,
+                "baseline_delta": baseline_delta, "delta_shift": delta - baseline_delta,
+                "sign_after_drop": bool(delta > 0.0), "note": "",
+            })
+        if baseline_delta > 0.0:
+            sign_flip = any(after[k] <= 0.0 for k in after)
+        elif baseline_delta < 0.0:
+            sign_flip = any(after[k] >= 0.0 for k in after)
+        else:
+            sign_flip = True
+        worst = min(after, key=lambda k: after[k])
+        influential = max(after, key=lambda k: abs(after[k] - baseline_delta))
+        rows.append({
+            "estimand": estimand, "weight_unit": "row", "left_out": "<all:summary>",
+            "n_units_remaining": int(len(cand)), "delta_after_drop": baseline_delta,
+            "baseline_delta": baseline_delta, "delta_shift": 0.0,
+            "sign_after_drop": bool(not sign_flip),
+            "note": (
+                f"row-pooled (protocol §8 row-union) over {len(values)} "
+                f"{axis} values; baseline reproduces pooled_delta_row_pooled; "
+                f"loo_sign_flip={sign_flip}; worst_after={after[worst]:.6f} (drop {worst}); "
+                f"most_influential={influential} (delta_after={after[influential]:.6f}). "
+                f"{descriptive_note}"
+            ).strip(),
+        })
+    return pd.DataFrame(rows)[LOO_ROBUSTNESS_COLUMNS]
