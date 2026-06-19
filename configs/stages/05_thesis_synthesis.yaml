@@ -1,0 +1,248 @@
+stage_name: 05_thesis_synthesis
+route: lst_models
+scope: synthesis_measure_only
+holdout_test_contact: false
+official_validation_contact: read_frozen_artifacts_only
+new_scoring_events: 0
+official_validation_for_selection: false
+no_final_model_selected: true
+reads_guarded_walkforward_artifacts: true
+
+# Stage 05 is measure-only synthesis: it reads frozen Stage 03 / Stage 04 / V2.1
+# artifacts and packages synthesis tables. It performs zero new fits, zero new
+# scoring events, and no reselection. Every measured number in the synthesis
+# artifacts is resolved from a frozen upstream record field (never hand-typed).
+inputs:
+  stage03_run_id: "20260610_133305_716174"
+  stage03_runtime_run_dir: /content/lst_models_results/03_frozen_validation_readout/20260610_133305_716174
+  stage03_drive_path_parts: [lst_models, results, 03_frozen_validation_readout, "20260610_133305_716174"]
+  required_stage03_artifacts:
+    - run_manifest.json
+    - artifact_inventory.csv
+    - 03_decision_record.json
+  stage04_run_id: "20260618_234011_838683"
+  stage04_runtime_run_dir: /content/lst_models_results/04_diagnostics_ablation/20260618_234011_838683
+  stage04_drive_path_parts: [lst_models, results, 04_diagnostics_ablation, "20260618_234011_838683"]
+  required_stage04_artifacts:
+    - run_manifest.json
+    - artifact_inventory.csv
+    - 04_diagnostics_report.json
+  v2_1_run_id: "20260618_063559_889276"
+  v2_1_runtime_run_dir: /content/lst_models_results/v2_1_guarded_walkforward_readout/20260618_063559_889276
+  v2_1_drive_path_parts: [lst_models, results, v2_1_guarded_walkforward_readout, "20260618_063559_889276"]
+  required_v2_1_artifacts:
+    - run_manifest.json
+    - artifact_inventory.csv
+    - v2_1_decision_record.json
+  notebook_path: notebooks/05_thesis_synthesis_colab.ipynb
+  protocol_path: docs/protocols/05_thesis_synthesis_protocol.md
+
+outputs:
+  output_dir: /content/lst_models_results/05_thesis_synthesis
+  manifest: run_manifest.json
+  artifact_inventory: artifact_inventory.csv
+  validation_budget_ledger: 05_validation_budget_ledger.csv
+  claim_boundary_register: 05_claim_boundary_register.csv
+  expectation_calibration: 05_expectation_calibration.csv
+  synthesis_report: 05_thesis_synthesis_report.json
+
+# The three canonical evidence domains (protocol §3). Every synthesized row is
+# tagged with exactly one; the claim register rejects any other value.
+evidence_domains:
+  - official_validation
+  - train_inner_control
+  - guarded_walkforward
+
+# S5.1 validation budget ledger. One row per scoring stage; the event count for
+# each is RESOLVED from that stage's frozen record field (events_source_key +
+# events_field), never hand-typed. The runner appends a `total` row.
+budget_ledger:
+  stages:
+    - stage_name: 03_frozen_validation_readout
+      run_id_key: stage03
+      evidence_domain: official_validation
+      data_segment: validation_2013_2017
+      contact_type: official_validation_scored_once_per_seed
+      events_source_key: stage03
+      events_field: official_validation_scoring_events
+      for_selection: false
+      notes: "official validation scored once per frozen seed x candidate (Dwork 2015 reusable-holdout budget)"
+    - stage_name: 04_diagnostics_ablation
+      run_id_key: stage04
+      evidence_domain: train_inner_control
+      data_segment: train_inner
+      contact_type: read_frozen_artifacts_only
+      events_source_key: stage04
+      events_field: new_validation_fit_predict_events
+      for_selection: false
+      notes: "diagnosis only; reads the frozen Stage 03 dump; zero new validation fit-predict events"
+    - stage_name: v2_1_guarded_walkforward_readout
+      run_id_key: v2_1
+      evidence_domain: guarded_walkforward
+      data_segment: guarded_holdout_2017_2024
+      contact_type: guarded_historically_contacted
+      events_source_key: v2_1
+      events_field: guarded_scoring_events
+      for_selection: false
+      notes: "guarded walk-forward; historically contacted post-2017 segment"
+
+# S5.2 claim boundary register. Each statement uses ONLY register-allowed wording
+# and is rejected if it contains any forbidden string. evidence_domain must be one
+# of evidence_domains; supporting_run_id_key must resolve to a wired input.
+claim_boundary_register:
+  claims:
+    - claim_id: C1_leakage_control_verified
+      evidence_domain: official_validation
+      is_limitation: false
+      supporting_run_id_key: stage04
+      supporting_artifact: 04_diagnostics_report.json
+      statement: "Leakage control is verified (causal/day-local features, fit-only normalization, disjoint early-stopping tail, day-aligned period boundaries)."
+    - claim_id: C2_sentinel_collapses
+      evidence_domain: official_validation
+      is_limitation: false
+      supporting_run_id_key: stage04
+      supporting_artifact: 04_sentinel_summary.csv
+      statement: "A within-day label-shuffle and a time-reversed sentinel collapse the same-row delta toward zero, an empirical leakage negative control."
+    - claim_id: C3_validation_met_criteria
+      evidence_domain: official_validation
+      is_limitation: false
+      supporting_run_id_key: stage03
+      supporting_artifact: 03_decision_record.json
+      statement: "The frozen primary candidate met the predeclared official validation-readout criteria (validation-only evidence)."
+    - claim_id: C4_guarded_met_criteria
+      evidence_domain: guarded_walkforward
+      is_limitation: false
+      supporting_run_id_key: v2_1
+      supporting_artifact: v2_1_decision_record.json
+      statement: "The predeclared TCN primary candidate met the guarded stability criteria in a historically-contacted walk-forward readout."
+    - claim_id: C5_families_exceed_dummy
+      evidence_domain: guarded_walkforward
+      is_limitation: false
+      supporting_run_id_key: v2_1
+      supporting_artifact: v2_1_comparison_table.csv
+      statement: "All four model families exceeded the same-row dummy baseline on mean macro-F1 in the guarded readout."
+    - claim_id: C6_no_winning_model
+      evidence_domain: guarded_walkforward
+      is_limitation: false
+      supporting_run_id_key: v2_1
+      supporting_artifact: v2_1_decision_record.json
+      statement: "LightGBM had the numerically highest mean delta; the route selects no winning model."
+    - claim_id: C7_guarded_not_unseen
+      evidence_domain: guarded_walkforward
+      is_limitation: false
+      supporting_run_id_key: v2_1
+      supporting_artifact: v2_1_decision_record.json
+      statement: "The guarded walk-forward evidence is historically-contacted and must not be treated as an unseen-data result."
+    - claim_id: L1_activity_conditional
+      evidence_domain: official_validation
+      is_limitation: true
+      supporting_run_id_key: stage04
+      supporting_artifact: 04_robustness_slices.csv
+      statement: "The edge is concentrated in low-activity (low-movement) bars and is below the balanced random prior on the highest-activity bars; 'activity' is a per-day eligible-row-count proxy (a no-trade-band proxy), not realized volume or liquidity."
+    - claim_id: L2_macro_f1_not_economic
+      evidence_domain: guarded_walkforward
+      is_limitation: true
+      supporting_run_id_key: v2_1
+      supporting_artifact: v2_1_decision_record.json
+      statement: "Evaluation is classification-only; no economic (P&L / cost / Sharpe) analysis is performed or claimed. A small macro-F1 delta is not evidence of tradeability."
+    - claim_id: L3_two_seeds
+      evidence_domain: guarded_walkforward
+      is_limitation: true
+      supporting_run_id_key: v2_1
+      supporting_artifact: v2_1_decision_record.json
+      statement: "Stability rests on 2 seeds, which is thin for seed-to-seed variance; the primary uncertainty estimate is a per-trading-day block bootstrap."
+    - claim_id: L4_v1_historical_contact
+      evidence_domain: guarded_walkforward
+      is_limitation: true
+      supporting_run_id_key: v2_1
+      supporting_artifact: v2_1_decision_record.json
+      statement: "The V1 route historically contacted the post-2017 segment, so the walk-forward readout is guarded and historically-contacted, not an unseen-data result."
+
+# S5.3 expectation calibration. config_literature rows carry external-knowledge
+# band anchors (value + citation in context); measured rows resolve `value` from a
+# frozen record field (value_source_key + dotted value_field), fail-closed.
+expectation_calibration:
+  rows:
+    - metric_id: literature_naive_floor
+      label: "Published naive direction-accuracy floor"
+      value_source: config_literature
+      value: 0.50
+      context: "~50% naive floor for daily/intraday direction (roadmap §12)"
+    - metric_id: literature_typical_ceiling
+      label: "Published typical reported direction-accuracy ceiling"
+      value_source: config_literature
+      value: 0.56
+      context: "low-to-mid 50s% typical reported ceiling (Gu, Kelly & Xiu 2020; roadmap §12); anything materially above is a leakage red flag"
+    - metric_id: validation_mean_macro_f1
+      label: "Stage 03 official-validation mean macro-F1 (2 seeds)"
+      value_source: frozen_record
+      value_source_key: stage03
+      value_field: aggregate.mean_macro_f1
+      context: "official_validation domain, 2013-09->2017-01 segment; absolute macro-F1, not accuracy"
+    - metric_id: validation_pooled_delta_vs_dummy
+      label: "Stage 03 official-validation mean macro-F1 delta vs same-row dummy"
+      value_source: frozen_record
+      value_source_key: stage03
+      value_field: aggregate.mean_delta_macro_f1_vs_stratified_dummy_train_prior
+      context: "official_validation domain; same-row stratified-dummy delta"
+    - metric_id: guarded_pooled_delta_binding
+      label: "V2.1 guarded TCN-primary pooled macro-F1 delta (binding estimand)"
+      value_source: frozen_record
+      value_source_key: v2_1
+      value_field: pooled_delta
+      context: "guarded_walkforward domain; binding estimand recorded in pooled_delta_estimand; 2017-01->2024-04 segment"
+    - metric_id: guarded_pooled_delta_row_pooled
+      label: "V2.1 guarded pooled delta (row-pooled / protocol §8 estimand)"
+      value_source: frozen_record
+      value_source_key: v2_1
+      value_field: pooled_delta_row_pooled
+      context: "guarded_walkforward domain; protocol row-union estimand (register FIX-1); null on a resumed run"
+    - metric_id: guarded_pooled_delta_equal_weight
+      label: "V2.1 guarded pooled delta (equal-weight companion estimand)"
+      value_source: frozen_record
+      value_source_key: v2_1
+      value_field: pooled_delta_equal_weight
+      context: "guarded_walkforward domain; equal-weight-per-period companion (register FIX-1 / F9)"
+
+# S5.5 KB wording guardrails carried into the synthesis report DO-NOT list.
+kb_wording_guardrails:
+  - "Do not call DLinear-classification a published standard."
+  - "Do not present drop-neutral binary results as full-market deployment performance."
+  - "Do not compare V1 labels with V2 no-trade labels as the same task."
+  - "Never frame the low-activity (calm-bar) edge as a feature/innovation; it is a conditional-signal limitation."
+  - "Complex / neural sequence models do not clearly beat tree baselines; never name a single winning or superior model."
+  - "Never assert the model is well-calibrated (low resolution)."
+
+# Measure-only synthesis names the heavier analyses this home unblocks; the runner
+# echoes them in the report as deferred_synthesis_items (no silent omission).
+deferred_synthesis_items:
+  - descriptive_pbo_cscv_and_min_family_lcb_over_56_event_guarded_ledger
+  - augrc_and_minimum_detectable_effect_and_abstention_by_activity_tercile
+  - four_estimand_recompute_and_leave_one_period_out_and_leave_one_ticker_out
+
+forbidden:
+  wording:
+    - final model
+    - official validation winner
+    - holdout winner
+    - test winner
+    - proved best model
+    - generalization proven
+    - profitable
+    - holdout-ready
+    - selected by official validation
+    - chosen threshold
+    - clean test
+    - clean holdout
+    - untouched test
+    - untouched holdout
+    - final evidence
+    - out-of-sample proof
+    - walk-forward winner
+    - tradable alpha
+    - statistically significant
+    - lightgbm best
+    - lightgbm selected
+    - tcn best
+    - tcn is superior
+    - sota

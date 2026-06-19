@@ -1,0 +1,344 @@
+"""Stage 05 thesis-synthesis run_stage smoke tests.
+
+Exercises the REAL committed config (budget ledger, claim register, expectation
+calibration, guardrails) against a tiny synthetic frozen Stage 03 / Stage 04 /
+V2.1 chain: fail-closed entry gates, measure-only synthesis, numbers resolved
+from frozen record fields, and a no-forbidden-wording happy path. No fits, no
+scoring, no model objects.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+import pandas as pd
+import pytest
+import yaml
+
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src"))
+
+from lst_models import synthesis  # noqa: E402
+from lst_models.artifacts import write_artifact_inventory, write_json  # noqa: E402
+from lst_models.stages import thesis_synthesis as stage05  # noqa: E402
+from lst_models.stages.thesis_synthesis import run_stage  # noqa: E402
+
+CONFIG_PATH = ROOT / "configs" / "stages" / "05_thesis_synthesis.yaml"
+
+
+def _load_config() -> dict:
+    with CONFIG_PATH.open("r", encoding="utf-8") as handle:
+        return yaml.safe_load(handle)
+
+
+class Stage05Dirs:
+    """Synthetic frozen Stage 03 / Stage 04 / V2.1 run folders with real sha256
+    inventories and decision records carrying exactly the fields the committed
+    Stage 05 config resolves."""
+
+    def __init__(self, tmp_path: Path) -> None:
+        self.tmp_path = tmp_path
+        self.base_config = _load_config()
+        ids = self.base_config["inputs"]
+        self.stage03_run_id = str(ids["stage03_run_id"])
+        self.stage04_run_id = str(ids["stage04_run_id"])
+        self.v2_1_run_id = str(ids["v2_1_run_id"])
+        self.dirs = {
+            "stage03": tmp_path / "stage03" / self.stage03_run_id,
+            "stage04": tmp_path / "stage04" / self.stage04_run_id,
+            "v2_1": tmp_path / "v2_1" / self.v2_1_run_id,
+        }
+        self.output_dir = tmp_path / "out"
+        self.notebook_path = tmp_path / "05_thesis_synthesis_colab.ipynb"
+        self.notebook_path.write_text("{}", encoding="utf-8")
+        self._write_stage03()
+        self._write_stage04()
+        self._write_v2_1()
+
+    # ----------------------------------------------------------- records --
+    def _stage03_record(self) -> dict:
+        return {
+            "decision": "met_predeclared_validation_readout_criteria",
+            "readout_complete": True,
+            "holdout_test_contact": False,
+            "official_validation_for_selection": False,
+            "official_validation_scoring_events": 2,
+            "scoring_event_ledger": [{"seed": 101, "n_rows": 5}, {"seed": 202, "n_rows": 5}],
+            "source_stage00_run_id": "stage00",
+            "source_stage01_run_id": "stage01",
+            "source_stage02_run_id": "stage02",
+            "aggregate": {
+                "mean_macro_f1": 0.5170,
+                "mean_delta_macro_f1_vs_stratified_dummy_train_prior": 0.0169,
+                "mean_delta_macro_f1_vs_majority_train_prior": 0.1883,
+                "positive_ticker_count": 5,
+            },
+        }
+
+    def _stage04_report(self) -> dict:
+        return {
+            "route": "lst_models",
+            "stage_name": "04_diagnostics_ablation",
+            "stage03_decision": "met_predeclared_validation_readout_criteria",
+            "new_validation_fit_predict_events": 0,
+            "official_validation_scoring_events": 0,
+            "holdout_test_contact": False,
+            "official_validation_for_selection": False,
+            "no_final_model_selected": True,
+            "source_stage03_run_id": self.stage03_run_id,
+        }
+
+    def _stage04_manifest(self) -> dict:
+        return {
+            "stage_name": "04_diagnostics_ablation",
+            "holdout_test_contact": False,
+            "official_validation_for_selection": False,
+            "official_validation_contact": "read_frozen_artifacts_only",
+            "no_final_model_selected": True,
+            "source_stage03_run_id": self.stage03_run_id,
+        }
+
+    def _v2_1_record(self) -> dict:
+        return {
+            "route": "lst_models",
+            "stage_name": "v2_1_guarded_walkforward_readout",
+            "decision": "met_predeclared_guarded_stability_criteria",
+            "readout_complete": True,
+            "holdout_test_contact": True,
+            "holdout_contact_tier": "guarded_historically_contacted",
+            "clean_test_claim": False,
+            "official_validation_for_selection": False,
+            "no_final_model_selected": True,
+            "guarded_scoring_events": 56,
+            "positive_period_count": 5,
+            "pooled_delta": 0.006362,
+            "pooled_delta_estimand": "row_pooled",
+            "pooled_delta_equal_weight": 0.005439,
+            "pooled_delta_row_pooled": 0.006362,
+            "pooled_delta_row_pooled_available": True,
+            "source_stage03_run_id": self.stage03_run_id,
+            "source_stage04_run_id": self.stage04_run_id,
+        }
+
+    # --------------------------------------------------------- folders ----
+    def _write_folder(self, key: str, records: dict[str, dict]) -> None:
+        run_dir = self.dirs[key]
+        run_dir.mkdir(parents=True, exist_ok=True)
+        for name, payload in records.items():
+            write_json(run_dir / name, payload)
+        write_artifact_inventory(run_dir, {name: run_dir / name for name in records})
+
+    def _write_stage03(self) -> None:
+        self._write_folder("stage03", {
+            "run_manifest.json": {"holdout_test_contact": False,
+                                  "official_validation_for_selection": False},
+            "03_decision_record.json": self._stage03_record(),
+        })
+
+    def _write_stage04(self) -> None:
+        self._write_folder("stage04", {
+            "run_manifest.json": self._stage04_manifest(),
+            "04_diagnostics_report.json": self._stage04_report(),
+        })
+
+    def _write_v2_1(self) -> None:
+        self._write_folder("v2_1", {
+            "run_manifest.json": {"holdout_test_contact": True,
+                                  "holdout_contact_tier": "guarded_historically_contacted",
+                                  "no_final_model_selected": True},
+            "v2_1_decision_record.json": self._v2_1_record(),
+        })
+
+    # ----------------------------------------------------------- config ---
+    def config(self) -> dict:
+        config = _load_config()
+        inputs = config["inputs"]
+        for key in ("stage03", "stage04", "v2_1"):
+            inputs[f"{key}_runtime_run_dir"] = str(self.dirs[key])
+        inputs["notebook_path"] = str(self.notebook_path)
+        config["outputs"]["output_dir"] = str(self.output_dir)
+        return config
+
+    # --------------------------------------------------------- mutators ---
+    def override_record(self, key: str, name: str, **overrides: object) -> None:
+        path = self.dirs[key] / name
+        record = json.loads(path.read_text(encoding="utf-8"))
+        record.update(overrides)
+        write_json(path, record)
+        names = [p.name for p in self.dirs[key].glob("*.json")]
+        write_artifact_inventory(self.dirs[key], {n: self.dirs[key] / n for n in names})
+
+    def remove_artifact(self, key: str, name: str) -> None:
+        (self.dirs[key] / name).unlink()
+
+    def single_run_dir(self) -> Path:
+        run_dirs = [path for path in self.output_dir.iterdir() if path.is_dir()]
+        assert len(run_dirs) == 1, f"expected one run folder, got {len(run_dirs)}"
+        return run_dirs[0]
+
+    def read_output(self, name: str) -> str:
+        return (self.single_run_dir() / name).read_text(encoding="utf-8")
+
+
+@pytest.fixture()
+def stage_dirs(tmp_path: Path) -> Stage05Dirs:
+    return Stage05Dirs(tmp_path)
+
+
+def test_happy_path_writes_four_artifacts_and_report(stage_dirs: Stage05Dirs) -> None:
+    result = run_stage(stage_dirs.config())
+    run_dir = stage_dirs.single_run_dir()
+    assert result.run_dir == run_dir
+    for name in stage05.REQUIRED_STAGE05_ARTIFACTS:
+        assert (run_dir / name).exists(), f"missing required artifact {name}"
+
+    report = json.loads(stage_dirs.read_output("05_thesis_synthesis_report.json"))
+    assert report["scope"] == "synthesis_measure_only"
+    assert report["new_scoring_events"] == 0
+    assert report["holdout_test_contact"] is False
+    assert report["no_final_model_selected"] is True
+    assert report["clean_test_claim"] is False
+    assert report["reads_guarded_walkforward_artifacts"] is True
+    assert report["source_stage03_run_id"] == stage_dirs.stage03_run_id
+    assert report["source_v2_1_run_id"] == stage_dirs.v2_1_run_id
+    assert report["v2_1_decision"] == "met_predeclared_guarded_stability_criteria"
+    assert report["kb_wording_guardrails"]
+    assert report["deferred_synthesis_items"]
+
+
+def test_budget_ledger_totals_resolved_from_records(stage_dirs: Stage05Dirs) -> None:
+    run_stage(stage_dirs.config())
+    run_dir = stage_dirs.single_run_dir()
+    ledger = pd.read_csv(run_dir / "05_validation_budget_ledger.csv")
+    assert list(ledger.columns) == synthesis.VALIDATION_BUDGET_LEDGER_COLUMNS
+    by_stage = ledger.set_index("stage_name")["scoring_events"].to_dict()
+    # Values come from the frozen records, not the config.
+    assert int(by_stage["03_frozen_validation_readout"]) == 2
+    assert int(by_stage["04_diagnostics_ablation"]) == 0
+    assert int(by_stage["v2_1_guarded_walkforward_readout"]) == 56
+    assert int(by_stage["total"]) == 58
+    assert not ledger["for_selection"].any()
+    # every non-total row tagged with a canonical evidence domain
+    non_total = ledger.loc[ledger["stage_name"] != "total"]
+    assert set(non_total["evidence_domain"]) <= set(synthesis.EVIDENCE_DOMAINS)
+
+
+def test_expectation_calibration_resolves_measured_values(stage_dirs: Stage05Dirs) -> None:
+    run_stage(stage_dirs.config())
+    run_dir = stage_dirs.single_run_dir()
+    table = pd.read_csv(run_dir / "05_expectation_calibration.csv")
+    assert list(table.columns) == synthesis.EXPECTATION_CALIBRATION_COLUMNS
+    by_metric = table.set_index("metric_id")
+    assert float(by_metric.loc["validation_mean_macro_f1", "value"]) == pytest.approx(0.5170)
+    assert float(by_metric.loc["guarded_pooled_delta_binding", "value"]) == pytest.approx(0.006362)
+    assert float(by_metric.loc["guarded_pooled_delta_equal_weight", "value"]) == pytest.approx(
+        0.005439
+    )
+    # measured rows trace to <source_key>:<field>; literature rows do not
+    assert by_metric.loc["guarded_pooled_delta_binding", "value_source"] == "v2_1:pooled_delta"
+    assert by_metric.loc["literature_naive_floor", "value_source"] == "config_literature"
+
+
+def test_no_forbidden_wording_in_any_output(stage_dirs: Stage05Dirs) -> None:
+    config = stage_dirs.config()
+    forbidden = config["forbidden"]["wording"]
+    run_stage(config)
+    run_dir = stage_dirs.single_run_dir()
+    for name in ("05_claim_boundary_register.csv", "05_expectation_calibration.csv",
+                 "05_thesis_synthesis_report.json", "05_validation_budget_ledger.csv"):
+        text = (run_dir / name).read_text(encoding="utf-8")
+        assert not synthesis.find_forbidden_wording(text, forbidden), name
+
+
+def test_claim_register_tags_domains_and_limitations(stage_dirs: Stage05Dirs) -> None:
+    run_stage(stage_dirs.config())
+    register = pd.read_csv(stage_dirs.single_run_dir() / "05_claim_boundary_register.csv")
+    assert list(register.columns) == synthesis.CLAIM_BOUNDARY_REGISTER_COLUMNS
+    assert set(register["evidence_domain"]) <= set(synthesis.EVIDENCE_DOMAINS)
+    assert register["is_limitation"].astype(bool).any()
+    # supporting run id resolved to a wired id, never blank
+    assert register["supporting_run_id"].astype(str).str.len().gt(0).all()
+
+
+def test_manifest_has_provenance_and_safety_fields(stage_dirs: Stage05Dirs) -> None:
+    run_stage(stage_dirs.config())
+    manifest = json.loads(stage_dirs.read_output("run_manifest.json"))
+    assert manifest["scope"] == "synthesis_measure_only"
+    assert manifest["holdout_test_contact"] is False
+    assert manifest["official_validation_contact"] == "read_frozen_artifacts_only"
+    assert manifest["new_scoring_events"] == 0
+    assert manifest["no_final_model_selected"] is True
+    for field in ("stage05_synthesis_code_sha256", "config_sha256", "git_commit",
+                  "source_stage03_run_id", "source_stage04_run_id", "source_v2_1_run_id"):
+        assert field in manifest
+
+
+def test_blocks_when_v2_1_readout_incomplete(stage_dirs: Stage05Dirs) -> None:
+    stage_dirs.override_record("v2_1", "v2_1_decision_record.json", readout_complete=False)
+    with pytest.raises(ValueError, match="readout_complete"):
+        run_stage(stage_dirs.config())
+
+
+def test_blocks_when_stage04_has_nonzero_events(stage_dirs: Stage05Dirs) -> None:
+    stage_dirs.override_record(
+        "stage04", "04_diagnostics_report.json", new_validation_fit_predict_events=3
+    )
+    with pytest.raises(ValueError, match="new_validation_fit_predict_events"):
+        run_stage(stage_dirs.config())
+
+
+def test_blocks_on_run_id_chain_mismatch(stage_dirs: Stage05Dirs) -> None:
+    stage_dirs.override_record(
+        "v2_1", "v2_1_decision_record.json", source_stage03_run_id="wrong_id"
+    )
+    with pytest.raises(ValueError, match="run id chain"):
+        run_stage(stage_dirs.config())
+
+
+def test_blocks_on_missing_required_artifact(stage_dirs: Stage05Dirs) -> None:
+    stage_dirs.remove_artifact("v2_1", "v2_1_decision_record.json")
+    with pytest.raises(FileNotFoundError, match="v2_1_decision_record.json"):
+        run_stage(stage_dirs.config())
+
+
+def test_blocks_when_v2_1_not_guarded_tier(stage_dirs: Stage05Dirs) -> None:
+    stage_dirs.override_record(
+        "v2_1", "v2_1_decision_record.json", holdout_contact_tier="clean"
+    )
+    with pytest.raises(ValueError, match="guarded_historically_contacted"):
+        run_stage(stage_dirs.config())
+
+
+def test_blocks_when_v2_1_claims_clean_test(stage_dirs: Stage05Dirs) -> None:
+    stage_dirs.override_record("v2_1", "v2_1_decision_record.json", clean_test_claim=True)
+    with pytest.raises(ValueError, match="clean_test_claim"):
+        run_stage(stage_dirs.config())
+
+
+def test_blocks_on_forbidden_wording_in_claim(stage_dirs: Stage05Dirs) -> None:
+    config = stage_dirs.config()
+    config["claim_boundary_register"]["claims"][0]["statement"] = (
+        "This is the final model and it is profitable."
+    )
+    with pytest.raises(ValueError, match="forbidden wording"):
+        run_stage(config)
+
+
+def test_blocks_on_missing_expectation_field(stage_dirs: Stage05Dirs) -> None:
+    config = stage_dirs.config()
+    for row in config["expectation_calibration"]["rows"]:
+        if row.get("value_source") != "config_literature":
+            row["value_field"] = "aggregate.does_not_exist"
+            break
+    with pytest.raises(KeyError, match="not found"):
+        run_stage(config)
+
+
+def test_blocks_on_unknown_evidence_domain_in_claim(stage_dirs: Stage05Dirs) -> None:
+    config = stage_dirs.config()
+    config["claim_boundary_register"]["claims"][0]["evidence_domain"] = "made_up_domain"
+    with pytest.raises(ValueError, match="evidence_domain"):
+        run_stage(config)

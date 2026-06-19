@@ -342,6 +342,38 @@ def stage03_readout_code_sha256() -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def stage05_synthesis_code_sha256() -> str:
+    """sha256 over the Stage 05 synthesis mechanism: the measure-only packaging
+    helpers in ``lst_models.synthesis`` (budget-ledger / claim-register /
+    expectation-calibration builders, the fail-closed field resolver, and the
+    forbidden-wording gate). Domain functions only — Stage 05 does no fit,
+    feature rebuild, or scoring, so this hash is independent of the rebuild
+    chain and of stage orchestration."""
+    from lst_models import synthesis as synthesis_module
+
+    code_payload = {
+        "resolve_record_field": inspect.getsource(synthesis_module.resolve_record_field),
+        "find_forbidden_wording": inspect.getsource(synthesis_module.find_forbidden_wording),
+        "assert_no_forbidden_wording": inspect.getsource(
+            synthesis_module.assert_no_forbidden_wording
+        ),
+        "build_validation_budget_ledger": inspect.getsource(
+            synthesis_module.build_validation_budget_ledger
+        ),
+        "build_claim_boundary_register": inspect.getsource(
+            synthesis_module.build_claim_boundary_register
+        ),
+        "build_expectation_calibration": inspect.getsource(
+            synthesis_module.build_expectation_calibration
+        ),
+        "collect_pooled_delta_estimands": inspect.getsource(
+            synthesis_module.collect_pooled_delta_estimands
+        ),
+    }
+    payload = json.dumps(code_payload, sort_keys=True).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def stage04_diagnostics_code_sha256() -> str:
     """sha256 over the Stage 04 measurement mechanism: the calibration and
     selective-prediction metric helpers, the baseline-reconstruction helper,

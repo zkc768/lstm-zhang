@@ -79,6 +79,30 @@ The V2 stage route is:
 06_ian_final_progress_record_colab.ipynb
 ```
 
+A measure-only **V2.1 branch** reads the frozen Stage 03/04 artifacts and runs a
+guarded, historically-contacted walk-forward readout (it is NOT a clean test and
+never reopens Stage 00-02 selection). Its sidecar bundle is
+`v2_1_guarded_walkforward_readout_colab.ipynb` +
+`configs/stages/v2_1_guarded_walkforward_readout.yaml` +
+`docs/protocols/v2_1_guarded_walkforward_readout_protocol.md` +
+`src/lst_models/guarded_walkforward.py` (with the
+`stages/guarded_walkforward_readout.py` entry point). It branches off after Stage
+04 and feeds Stage 05 synthesis.
+
+The route also carries **measure-only analyses** layered on the frozen dumps,
+with zero new scoring: Stage 04 hosts calibration / selective-AURC / robustness
+LOO / the leakage sentinel; Stage 05 (thesis synthesis) aggregates the
+validation-budget ledger, claim boundary register, and expectation calibration,
+and is the home for the deferred descriptive PBO/CSCV + `min_family_lcb`,
+AUGRC/MDE, and four-estimand analyses.
+
+Build status (2026-06-18): stages 00-05 and the V2.1 branch have full sidecar
+bundles (notebook + protocol + config + entry point + tests). Stage 06
+(`06_ian_final_progress_record`) currently has its protocol only; its config and
+notebook are pending — it is the route's closing progress record, not an
+executable scoring stage. The listing above is the route contract (intended
+shape), not an assertion that every file already exists.
+
 Each executable stage has exactly one user-facing notebook. When an agent
 creates or materially changes that notebook, the same task must create or update
 the GitHub sidecar bundle. The user should not need a separate manual generation
