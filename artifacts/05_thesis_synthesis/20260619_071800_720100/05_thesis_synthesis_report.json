@@ -2,8 +2,16 @@
   "claim_count": 11,
   "clean_test_claim": false,
   "deferred_synthesis_items": [
-    "four_estimand_recompute_and_leave_one_period_out_and_leave_one_ticker_out"
+    "row_pooled_leave_one_period_out_and_leave_one_ticker_out_from_raw_v2_1_predictions"
   ],
+  "estimand_contrast": {
+    "descriptive_only": true,
+    "guarded_walkforward__equal_weight": 0.005495103879443143,
+    "guarded_walkforward__row_pooled": 0.006361602324004845,
+    "no_final_model_selected": true,
+    "official_validation__equal_weight": 0.019354432425994366,
+    "official_validation__row_pooled": 0.0168850843462664
+  },
   "evidence_domains": [
     "official_validation",
     "train_inner_control",
@@ -20,6 +28,19 @@
     "Never assert the model is well-calibrated (low resolution)."
   ],
   "limitation_count": 4,
+  "loo_robustness": {
+    "baseline_delta": {
+      "equal_weight_over_periods": 0.005495103879443114,
+      "equal_weight_over_tickers": 0.005297503310335309
+    },
+    "descriptive_only": true,
+    "row_pooled_loo_deferred": true,
+    "row_pooled_loo_reason": "macro-F1 non-linear across rows; needs raw v2_1_predictions.csv",
+    "sign_survives_all_drops": {
+      "equal_weight_over_periods": true,
+      "equal_weight_over_tickers": true
+    }
+  },
   "multiplicity_discount": {
     "descriptive_only": true,
     "max_family_mean": 0.006950003903129272,
@@ -37,7 +58,7 @@
   "official_validation_contact": "read_frozen_artifacts_only",
   "reads_guarded_walkforward_artifacts": true,
   "route": "lst_models",
-  "run_id": "20260619_053750_244288",
+  "run_id": "20260619_071800_720100",
   "scope": "synthesis_measure_only",
   "scoring_event_budget": {
     "03_frozen_validation_readout": 2,

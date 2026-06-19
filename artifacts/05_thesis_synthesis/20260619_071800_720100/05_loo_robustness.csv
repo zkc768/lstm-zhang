@@ -1,0 +1,16 @@
+estimand,weight_unit,left_out,n_units_remaining,delta_after_drop,baseline_delta,delta_shift,sign_after_drop,note
+equal_weight_over_periods,walkforward_period,wf_p1,6.0,0.0048739188535555835,0.005495103879443114,-0.0006211850258875306,True,
+equal_weight_over_periods,walkforward_period,wf_p2,6.0,0.0044085574529287835,0.005495103879443114,-0.0010865464265143307,True,
+equal_weight_over_periods,walkforward_period,wf_p3,6.0,0.005171913324658183,0.005495103879443114,-0.0003231905547849308,True,
+equal_weight_over_periods,walkforward_period,wf_p4,6.0,0.006840005308770917,0.005495103879443114,0.0013449014293278033,True,
+equal_weight_over_periods,walkforward_period,wf_p5,6.0,0.005412404979827083,0.005495103879443114,-8.269889961603095e-05,True,
+equal_weight_over_periods,walkforward_period,wf_p6,6.0,0.0066338013215848325,0.005495103879443114,0.0011386974421417183,True,
+equal_weight_over_periods,walkforward_period,wf_p7,6.0,0.005125125914776416,0.005495103879443114,-0.0003699779646666977,True,
+equal_weight_over_periods,walkforward_period,<all:summary>,7.0,0.005495103879443114,0.005495103879443114,0.0,True,equal-weight over 7 walkforward_periods; loo_sign_flip=False; worst_after=0.004409 (drop wf_p2); most_influential=wf_p4 (delta_after=0.006840)
+equal_weight_over_tickers,ticker,CSCO,4.0,0.004090736038777926,0.005297503310335309,-0.0012067672715573826,True,
+equal_weight_over_tickers,ticker,JPM,4.0,0.006248738362922858,0.005297503310335309,0.0009512350525875488,True,
+equal_weight_over_tickers,ticker,KO,4.0,0.006242205472914329,0.005297503310335309,0.0009447021625790201,True,
+equal_weight_over_tickers,ticker,MSFT,4.0,0.004266287009531409,0.005297503310335309,-0.0010312163008038997,True,
+equal_weight_over_tickers,ticker,WMT,4.0,0.0056395496675300215,0.005297503310335309,0.00034204635719471254,True,
+equal_weight_over_tickers,ticker,<all:summary>,5.0,0.005297503310335309,0.005297503310335309,0.0,True,equal-weight over 5 tickers; loo_sign_flip=False; worst_after=0.004091 (drop CSCO); most_influential=CSCO (delta_after=0.004091)
+row_pooled,row,<deferred>,,,,,,"row-pooled LOO deferred: macro-F1 is non-linear across rows, so it must recompute pooled macro-F1 from the raw v2_1_predictions.csv (Drive-only); kept measure-only here. row_pooled_available_in_record=True. Equal-weight LOO is descriptive robustness, not a significance test; the binding estimand is row-pooled and its LOO is deferred to a raw-dump (v2_1_predictions.csv) pass."

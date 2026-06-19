@@ -1,0 +1,5 @@
+evidence_domain,aggregation,weight_unit,pooled_delta,metric_kind,value_source,note
+guarded_walkforward,row_pooled,row,0.006361602324004845,macro_f1_delta_vs_stratified_dummy_train_prior,v2_1_decision_record.json:pooled_delta_row_pooled,binding estimand for the guarded met-criteria claim (C4)
+guarded_walkforward,equal_weight,walkforward_period,0.005495103879443143,macro_f1_delta_vs_stratified_dummy_train_prior,v2_1_decision_record.json:pooled_delta_equal_weight,"equal weight over the 7 walk-forward periods (companion, not binding)"
+official_validation,row_pooled,row,0.0168850843462664,macro_f1_delta_vs_stratified_dummy_train_prior,05_selective_autopsy.csv:all/seed_mean:delta_vs_dummy,pooled over all validation rows (seed-mean of n=2 seeds)
+official_validation,equal_weight,activity_tercile,0.019354432425994366,macro_f1_delta_vs_stratified_dummy_train_prior,"05_selective_autopsy.csv:mean(low,mid,high)/seed_mean:delta_vs_dummy","regime-balanced: equal weight over activity terciles -- a different unit from the guarded period equal-weight, so compare each only to its own row-pooled"

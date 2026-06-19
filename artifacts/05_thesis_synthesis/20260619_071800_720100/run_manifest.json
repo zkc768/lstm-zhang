@@ -1,6 +1,6 @@
 {
-  "config_sha256": "f0a6b15fe74236e74ed6bf4aef7e6befedf5320ca8e8b1f33a353b5883aec845",
-  "git_commit": "96e91ab013c5669322ad59d556e671cbb3191229",
+  "config_sha256": "f0af1258beef96963bcce1a1a2580a003cc62c3a8b41a2b9877ca41dd9653783",
+  "git_commit": "7198df12d76ab339eb5c6531cd2e8f1486a55ab1",
   "git_commit_reason": "resolved_from_local_git_checkout",
   "holdout_test_contact": false,
   "input_artifacts": [
@@ -17,11 +17,13 @@
     "/content/lst_models_results/v2_1_guarded_walkforward_readout/20260618_063559_889276/artifact_inventory.csv",
     "/content/lst_models_results/v2_1_guarded_walkforward_readout/20260618_063559_889276/v2_1_decision_record.json",
     "/content/lst_models_results/v2_1_guarded_walkforward_readout/20260618_063559_889276/v2_1_comparison_table.csv",
-    "/content/lst_models_results/v2_1_guarded_walkforward_readout/20260618_063559_889276/v2_1_walkforward_readout.csv"
+    "/content/lst_models_results/v2_1_guarded_walkforward_readout/20260618_063559_889276/v2_1_walkforward_readout.csv",
+    "/content/lst_models_results/v2_1_guarded_walkforward_readout/20260618_063559_889276/v2_1_period_summary.csv",
+    "/content/lst_models_results/v2_1_guarded_walkforward_readout/20260618_063559_889276/v2_1_per_ticker_readout.csv"
   ],
   "new_scoring_events": 0,
   "no_final_model_selected": true,
-  "notebook_sha256": "60a09f2034aa0d1505cd7fde679b4753e531bf3d009a13efb3ae2b1d241fa25b",
+  "notebook_sha256": "c46de21279425773c19ee3a382fbb669892d172664539d1be63a682a0574dade",
   "notebook_sha256_reason": "resolved_from_repo_root",
   "official_validation_contact": "read_frozen_artifacts_only",
   "official_validation_for_selection": false,
@@ -33,17 +35,19 @@
     "05_expectation_calibration.csv",
     "05_multiplicity_discount.csv",
     "05_selective_autopsy.csv",
+    "05_estimand_contrast.csv",
+    "05_loo_robustness.csv",
     "05_thesis_synthesis_report.json"
   ],
   "reads_guarded_walkforward_artifacts": true,
   "route": "lst_models",
-  "run_id": "20260619_053750_244288",
+  "run_id": "20260619_071800_720100",
   "scope": "synthesis_measure_only",
   "source_stage03_run_id": "20260610_133305_716174",
   "source_stage04_run_id": "20260618_234011_838683",
   "source_v2_1_run_id": "20260618_063559_889276",
   "stage03_decision": "met_predeclared_validation_readout_criteria",
-  "stage05_synthesis_code_sha256": "0266735a0a0fecb1391efba9171847537a8e3d0a36101e79e15d2570e4429ea8",
+  "stage05_synthesis_code_sha256": "3bb2abe3297d312e9fb82786b634c6fa420efbb46b66baa8696f76209bc1d7cc",
   "stage_name": "05_thesis_synthesis",
   "v2_1_decision": "met_predeclared_guarded_stability_criteria"
 }
