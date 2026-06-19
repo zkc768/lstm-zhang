@@ -28,7 +28,7 @@ from lst_models.artifacts import (
     write_artifact_inventory,
     write_json,
 )
-from lst_models.config import hash_file, hash_mapping, require_mapping
+from lst_models.config import hash_file, hash_mapping, require_mapping, resolve_repo_path
 
 STAGE05_SCOPE = "synthesis_measure_only"
 HOLDOUT_BOUNDARY = "2017-01-25"
@@ -107,6 +107,7 @@ def _validate_config(config: Mapping[str, Any]) -> None:
     require_mapping(config["expectation_calibration"], "expectation_calibration")
     if not list(config.get("evidence_domains", [])):
         raise ValueError("Stage 05 requires a non-empty evidence_domains list")
+    require_mapping(config["required_upstream_decisions"], "required_upstream_decisions")
     require_mapping(config["forbidden"], "forbidden")
 
 
@@ -123,6 +124,8 @@ def _verify_entry_gates(config: Mapping[str, Any]) -> Stage05Inputs:
     }
     stage04_manifest = read_json_object(paths["stage04"]["run_manifest.json"])
     _gate_readout_completeness(records)
+    _gate_scoring_event_integrity(records)
+    _gate_upstream_decisions(config, records)
     _gate_stage04_measure_only(records["stage04"])
     _gate_run_id_chain(inputs, records)
     _gate_safety_flags(records, stage04_manifest)
@@ -143,6 +146,52 @@ def _gate_readout_completeness(records: Mapping[str, Mapping[str, Any]]) -> None
         raise ValueError("Stage 05 blocked: v2_1_decision_record.json readout_complete is not true")
     if int(records["v2_1"].get("guarded_scoring_events", -1)) < 0:
         raise ValueError("Stage 05 blocked: v2_1_decision_record.json guarded_scoring_events missing")
+
+
+def _gate_scoring_event_integrity(records: Mapping[str, Mapping[str, Any]]) -> None:
+    """The recorded scoring-event count must equal its ledger length (V2.1
+    protocol §17; mirrors the Stage 04 entry gate). A count that disagrees with
+    the ledger is a tampered/partial record, not a budget we can synthesize."""
+    stage03 = records["stage03"]
+    ledger03 = stage03.get("scoring_event_ledger")
+    if not isinstance(ledger03, list):
+        raise ValueError(
+            "Stage 05 blocked: 03_decision_record.json scoring_event_ledger missing or not a list"
+        )
+    if int(stage03.get("official_validation_scoring_events", -1)) != len(ledger03):
+        raise ValueError(
+            "Stage 05 blocked: Stage 03 official_validation_scoring_events does not equal the "
+            "scoring_event_ledger length"
+        )
+    v2_1 = records["v2_1"]
+    ledger_v = v2_1.get("scoring_event_ledger")
+    if not isinstance(ledger_v, list):
+        raise ValueError(
+            "Stage 05 blocked: v2_1_decision_record.json scoring_event_ledger missing or not a list"
+        )
+    if int(v2_1.get("guarded_scoring_events", -1)) != len(ledger_v):
+        raise ValueError(
+            "Stage 05 blocked: V2.1 guarded_scoring_events does not equal the "
+            "scoring_event_ledger length"
+        )
+
+
+def _gate_upstream_decisions(
+    config: Mapping[str, Any], records: Mapping[str, Mapping[str, Any]]
+) -> None:
+    """The positive 'met criteria' claims (C3/C4) require the pinned upstream
+    record to actually carry the met decision; a complete-but-failed pin fails
+    closed instead of silently emitting a met claim."""
+    required = require_mapping(config["required_upstream_decisions"], "required_upstream_decisions")
+    for key, expected in required.items():
+        if key not in records:
+            raise KeyError(f"required_upstream_decisions key {key!r} is not a wired record")
+        actual = records[str(key)].get("decision")
+        if str(actual) != str(expected):
+            raise ValueError(
+                f"Stage 05 blocked: {key} decision must be {expected!r} for the positive "
+                f"met-criteria claims, observed {actual!r}"
+            )
 
 
 def _gate_stage04_measure_only(stage04_report: Mapping[str, Any]) -> None:
@@ -238,11 +287,17 @@ def _build_frames(
         inputs.run_ids_by_key,
         evidence_domains=evidence_domains,
     )
+    inputs_cfg = require_mapping(config["inputs"], "inputs")
+    supporting_artifacts_by_key = {
+        key: [str(name) for name in inputs_cfg[f"required_{key}_artifacts"]]
+        for key in UPSTREAM_KEYS
+    }
     register = synthesis.build_claim_boundary_register(
         require_mapping(config["claim_boundary_register"], "claim_boundary_register")["claims"],
         inputs.run_ids_by_key,
         forbidden,
         evidence_domains=evidence_domains,
+        supporting_artifacts_by_key=supporting_artifacts_by_key,
     )
     expectation = synthesis.build_expectation_calibration(
         require_mapping(config["expectation_calibration"], "expectation_calibration")["rows"],
@@ -310,6 +365,10 @@ def _synthesis_report(
 def _manifest_payload(
     config: Mapping[str, Any], inputs: Stage05Inputs, run_id: str
 ) -> dict[str, Any]:
+    # Resolve the notebook against the repo root so notebook_sha256 is reliable
+    # regardless of the runtime cwd (a bare relative path hashes to null off-root).
+    notebook_resolved = resolve_repo_path(inputs.notebook_path)
+    notebook_present = notebook_resolved.exists()
     return {
         "route": "lst_models",
         "stage_name": "05_thesis_synthesis",
@@ -327,8 +386,9 @@ def _manifest_payload(
         "stage05_synthesis_code_sha256": stage05_synthesis_code_sha256(),
         **git_commit_fields(),
         "config_sha256": hash_mapping(config),
-        "notebook_sha256": (
-            hash_file(inputs.notebook_path) if inputs.notebook_path.exists() else None
+        "notebook_sha256": hash_file(notebook_resolved) if notebook_present else None,
+        "notebook_sha256_reason": (
+            "resolved_from_repo_root" if notebook_present else "notebook_not_present_at_runtime"
         ),
         "input_artifacts": [
             str(path) for key in UPSTREAM_KEYS for path in inputs.stage_paths[key].values()

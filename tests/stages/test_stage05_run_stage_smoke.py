@@ -113,6 +113,7 @@ class Stage05Dirs:
             "official_validation_for_selection": False,
             "no_final_model_selected": True,
             "guarded_scoring_events": 56,
+            "scoring_event_ledger": [{"event_index": n} for n in range(56)],
             "positive_period_count": 5,
             "pooled_delta": 0.006362,
             "pooled_delta_estimand": "row_pooled",
@@ -124,12 +125,18 @@ class Stage05Dirs:
         }
 
     # --------------------------------------------------------- folders ----
-    def _write_folder(self, key: str, records: dict[str, dict]) -> None:
+    def _write_folder(
+        self, key: str, json_records: dict[str, dict],
+        csv_records: dict[str, pd.DataFrame] | None = None,
+    ) -> None:
         run_dir = self.dirs[key]
         run_dir.mkdir(parents=True, exist_ok=True)
-        for name, payload in records.items():
+        for name, payload in json_records.items():
             write_json(run_dir / name, payload)
-        write_artifact_inventory(run_dir, {name: run_dir / name for name in records})
+        for name, frame in (csv_records or {}).items():
+            frame.to_csv(run_dir / name, index=False)
+        names = list(json_records) + list(csv_records or {})
+        write_artifact_inventory(run_dir, {name: run_dir / name for name in names})
 
     def _write_stage03(self) -> None:
         self._write_folder("stage03", {
@@ -139,18 +146,39 @@ class Stage05Dirs:
         })
 
     def _write_stage04(self) -> None:
-        self._write_folder("stage04", {
-            "run_manifest.json": self._stage04_manifest(),
-            "04_diagnostics_report.json": self._stage04_report(),
-        })
+        self._write_folder(
+            "stage04",
+            {
+                "run_manifest.json": self._stage04_manifest(),
+                "04_diagnostics_report.json": self._stage04_report(),
+            },
+            {
+                "04_sentinel_summary.csv": pd.DataFrame(
+                    [{"sentinel": "label_shuffle", "label_shuffle_p_value": 0.004975}]
+                ),
+                "04_robustness_slices.csv": pd.DataFrame(
+                    [{"slice_axis": "activity_tercile", "slice_value": "low",
+                      "delta_macro_f1_vs_stratified_dummy_train_prior": 0.054}]
+                ),
+            },
+        )
 
     def _write_v2_1(self) -> None:
-        self._write_folder("v2_1", {
-            "run_manifest.json": {"holdout_test_contact": True,
-                                  "holdout_contact_tier": "guarded_historically_contacted",
-                                  "no_final_model_selected": True},
-            "v2_1_decision_record.json": self._v2_1_record(),
-        })
+        self._write_folder(
+            "v2_1",
+            {
+                "run_manifest.json": {"holdout_test_contact": True,
+                                      "holdout_contact_tier": "guarded_historically_contacted",
+                                      "no_final_model_selected": True},
+                "v2_1_decision_record.json": self._v2_1_record(),
+            },
+            {
+                "v2_1_comparison_table.csv": pd.DataFrame(
+                    [{"Model": "TCN", "Mean delta vs Dummy": 0.0054},
+                     {"Model": "LightGBM", "Mean delta vs Dummy": 0.0069}]
+                ),
+            },
+        )
 
     # ----------------------------------------------------------- config ---
     def config(self) -> dict:
@@ -168,7 +196,10 @@ class Stage05Dirs:
         record = json.loads(path.read_text(encoding="utf-8"))
         record.update(overrides)
         write_json(path, record)
-        names = [p.name for p in self.dirs[key].glob("*.json")]
+        names = [
+            p.name for p in self.dirs[key].iterdir()
+            if p.is_file() and p.name != "artifact_inventory.csv"
+        ]
         write_artifact_inventory(self.dirs[key], {n: self.dirs[key] / n for n in names})
 
     def remove_artifact(self, key: str, name: str) -> None:
@@ -240,6 +271,10 @@ def test_expectation_calibration_resolves_measured_values(stage_dirs: Stage05Dir
     # measured rows trace to <source_key>:<field>; literature rows do not
     assert by_metric.loc["guarded_pooled_delta_binding", "value_source"] == "v2_1:pooled_delta"
     assert by_metric.loc["literature_naive_floor", "value_source"] == "config_literature"
+    # accuracy literature vs macro-F1 measured are never conflated (metric_kind)
+    assert by_metric.loc["literature_naive_floor", "metric_kind"] == "direction_accuracy"
+    assert by_metric.loc["guarded_pooled_delta_binding", "metric_kind"] == "macro_f1_delta"
+    assert by_metric.loc["literature_naive_floor", "citation"] == "roadmap_section_12"
 
 
 def test_no_forbidden_wording_in_any_output(stage_dirs: Stage05Dirs) -> None:
@@ -342,3 +377,48 @@ def test_blocks_on_unknown_evidence_domain_in_claim(stage_dirs: Stage05Dirs) -> 
     config["claim_boundary_register"]["claims"][0]["evidence_domain"] = "made_up_domain"
     with pytest.raises(ValueError, match="evidence_domain"):
         run_stage(config)
+
+
+def test_blocks_when_v2_1_decision_not_met(stage_dirs: Stage05Dirs) -> None:
+    stage_dirs.override_record(
+        "v2_1", "v2_1_decision_record.json",
+        decision="did_not_meet_predeclared_guarded_stability_criteria",
+    )
+    with pytest.raises(ValueError, match="decision must be"):
+        run_stage(stage_dirs.config())
+
+
+def test_blocks_when_stage03_decision_not_met(stage_dirs: Stage05Dirs) -> None:
+    stage_dirs.override_record(
+        "stage03", "03_decision_record.json",
+        decision="did_not_meet_predeclared_validation_readout_criteria",
+    )
+    with pytest.raises(ValueError, match="decision must be"):
+        run_stage(stage_dirs.config())
+
+
+def test_blocks_on_scoring_event_ledger_mismatch(stage_dirs: Stage05Dirs) -> None:
+    # count disagrees with the ledger length -> tampered/partial budget
+    stage_dirs.override_record("v2_1", "v2_1_decision_record.json", guarded_scoring_events=99)
+    with pytest.raises(ValueError, match="scoring_event_ledger length"):
+        run_stage(stage_dirs.config())
+
+
+def test_blocks_on_claim_citing_ungated_artifact(stage_dirs: Stage05Dirs) -> None:
+    config = stage_dirs.config()
+    # cite a file that is not in required_stage04_artifacts -> not presence/hash-gated
+    config["claim_boundary_register"]["claims"][0]["supporting_artifact"] = "not_required.csv"
+    with pytest.raises(ValueError, match="entry-gated"):
+        run_stage(config)
+
+
+def test_happy_path_resolves_all_gated_supporting_artifacts(stage_dirs: Stage05Dirs) -> None:
+    # every claim's supporting_artifact is among the wired required artifacts
+    config = stage_dirs.config()
+    inputs = config["inputs"]
+    gated = {
+        key: set(inputs[f"required_{key}_artifacts"]) for key in ("stage03", "stage04", "v2_1")
+    }
+    for claim in config["claim_boundary_register"]["claims"]:
+        assert claim["supporting_artifact"] in gated[claim["supporting_run_id_key"]], claim["claim_id"]
+    run_stage(config)  # and it runs clean end-to-end

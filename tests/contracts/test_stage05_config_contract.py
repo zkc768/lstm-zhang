@@ -54,9 +54,29 @@ def test_required_upstream_artifacts_cover_decision_records() -> None:
     assert "03_decision_record.json" in inputs["required_stage03_artifacts"]
     assert "04_diagnostics_report.json" in inputs["required_stage04_artifacts"]
     assert "v2_1_decision_record.json" in inputs["required_v2_1_artifacts"]
+    # cited supporting artifacts must be gated too (claim->evidence chain)
+    assert "04_sentinel_summary.csv" in inputs["required_stage04_artifacts"]
+    assert "04_robustness_slices.csv" in inputs["required_stage04_artifacts"]
+    assert "v2_1_comparison_table.csv" in inputs["required_v2_1_artifacts"]
     for key in UPSTREAM_KEYS:
         for name in ("run_manifest.json", "artifact_inventory.csv"):
             assert name in inputs[f"required_{key}_artifacts"]
+
+
+def test_required_upstream_decisions_gate_met_claims() -> None:
+    required = CONFIG["required_upstream_decisions"]
+    assert required["stage03"] == "met_predeclared_validation_readout_criteria"
+    assert required["v2_1"] == "met_predeclared_guarded_stability_criteria"
+
+
+def test_every_claim_cites_a_gated_supporting_artifact() -> None:
+    inputs = CONFIG["inputs"]
+    gated = {key: set(inputs[f"required_{key}_artifacts"]) for key in UPSTREAM_KEYS}
+    for claim in CONFIG["claim_boundary_register"]["claims"]:
+        key = claim["supporting_run_id_key"]
+        assert claim["supporting_artifact"] in gated[key], (
+            f"{claim['claim_id']} cites un-gated {claim['supporting_artifact']}"
+        )
 
 
 def test_required_artifact_list_closes_with_runner_constant() -> None:
@@ -116,16 +136,24 @@ def test_expectation_rows_have_traceable_values() -> None:
     rows = CONFIG["expectation_calibration"]["rows"]
     assert rows
     saw_literature = saw_measured = False
+    metric_kinds: set[str] = set()
     for row in rows:
         assert not synthesis.find_forbidden_wording(row.get("context", ""), forbidden)
+        assert str(row.get("metric_kind", "")).strip(), f"{row['metric_id']} missing metric_kind"
+        metric_kinds.add(row["metric_kind"])
         if row.get("value_source") == "config_literature":
             saw_literature = True
             assert "value" in row
+            assert row["metric_kind"] == "direction_accuracy"  # accuracy, not macro-F1
+            assert str(row.get("citation", "")).strip()  # literature anchors are traceable
         else:
             saw_measured = True
             assert row["value_source_key"] in UPSTREAM_KEYS
             assert row["value_field"]
+            assert row["metric_kind"] in {"macro_f1", "macro_f1_delta"}
     assert saw_literature and saw_measured
+    # accuracy and macro-F1 are both present and explicitly distinguished
+    assert "direction_accuracy" in metric_kinds and metric_kinds & {"macro_f1", "macro_f1_delta"}
 
 
 def test_forbidden_wording_superset_present() -> None:

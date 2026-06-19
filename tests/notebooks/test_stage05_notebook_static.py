@@ -131,6 +131,7 @@ def test_stage05_notebook_durable_save_with_manifest_refusals() -> None:
     )
     assert 'run_manifest.get("holdout_test_contact") is not False' in save_cell
     assert 'run_manifest.get("no_final_model_selected") is not True' in save_cell
+    assert 'run_manifest.get("source_stage04_run_id") != STAGE04_RUN_ID' in save_cell
     assert "drive_backup_manifest.json" in save_cell
     assert '"bytes": None, "self_reference": True' in save_cell
     assert 'print("stage_run_id:", backup_manifest["stage_run_id"])' in save_cell

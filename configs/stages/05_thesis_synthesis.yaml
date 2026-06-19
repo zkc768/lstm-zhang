@@ -27,6 +27,8 @@ inputs:
     - run_manifest.json
     - artifact_inventory.csv
     - 04_diagnostics_report.json
+    - 04_sentinel_summary.csv
+    - 04_robustness_slices.csv
   v2_1_run_id: "20260618_063559_889276"
   v2_1_runtime_run_dir: /content/lst_models_results/v2_1_guarded_walkforward_readout/20260618_063559_889276
   v2_1_drive_path_parts: [lst_models, results, v2_1_guarded_walkforward_readout, "20260618_063559_889276"]
@@ -34,8 +36,16 @@ inputs:
     - run_manifest.json
     - artifact_inventory.csv
     - v2_1_decision_record.json
+    - v2_1_comparison_table.csv
   notebook_path: notebooks/05_thesis_synthesis_colab.ipynb
   protocol_path: docs/protocols/05_thesis_synthesis_protocol.md
+
+# Positive "met criteria" claims (C3/C4) require the pinned upstream record to
+# actually carry the met decision -- a complete-but-failed pin must fail closed,
+# never silently emit a met claim. Resolved from each record's `decision` field.
+required_upstream_decisions:
+  stage03: met_predeclared_validation_readout_criteria
+  v2_1: met_predeclared_guarded_stability_criteria
 
 outputs:
   output_dir: /content/lst_models_results/05_thesis_synthesis
@@ -158,47 +168,59 @@ claim_boundary_register:
       supporting_artifact: v2_1_decision_record.json
       statement: "The V1 route historically contacted the post-2017 segment, so the walk-forward readout is guarded and historically-contacted, not an unseen-data result."
 
-# S5.3 expectation calibration. config_literature rows carry external-knowledge
-# band anchors (value + citation in context); measured rows resolve `value` from a
-# frozen record field (value_source_key + dotted value_field), fail-closed.
+# S5.3 expectation calibration. Each row declares a metric_kind so the
+# direction-ACCURACY literature anchors are never read as comparable to the
+# measured macro-F1 rows. config_literature rows are external-knowledge context
+# (NOT a benchmark or leakage threshold), with a structured citation key for
+# traceability; measured rows resolve `value` from a frozen record field
+# (value_source_key + dotted value_field), fail-closed.
 expectation_calibration:
   rows:
     - metric_id: literature_naive_floor
       label: "Published naive direction-accuracy floor"
+      metric_kind: direction_accuracy
       value_source: config_literature
       value: 0.50
-      context: "~50% naive floor for daily/intraday direction (roadmap §12)"
+      citation: roadmap_section_12
+      context: "~50% naive direction-accuracy floor (roadmap §12); accuracy scale -- qualitative context only, NOT comparable to the macro-F1 rows below and NOT a threshold"
     - metric_id: literature_typical_ceiling
       label: "Published typical reported direction-accuracy ceiling"
+      metric_kind: direction_accuracy
       value_source: config_literature
       value: 0.56
-      context: "low-to-mid 50s% typical reported ceiling (Gu, Kelly & Xiu 2020; roadmap §12); anything materially above is a leakage red flag"
+      citation: gu2020empirical
+      context: "low-to-mid 50s% typical reported direction-accuracy ceiling (Gu, Kelly & Xiu 2020; roadmap §12); accuracy scale -- qualitative context only, not a benchmark or leakage threshold for the macro-F1 deltas"
     - metric_id: validation_mean_macro_f1
       label: "Stage 03 official-validation mean macro-F1 (2 seeds)"
+      metric_kind: macro_f1
       value_source: frozen_record
       value_source_key: stage03
       value_field: aggregate.mean_macro_f1
       context: "official_validation domain, 2013-09->2017-01 segment; absolute macro-F1, not accuracy"
     - metric_id: validation_pooled_delta_vs_dummy
       label: "Stage 03 official-validation mean macro-F1 delta vs same-row dummy"
+      metric_kind: macro_f1_delta
       value_source: frozen_record
       value_source_key: stage03
       value_field: aggregate.mean_delta_macro_f1_vs_stratified_dummy_train_prior
       context: "official_validation domain; same-row stratified-dummy delta"
     - metric_id: guarded_pooled_delta_binding
       label: "V2.1 guarded TCN-primary pooled macro-F1 delta (binding estimand)"
+      metric_kind: macro_f1_delta
       value_source: frozen_record
       value_source_key: v2_1
       value_field: pooled_delta
       context: "guarded_walkforward domain; binding estimand recorded in pooled_delta_estimand; 2017-01->2024-04 segment"
     - metric_id: guarded_pooled_delta_row_pooled
       label: "V2.1 guarded pooled delta (row-pooled / protocol §8 estimand)"
+      metric_kind: macro_f1_delta
       value_source: frozen_record
       value_source_key: v2_1
       value_field: pooled_delta_row_pooled
       context: "guarded_walkforward domain; protocol row-union estimand (register FIX-1); null on a resumed run"
     - metric_id: guarded_pooled_delta_equal_weight
       label: "V2.1 guarded pooled delta (equal-weight companion estimand)"
+      metric_kind: macro_f1_delta
       value_source: frozen_record
       value_source_key: v2_1
       value_field: pooled_delta_equal_weight

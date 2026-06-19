@@ -29,7 +29,7 @@ CLAIM_BOUNDARY_REGISTER_COLUMNS = [
     "supporting_run_id", "supporting_artifact", "statement",
 ]
 EXPECTATION_CALIBRATION_COLUMNS = [
-    "metric_id", "label", "value", "value_source", "context",
+    "metric_id", "label", "value", "metric_kind", "value_source", "citation", "context",
 ]
 
 _FIELD_MISSING = object()
@@ -125,11 +125,19 @@ def build_claim_boundary_register(
     forbidden: Sequence[str],
     *,
     evidence_domains: Sequence[str] = EVIDENCE_DOMAINS,
+    supporting_artifacts_by_key: Mapping[str, Sequence[str]] | None = None,
 ) -> pd.DataFrame:
-    """S5.2 register: validate each claim's domain, supporting run id, and that
-    its statement carries no forbidden wording; emit the resolved table."""
+    """S5.2 register: validate each claim's domain, supporting run id, that its
+    cited ``supporting_artifact`` is an entry-gated required artifact of that run
+    (so the claim->evidence link is presence/hash-verified, not just a string),
+    and that its statement carries no forbidden wording; emit the resolved table.
+    """
     if not claims_config:
         raise ValueError("claim_boundary_register.claims must be non-empty")
+    gated = {
+        key: {str(name) for name in names}
+        for key, names in (supporting_artifacts_by_key or {}).items()
+    }
     rows: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     for claim in claims_config:
@@ -147,6 +155,13 @@ def build_claim_boundary_register(
         if run_key not in run_ids_by_key:
             raise KeyError(
                 f"claim {claim_id!r} supporting_run_id_key {run_key!r} is not a wired run id"
+            )
+        supporting_artifact = str(claim.get("supporting_artifact", ""))
+        if gated and supporting_artifact and supporting_artifact not in gated.get(run_key, set()):
+            raise ValueError(
+                f"claim {claim_id!r} cites supporting_artifact {supporting_artifact!r}, which is "
+                f"not an entry-gated required artifact of run {run_key!r}; add it to "
+                f"required_{run_key}_artifacts so it is presence/hash-verified"
             )
         statement = str(claim["statement"])
         assert_no_forbidden_wording(statement, forbidden, context=f"claim {claim_id}")
@@ -175,6 +190,11 @@ def build_expectation_calibration(
     rows: list[dict[str, Any]] = []
     for entry in rows_config:
         metric_id = str(entry["metric_id"])
+        if not str(entry.get("metric_kind", "")).strip():
+            raise ValueError(
+                f"expectation {metric_id!r} must declare a metric_kind so accuracy and "
+                "macro-F1 rows are never read as comparable"
+            )
         context = str(entry.get("context", ""))
         assert_no_forbidden_wording(context, forbidden, context=f"expectation {metric_id} context")
         source = str(entry.get("value_source", "frozen_record"))
@@ -194,7 +214,9 @@ def build_expectation_calibration(
             "metric_id": metric_id,
             "label": str(entry.get("label", "")),
             "value": value,
+            "metric_kind": str(entry["metric_kind"]),
             "value_source": value_source,
+            "citation": str(entry.get("citation", "")),
             "context": context,
         })
     return pd.DataFrame(rows)[EXPECTATION_CALIBRATION_COLUMNS]
