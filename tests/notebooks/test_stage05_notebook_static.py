@@ -4,18 +4,33 @@ import ast
 from pathlib import Path
 
 import nbformat
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
 NOTEBOOK = ROOT / "notebooks" / "05_thesis_synthesis_colab.ipynb"
+CONFIG = ROOT / "configs" / "stages" / "05_thesis_synthesis.yaml"
 
 # Two-step exact-commit pin (AGENTS.md section 5): this constant and the notebook
 # PROJECT_REPO_COMMIT are re-pinned together to the Stage 05 full-bundle commit in
 # the pin commit that follows each bundle change.
 EXPECTED_PROJECT_REPO_COMMIT = "64078a9ca32779536a5ea5d6258a2f73f699b96c"
 CURRENT_STAGE03_RUN_ID = "20260610_133305_716174"
-CURRENT_STAGE04_RUN_ID = "20260618_234011_838683"
+CURRENT_STAGE04_RUN_ID = "20260619_082125_765984"
 CURRENT_V2_1_RUN_ID = "20260618_063559_889276"
+
+
+def test_stage05_notebook_run_ids_match_committed_config() -> None:
+    # GUARD: the notebook injects STAGE03/04/V2_1_RUN_ID into stage_inputs at
+    # runtime, OVERRIDING the committed config. So these constants MUST equal the
+    # config's run ids -- otherwise a config re-point is silently ignored (the B4
+    # footgun: the config pointed at the new Stage 04 run but the notebook constant
+    # still pinned the old one, so Stage 05 read the wrong upstream run).
+    with CONFIG.open("r", encoding="utf-8") as handle:
+        inputs = yaml.safe_load(handle)["inputs"]
+    assert CURRENT_STAGE03_RUN_ID == inputs["stage03_run_id"]
+    assert CURRENT_STAGE04_RUN_ID == inputs["stage04_run_id"]
+    assert CURRENT_V2_1_RUN_ID == inputs["v2_1_run_id"]
 
 
 def _notebook() -> nbformat.NotebookNode:
