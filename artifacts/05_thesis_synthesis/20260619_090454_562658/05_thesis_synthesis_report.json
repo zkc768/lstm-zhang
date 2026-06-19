@@ -58,7 +58,7 @@
   "official_validation_contact": "read_frozen_artifacts_only",
   "reads_guarded_walkforward_artifacts": true,
   "route": "lst_models",
-  "run_id": "20260619_071800_720100",
+  "run_id": "20260619_090454_562658",
   "scope": "synthesis_measure_only",
   "scoring_event_budget": {
     "03_frozen_validation_readout": 2,
@@ -68,9 +68,9 @@
   },
   "selective_autopsy": {
     "delta_clears_mde_by_tercile": {
-      "high": null,
-      "low": null,
-      "mid": null
+      "high": false,
+      "low": true,
+      "mid": true
     },
     "descriptive_only": true,
     "note": "Selective metrics are accuracy-based (no cost/return); abstention is a diagnostic, not an operating point or a tradeability claim (register F4). e-AURC/AUGRC describe whole curves and mark no operating point; MDE is extracted from the frozen Stage 04 per-trading-day block bootstrap (delta minus lcb). The abstention cross is read with register F1: the edge sits in low-activity bars and is below the random prior on high-activity bars.",
@@ -80,7 +80,7 @@
     "selective_metric_basis": "accuracy_no_cost_or_return"
   },
   "source_stage03_run_id": "20260610_133305_716174",
-  "source_stage04_run_id": "20260618_234011_838683",
+  "source_stage04_run_id": "20260619_082125_765984",
   "source_v2_1_run_id": "20260618_063559_889276",
   "stage03_decision": "met_predeclared_validation_readout_criteria",
   "stage_name": "05_thesis_synthesis",

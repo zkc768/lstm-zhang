@@ -1,0 +1,109 @@
+{
+  "stage_name": "05_thesis_synthesis",
+  "run_id": "20260619_090454_562658",
+  "stage_run_id": "20260619_090454_562658",
+  "new_scoring_events": 0,
+  "local_output_dir": "/content/lst_models_results/05_thesis_synthesis/20260619_090454_562658",
+  "drive_path": "My Drive/lst_models/results/05_thesis_synthesis/20260619_090454_562658",
+  "drive_path_parts": [
+    "lst_models",
+    "results",
+    "05_thesis_synthesis",
+    "20260619_090454_562658"
+  ],
+  "drive_folder_id": "1-M0Nh3Fzmg-6DzEc76ufoodvvJ1n50nk",
+  "uploaded_file_names": [
+    "05_claim_boundary_register.csv",
+    "05_estimand_contrast.csv",
+    "05_expectation_calibration.csv",
+    "05_loo_robustness.csv",
+    "05_multiplicity_discount.csv",
+    "05_selective_autopsy.csv",
+    "05_thesis_synthesis_report.json",
+    "05_validation_budget_ledger.csv",
+    "artifact_inventory.csv",
+    "run_manifest.json",
+    "drive_backup_manifest.json"
+  ],
+  "uploaded_files": [
+    {
+      "id": "1DqX0OQqqjPz0w_t_LAq6NqJ2N_JSP1mT",
+      "name": "05_claim_boundary_register.csv",
+      "webViewLink": "https://drive.google.com/file/d/1DqX0OQqqjPz0w_t_LAq6NqJ2N_JSP1mT/view?usp=drivesdk",
+      "size": "2760",
+      "bytes": 2760
+    },
+    {
+      "id": "12BnSxLfHgKKeOW9MYV-hRI72fguH-8LR",
+      "name": "05_estimand_contrast.csv",
+      "webViewLink": "https://drive.google.com/file/d/12BnSxLfHgKKeOW9MYV-hRI72fguH-8LR/view?usp=drivesdk",
+      "size": "1094",
+      "bytes": 1094
+    },
+    {
+      "id": "1Ru6Fyr9ql3jobrCfxut0aRwVvQbI6trj",
+      "name": "05_expectation_calibration.csv",
+      "webViewLink": "https://drive.google.com/file/d/1Ru6Fyr9ql3jobrCfxut0aRwVvQbI6trj/view?usp=drivesdk",
+      "size": "1944",
+      "bytes": 1944
+    },
+    {
+      "id": "1PG9ukiBCogiPqGVYiKlkueotE3RN_tW9",
+      "name": "05_loo_robustness.csv",
+      "webViewLink": "https://drive.google.com/file/d/1PG9ukiBCogiPqGVYiKlkueotE3RN_tW9/view?usp=drivesdk",
+      "size": "2455",
+      "bytes": 2455
+    },
+    {
+      "id": "1wqx1QKoSLR75okmCnbThQdvnaTG8oKT7",
+      "name": "05_multiplicity_discount.csv",
+      "webViewLink": "https://drive.google.com/file/d/1wqx1QKoSLR75okmCnbThQdvnaTG8oKT7/view?usp=drivesdk",
+      "size": "1181",
+      "bytes": 1181
+    },
+    {
+      "id": "1opgpnTQrY3pw1so6_Yp330EXYKF0ISf9",
+      "name": "05_selective_autopsy.csv",
+      "webViewLink": "https://drive.google.com/file/d/1opgpnTQrY3pw1so6_Yp330EXYKF0ISf9/view?usp=drivesdk",
+      "size": "2239",
+      "bytes": 2239
+    },
+    {
+      "id": "1Uxj4SiygqY-ME2Uo7nCR9_xFHxFyOUKM",
+      "name": "05_thesis_synthesis_report.json",
+      "webViewLink": "https://drive.google.com/file/d/1Uxj4SiygqY-ME2Uo7nCR9_xFHxFyOUKM/view?usp=drivesdk",
+      "size": "4095",
+      "bytes": 4095
+    },
+    {
+      "id": "1K4_5J82CPkCJfYEg51TQuOsXn7S_8wyi",
+      "name": "05_validation_budget_ledger.csv",
+      "webViewLink": "https://drive.google.com/file/d/1K4_5J82CPkCJfYEg51TQuOsXn7S_8wyi/view?usp=drivesdk",
+      "size": "852",
+      "bytes": 852
+    },
+    {
+      "id": "1WSHLLu11MHa3NYdCmW6M6M5P7BCw9-fl",
+      "name": "artifact_inventory.csv",
+      "webViewLink": "https://drive.google.com/file/d/1WSHLLu11MHa3NYdCmW6M6M5P7BCw9-fl/view?usp=drivesdk",
+      "size": "2373",
+      "bytes": 2373
+    },
+    {
+      "id": "1p2hROfhQHJKA1FBjEkRqw6shkAqSrTLQ",
+      "name": "run_manifest.json",
+      "webViewLink": "https://drive.google.com/file/d/1p2hROfhQHJKA1FBjEkRqw6shkAqSrTLQ/view?usp=drivesdk",
+      "size": "3310",
+      "bytes": 3310
+    },
+    {
+      "name": "drive_backup_manifest.json",
+      "bytes": null,
+      "self_reference": true
+    }
+  ],
+  "sync_timestamp_utc": "2026-06-19T09:05:08.408141+00:00",
+  "holdout_test_contact": false,
+  "official_validation_contact": "read_frozen_artifacts_only",
+  "no_final_model_selected": true
+}
