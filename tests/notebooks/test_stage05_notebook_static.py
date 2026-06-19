@@ -13,7 +13,7 @@ NOTEBOOK = ROOT / "notebooks" / "05_thesis_synthesis_colab.ipynb"
 # committed/pinned (commit is user-gated), so the notebook ships the placeholder.
 # When the user authorizes the bundle commit, update this constant and the
 # notebook PROJECT_REPO_COMMIT together in the pin commit.
-EXPECTED_PROJECT_REPO_COMMIT = "<STAGE05_FULL_BUNDLE_COMMIT>"
+EXPECTED_PROJECT_REPO_COMMIT = "2148ff0aef51da354fbeb0905b7d5462b210095a"
 CURRENT_STAGE03_RUN_ID = "20260610_133305_716174"
 CURRENT_STAGE04_RUN_ID = "20260618_234011_838683"
 CURRENT_V2_1_RUN_ID = "20260618_063559_889276"
