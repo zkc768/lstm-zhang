@@ -41,3 +41,7 @@ docs/
 
 # Local paper workspace (Doc A contract: local-only)
 paper/
+
+# Local Claude Code tooling state (machine-local; not shared). If a shared
+# config is ever added, un-ignore it explicitly, e.g. !.claude/settings.json
+.claude/
