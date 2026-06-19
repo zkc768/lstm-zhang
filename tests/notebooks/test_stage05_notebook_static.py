@@ -14,7 +14,7 @@ CONFIG = ROOT / "configs" / "stages" / "05_thesis_synthesis.yaml"
 # Two-step exact-commit pin (AGENTS.md section 5): this constant and the notebook
 # PROJECT_REPO_COMMIT are re-pinned together to the Stage 05 full-bundle commit in
 # the pin commit that follows each bundle change.
-EXPECTED_PROJECT_REPO_COMMIT = "64078a9ca32779536a5ea5d6258a2f73f699b96c"
+EXPECTED_PROJECT_REPO_COMMIT = "e2bfba4d3f41cac12d006d42992e60eacf18c37a"
 CURRENT_STAGE03_RUN_ID = "20260610_133305_716174"
 CURRENT_STAGE04_RUN_ID = "20260619_082125_765984"
 CURRENT_V2_1_RUN_ID = "20260618_063559_889276"
