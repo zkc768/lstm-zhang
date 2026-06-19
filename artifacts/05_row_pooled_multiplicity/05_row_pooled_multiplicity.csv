@@ -1,0 +1,6 @@
+row_kind,family,n_periods,positive_periods,mean_delta,period_delta_lcb,min_family_lcb,median_family_lcb,max_family_mean,pbo,pbo_n_combinations,pbo_n_trials,pbo_n_blocks,pbo_method,seed_aggregation,note
+family,lightgbm_family_best,7,5.0,0.007263182125964884,-0.0002974762937258896,,,,,,,,,,
+family,ms_dlinear_tcn_family_best,7,6.0,0.006724395849975473,-0.0002490435327804569,,,,,,,,,,
+family,standard_dlinear_family_best,7,4.0,0.00512831755410742,-0.0046447337048432106,,,,,,,,,,
+family,tcn_frozen_primary,7,5.0,0.006361602324004845,0.0004701926780222654,,,,,,,,,,
+summary,all,7,,,,-0.0046447337048432106,-0.00027325991325317326,0.007263182125964884,0.5142857142857142,35.0,4.0,7.0,cscv_odd_block_floor_ceil_adaptation,row_pooled_within_period_then_block,BINDING row-pooled estimand: per-family mean_delta is the row-pooled-over-all-rows pooled_delta (the TCN primary reproduces pooled_delta_row_pooled); PBO and per-family period_delta_lcb are block-structured over row-pooled-within-period deltas; contrast with the equal-weight 05_multiplicity_discount.csv. Row-pooled binding-estimand multiplicity; measure-only re-aggregation of the frozen V2.1 dumps (run 20260618_063559_889276).
