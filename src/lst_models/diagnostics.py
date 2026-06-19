@@ -397,7 +397,13 @@ def _robustness_row(
             ) - metrics.binary_macro_f1(rest["y_true"].to_numpy(dtype=int), rest_dummy)
             row["loo_pooled_delta"] = float(loo)
             row["loo_sign_flip"] = bool(loo <= 0)
-    if axis == "ticker":
+    # Per-trading-day block bootstrap on the axes named in bootstrap.slice_axes
+    # (default ticker only; B4 adds activity_tercile so the per-tercile MDE is
+    # reportable). A (ticker, trading_day) block lies wholly within one tercile
+    # (activity_terciles assigns per ticker-day), so the block resample is valid
+    # for the tercile slice. Requires the reconstructed dummy (verified branch).
+    bootstrap_axes = {str(a) for a in bootstrap.get("slice_axes", ("ticker",))}
+    if axis in bootstrap_axes:
         slice_dummy = dummy_by_index.loc[slice_rows.index].to_numpy()
         blocks = (
             slice_rows["ticker"].astype(str) + "|" + slice_rows["trading_day"].astype(str)

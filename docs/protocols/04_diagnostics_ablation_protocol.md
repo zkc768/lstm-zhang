@@ -6,6 +6,18 @@ within the frozen §2-8 core.
 
 Revision record:
 
+- 2026-06-19 (B4): made the per-trading-day block-bootstrap axes config-driven
+  (`diagnostics.bootstrap.slice_axes`) and added `activity_tercile` so the
+  per-activity-tercile delta now carries a bootstrap LCB — this is what supplies
+  Stage 05's per-tercile MDE (`delta − lcb`) and closes the C3.4 `delta_clears_mde`
+  null gap. Also added `calendar_quarter` + `time_of_day_hour` to the LOO
+  sign-flip axes. Measure-only (reads the frozen Stage 03 dump; zero new fits /
+  scoring); the bootstrap stays a descriptive uncertainty band, not a
+  significance test. `stage04_diagnostics_code_sha256` now covers the robustness
+  slicing + block-bootstrap path so this mechanism change moves the code hash.
+  The `raw_bar_volatility_slice` remains a V2.1 deferred item (the frozen
+  prediction dump carries no realized-volatility column; it needs raw-bar data,
+  not a measure-only recompute). No §2-8 sentence changed.
 - 2026-06-10: replaced the §9 placeholder and §10 risk stub with the full
   operational sections §9-14 (entry gates, diagnostics definitions, ablation
   recipe, required artifacts, execution discipline, tests and risks). The
@@ -258,7 +270,8 @@ Robustness slices and failure analysis (§6 core):
   `activity_tercile` = per-ticker terciles of eligible-row count per
   `(ticker, trading_day)`; it is named an activity proxy and never called
   realized volatility (a raw-bar volatility slice is a V2.1 item).
-- Concentration rule: for axes `{ticker, seed, calendar_year}` compute the
+- Concentration rule: for axes `{ticker, seed, calendar_year, calendar_quarter,
+  time_of_day_hour, activity_tercile}` (B4 expanded) compute the
   leave-one-slice-out pooled delta vs the reconstructed stratified dummy;
   `loo_sign_flip=true` when removing one slice turns the pooled delta
   <= 0. `share_of_pooled_positive_delta` is reported descriptively.
@@ -268,8 +281,14 @@ Robustness slices and failure analysis (§6 core):
   2013/2017 are partial and every slice row carries `n_rows`.
 - Uncertainty context: only the frozen trading-day block bootstrap
   (`metrics.block_bootstrap_macro_f1_delta`, blocks `ticker|trading_day`,
-  1000 draws, seed 12345) on pooled and per-ticker deltas. No new
-  significance machinery (no McNemar, no DM test).
+  1000 draws, seed 12345) on the seed-pooled, per-ticker, and (B4)
+  per-activity-tercile deltas — the bootstrap axes are config-driven
+  (`bootstrap.slice_axes = [ticker, activity_tercile]`; the seed axis always
+  gets one). A `(ticker, trading_day)` block lies wholly within one tercile
+  (terciles are assigned per ticker-day), so the block resample is valid for a
+  tercile slice; this supplies Stage 05's per-activity-tercile MDE (`delta − lcb`).
+  No new significance machinery (no McNemar, no DM test); the bootstrap CI is a
+  descriptive uncertainty band, not a significance test.
 
 ## 11. Ablation Recipe (train-inner only, §3 core)
 

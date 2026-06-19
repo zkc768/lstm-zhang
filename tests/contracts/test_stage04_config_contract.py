@@ -101,6 +101,19 @@ def test_diagnostics_measure_only_flags() -> None:
     assert diag["bootstrap"]["seed"] == 12345
 
 
+def test_b4_activity_tercile_bootstrap_and_loo_axes() -> None:
+    rob = CONFIG["diagnostics"]["robustness_slices"]
+    boot = CONFIG["diagnostics"]["bootstrap"]
+    # B4: activity_tercile gets a block-bootstrap CI (-> Stage 05 per-tercile MDE)
+    assert "activity_tercile" in boot["slice_axes"]
+    assert "ticker" in boot["slice_axes"]
+    # bootstrap axes must be sliced axes
+    assert set(boot["slice_axes"]) <= set(rob["slice_axes"])
+    # B4: calendar_quarter + time_of_day_hour added to the LOO sign-flip axes
+    for axis in ("calendar_quarter", "time_of_day_hour", "activity_tercile"):
+        assert axis in rob["loo_sign_flip_axes"]
+
+
 def test_sentinel_params_frozen() -> None:
     sentinel = CONFIG["diagnostics"]["sentinel"]
     assert sentinel["n_perm"] == 200

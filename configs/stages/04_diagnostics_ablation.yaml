@@ -100,7 +100,9 @@ diagnostics:
     on_mismatch: mark_not_computed_keep_frozen_ticker_rows
   robustness_slices:
     slice_axes: [ticker, seed, calendar_year, calendar_quarter, time_of_day_hour, activity_tercile]
-    loo_sign_flip_axes: [ticker, seed, calendar_year, activity_tercile]
+    # B4: calendar_quarter + time_of_day_hour added so their leave-one-slice-out
+    # sign stability is reported alongside the existing axes.
+    loo_sign_flip_axes: [ticker, seed, calendar_year, calendar_quarter, time_of_day_hour, activity_tercile]
     activity_proxy: eligible_rows_per_ticker_trading_day_terciles
   failure_slices:
     slice_axes: [ticker_hour, ticker_trading_day, activity_tercile, calendar_month]
@@ -118,6 +120,10 @@ diagnostics:
     block_id: ticker_trading_day
     iterations: 1000
     seed: 12345
+    # B4: robustness slice axes that receive a per-trading-day block-bootstrap CI
+    # (the seed axis always gets one). activity_tercile added so Stage 05's
+    # per-tercile MDE (delta - lcb) is reportable, closing the C3.4 null gap.
+    slice_axes: [ticker, activity_tercile]
 
 ablation:
   candidate_input: price_volume_time_w20

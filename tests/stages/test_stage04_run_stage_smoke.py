@@ -1020,3 +1020,64 @@ def test_loo_sign_flip_fires_when_one_ticker_carries_the_delta() -> None:
     )
     aaa = frame.loc[frame["slice_value"].eq("AAA")].iloc[0]
     assert bool(aaa["loo_sign_flip"]) is True  # removing AAA kills the pooled delta
+
+
+def _tercile_bootstrap_dump() -> tuple[pd.DataFrame, np.ndarray, pd.DataFrame]:
+    # multi-tercile dump: 2 tickers x 6 days, days bucketed low/mid/high so each
+    # tercile spans several (ticker, trading_day) blocks (a valid block resample).
+    rng = np.random.default_rng(7)
+    train_labels = np.array([0, 1] * 50)
+    bucket = {0: "low", 1: "low", 2: "mid", 3: "mid", 4: "high", 5: "high"}
+    edge = {"low": 0.9, "mid": 0.6, "high": 0.3}  # register F1 shape (calm bars predictable)
+    rows = []
+    for ticker in ("AAA", "BBB"):
+        for d in range(6):
+            day = f"2013-01-{d + 2:02d}"
+            for r in range(8):
+                y_true = int((d + r) % 2)
+                y_pred = y_true if rng.random() < edge[bucket[d]] else 1 - y_true
+                rows.append({
+                    "candidate_role": "primary", "candidate_id": "probe", "seed": 101,
+                    "sample_id": f"{ticker}{d}{r}", "ticker": ticker,
+                    "target_timestamp": pd.Timestamp(f"{day} 10:00:00"),
+                    "trading_day": day, "y_true": y_true, "y_pred": y_pred, "p_up": 0.5,
+                    "correct": y_pred == y_true, "calendar_year": "2013",
+                    "calendar_quarter": "2013Q1", "time_of_day_hour": "10",
+                    "calendar_month": "2013-01", "activity_tercile": bucket[d],
+                    "scope": "validation_only",
+                })
+    dump = pd.DataFrame(rows)
+    recon = {101: metrics.predict_stratified_dummy(train_labels, len(dump), 101)[0]}
+    frozen_ticker = pd.DataFrame([
+        {"candidate_role": "primary", "seed": 101, "ticker": t,
+         "delta_macro_f1_vs_stratified_dummy_train_prior": 0.0} for t in ("AAA", "BBB")
+    ])
+    return dump, train_labels, frozen_ticker, recon
+
+
+def test_activity_tercile_axis_gets_block_bootstrap_lcb() -> None:
+    # B4: the per-activity-tercile block-bootstrap CI (delta - lcb feeds Stage 05's
+    # per-tercile MDE, closing the C3.4 null gap). Enabled via bootstrap.slice_axes.
+    dump, train_labels, frozen_ticker, recon = _tercile_bootstrap_dump()
+    frame = diagnostics.robustness_frames(
+        dump, train_labels, frozen_ticker, recon, "verified_identical",
+        {"slice_axes": ["activity_tercile"], "loo_sign_flip_axes": ["activity_tercile"]},
+        {"iterations": 50, "seed": 1, "slice_axes": ["activity_tercile"]},
+    )
+    terc = frame.loc[frame["slice_axis"].eq("activity_tercile")]
+    assert set(terc["slice_value"]) == {"low", "mid", "high"}
+    assert terc["bootstrap_delta_lcb"].notna().all()   # was all-NaN before B4
+    assert terc["bootstrap_delta_ucb"].notna().all()
+    assert (terc["bootstrap_delta_lcb"] <= terc["bootstrap_delta_ucb"] + 1e-9).all()
+
+
+def test_bootstrap_slice_axes_defaults_to_ticker_only() -> None:
+    # back-compat: without bootstrap.slice_axes, non-ticker/non-seed axes stay NaN
+    dump, train_labels, frozen_ticker, recon = _tercile_bootstrap_dump()
+    frame = diagnostics.robustness_frames(
+        dump, train_labels, frozen_ticker, recon, "verified_identical",
+        {"slice_axes": ["activity_tercile"], "loo_sign_flip_axes": ["activity_tercile"]},
+        {"iterations": 50, "seed": 1},  # no slice_axes -> default ("ticker",)
+    )
+    terc = frame.loc[frame["slice_axis"].eq("activity_tercile")]
+    assert terc["bootstrap_delta_lcb"].isna().all()

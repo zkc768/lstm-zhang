@@ -433,9 +433,12 @@ def stage05_synthesis_code_sha256() -> str:
 
 def stage04_diagnostics_code_sha256() -> str:
     """sha256 over the Stage 04 measurement mechanism: the calibration and
-    selective-prediction metric helpers, the baseline-reconstruction helper,
-    the control fit mechanics, and the frozen rebuild chain hash. Domain
-    functions only — stage-orchestration refactors cannot move this hash."""
+    selective-prediction metric helpers, the robustness slicing + per-trading-day
+    block-bootstrap path (incl. the B4 activity-tercile bootstrap), the
+    baseline-reconstruction helper, the control fit mechanics, and the frozen
+    rebuild chain hash. Domain functions only — stage-orchestration refactors
+    cannot move this hash."""
+    from lst_models import diagnostics as diagnostics_module
     from lst_models import fitting as fitting_module
     from lst_models import metrics as metrics_module
 
@@ -460,6 +463,15 @@ def stage04_diagnostics_code_sha256() -> str:
         "lightgbm_tail_split_and_fit_kwargs": inspect.getsource(
             fitting_module.lightgbm_tail_split_and_fit_kwargs
         ),
+        # robustness slicing + block-bootstrap path (B4 added the config-driven
+        # activity_tercile bootstrap; hashing it ties the per-tercile MDE to code)
+        "block_bootstrap_macro_f1_delta": inspect.getsource(
+            metrics_module.block_bootstrap_macro_f1_delta
+        ),
+        "robustness_frames": inspect.getsource(diagnostics_module.robustness_frames),
+        "_robustness_row": inspect.getsource(diagnostics_module._robustness_row),
+        "_seed_axis_row": inspect.getsource(diagnostics_module._seed_axis_row),
+        "activity_terciles": inspect.getsource(diagnostics_module.activity_terciles),
         "feature_rebuild_code_sha256": feature_rebuild_code_sha256(),
     }
     payload = json.dumps(code_payload, sort_keys=True).encode("utf-8")
