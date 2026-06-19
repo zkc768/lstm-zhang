@@ -213,11 +213,22 @@ results/05_thesis_synthesis/<run_id>/
   05_validation_budget_ledger.csv     (S5.1)
   05_claim_boundary_register.csv      (S5.2)
   05_expectation_calibration.csv      (S5.3)
+  05_multiplicity_discount.csv        (B6: descriptive CSCV PBO + min_family_lcb)
+  05_selective_autopsy.csv            (B7: AURC/e-AURC/AUGRC + abstention x
+                                       activity-tercile + delta-vs-dummy MDE)
   05_thesis_synthesis_report.json     (decision summary, estimand surface,
+                                       multiplicity + selective summaries,
                                        guardrails, deferred_synthesis_items)
   run_manifest.json
   artifact_inventory.csv
 ```
+
+Execution status (2026-06-18): the Stage 05 bundle (runner, config, B6, B7) and
+its tests are committed, but Stage 05 has NOT yet been executed on Colab — there
+is no real `05_*` run artifact yet. The low/high MDE and per-tercile numbers in
+the tests are SYNTHETIC fixtures exercising the computation path, NOT a verified
+result. No real Stage 05 finding may be claimed until an actual run is frozen and
+its artifacts are checked in/mirrored with sha256.
 
 `run_manifest.json` records: `scope=synthesis_measure_only`,
 `holdout_test_contact=false`, `official_validation_contact=read_frozen_artifacts_only`,

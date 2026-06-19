@@ -121,7 +121,9 @@ def _verify_entry_gates(config: Mapping[str, Any]) -> Stage05Inputs:
     inputs = require_mapping(config["inputs"], "inputs")
     paths = {
         key: require_artifacts(
-            Path(str(inputs[f"{key}_runtime_run_dir"])), inputs[f"required_{key}_artifacts"]
+            Path(str(inputs[f"{key}_runtime_run_dir"])),
+            inputs[f"required_{key}_artifacts"],
+            strict=True,  # Stage 03/04/V2.1 are fully provenanced -> fail closed
         )
         for key in UPSTREAM_KEYS
     }
@@ -408,6 +410,9 @@ def _selective_autopsy_summary(frame: pd.DataFrame, note: str) -> dict[str, Any]
     def _num(value: Any) -> float | None:
         return None if value is None or pd.isna(value) else float(value)
 
+    def _clears(value: Any) -> bool | None:
+        return None if value is None or pd.isna(value) else bool(value)
+
     pooled = _pick("all", "seed_mean")
     summary: dict[str, Any] = {
         "descriptive_only": True,
@@ -420,7 +425,7 @@ def _selective_autopsy_summary(frame: pd.DataFrame, note: str) -> dict[str, Any]
         summary["pooled_full_coverage_risk"] = _num(pooled["full_coverage_risk"])
     summary["delta_clears_mde_by_tercile"] = {
         tercile: (None if (row := _pick(tercile, "seed_mean")) is None
-                  else bool(row["delta_clears_mde"]))
+                  else _clears(row["delta_clears_mde"]))
         for tercile in ("low", "mid", "high")
     }
     return summary

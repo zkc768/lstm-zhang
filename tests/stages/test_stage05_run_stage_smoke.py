@@ -195,14 +195,12 @@ class Stage05Dirs:
         )
 
     def _robustness_slices(self) -> pd.DataFrame:
-        # per-seed + per-activity-tercile block-bootstrap rows (the B7 MDE source),
-        # mirroring register F1: low +0.054 clears, mid +0.019 borderline, high -0.015
-        # below random and does NOT clear its MDE.
-        tercile_ci = {
-            "low": (0.054, 0.030, 0.078),
-            "mid": (0.019, -0.005, 0.043),
-            "high": (-0.015, -0.040, 0.010),
-        }
+        # Mirrors REAL Stage 04: block-bootstrap LCB/UCB are written ONLY for the
+        # seed and ticker axes (diagnostics.py), NOT for activity_tercile. So the
+        # per-tercile rows carry the delta but NaN bootstrap -> per-tercile MDE is
+        # unavailable until B4 adds an activity-tercile bootstrap. Tercile deltas
+        # follow register F1 (low +0.054, mid +0.019, high -0.015 below random).
+        tercile_delta = {"low": 0.054, "mid": 0.019, "high": -0.015}
         rows = []
         for seed in (101, 202):
             rows.append({
@@ -210,11 +208,11 @@ class Stage05Dirs:
                 "delta_macro_f1_vs_stratified_dummy_train_prior": 0.0169,
                 "bootstrap_delta_lcb": 0.011, "bootstrap_delta_ucb": 0.022,
             })
-            for tercile, (delta, lcb, ucb) in tercile_ci.items():
+            for tercile, delta in tercile_delta.items():
                 rows.append({
                     "seed": seed, "slice_axis": "activity_tercile", "slice_value": tercile,
                     "delta_macro_f1_vs_stratified_dummy_train_prior": delta,
-                    "bootstrap_delta_lcb": lcb, "bootstrap_delta_ucb": ucb,
+                    "bootstrap_delta_lcb": float("nan"), "bootstrap_delta_ucb": float("nan"),
                 })
         return pd.DataFrame(rows)
 
@@ -286,6 +284,17 @@ class Stage05Dirs:
 
     def remove_artifact(self, key: str, name: str) -> None:
         (self.dirs[key] / name).unlink()
+
+    def blank_inventory_sha256(self, key: str, artifact_name: str) -> None:
+        inv = self.dirs[key] / "artifact_inventory.csv"
+        frame = pd.read_csv(inv)
+        frame.loc[frame["file_name"].astype(str) == artifact_name, "sha256"] = ""
+        frame.to_csv(inv, index=False)
+
+    def drop_inventory_row(self, key: str, artifact_name: str) -> None:
+        inv = self.dirs[key] / "artifact_inventory.csv"
+        frame = pd.read_csv(inv)
+        frame.loc[frame["file_name"].astype(str) != artifact_name].to_csv(inv, index=False)
 
     def rewrite_v2_1_readout(self, frame: pd.DataFrame) -> None:
         frame.to_csv(self.dirs["v2_1"] / "v2_1_walkforward_readout.csv", index=False)
@@ -391,19 +400,28 @@ def test_selective_autopsy_augrc_abstention_and_mde(stage_dirs: Stage05Dirs) -> 
     assert table["augrc"].notna().all()
     assert (table["augrc"] <= table["aurc"] + 1e-9).all()
     assert (table["e_aurc"] >= -1e-9).all()
-    # MDE joined from the frozen Stage 04 bootstrap; register F1 ordering surfaces:
-    # low clears its MDE, high does not (below-random high-activity bars)
+    all_mean = table[(table["activity_tercile"].eq("all")) & (table["seed"].eq("seed_mean"))].iloc[0]
     low = table[(table["activity_tercile"].eq("low")) & (table["seed"].eq("seed_mean"))].iloc[0]
     high = table[(table["activity_tercile"].eq("high")) & (table["seed"].eq("seed_mean"))].iloc[0]
-    assert bool(low["delta_clears_mde"]) is True
-    assert bool(high["delta_clears_mde"]) is False
-    assert float(low["mde_vs_dummy"]) == pytest.approx(0.054 - 0.030)
-    # report surface: accuracy-basis caveat + per-tercile clears map
+    # pooled MDE comes from the per-SEED Stage 04 bootstrap (which IS produced) ->
+    # determined; mde = delta - lcb = 0.0169 - 0.011
+    assert str(all_mean["delta_clears_mde"]) == "True"
+    assert float(all_mean["mde_vs_dummy"]) == pytest.approx(0.0169 - 0.011)
+    # per-tercile MDE is UNKNOWN (real Stage 04 has no activity-tercile bootstrap;
+    # reportable only after B4) -> NaN, never a misleading False
+    assert pd.isna(low["mde_vs_dummy"]) and pd.isna(high["mde_vs_dummy"])
+    assert pd.isna(low["delta_clears_mde"]) and pd.isna(high["delta_clears_mde"])
+    # the conditional-predictability signal still surfaces via per-tercile delta +
+    # accuracy (register F1: low-activity edge, high-activity below-random)
+    assert float(low["delta_vs_dummy"]) == pytest.approx(0.054)
+    assert float(high["delta_vs_dummy"]) == pytest.approx(-0.015)
+    assert float(high["accuracy"]) <= float(low["accuracy"])
+    # report surface: accuracy-basis caveat + per-tercile clears map (None = unknown)
     report = json.loads(stage_dirs.read_output("05_thesis_synthesis_report.json"))
     autopsy = report["selective_autopsy"]
     assert autopsy["descriptive_only"] is True
     assert autopsy["selective_metric_basis"] == "accuracy_no_cost_or_return"
-    assert autopsy["delta_clears_mde_by_tercile"]["high"] is False
+    assert autopsy["delta_clears_mde_by_tercile"]["high"] is None  # unknown, not False
     assert autopsy["pooled_augrc"] is not None
 
 
@@ -506,6 +524,21 @@ def test_blocks_on_run_id_chain_mismatch(stage_dirs: Stage05Dirs) -> None:
 def test_blocks_on_missing_required_artifact(stage_dirs: Stage05Dirs) -> None:
     stage_dirs.remove_artifact("v2_1", "v2_1_decision_record.json")
     with pytest.raises(FileNotFoundError, match="v2_1_decision_record.json"):
+        run_stage(stage_dirs.config())
+
+
+def test_blocks_on_inventory_missing_sha256(stage_dirs: Stage05Dirs) -> None:
+    # fail-closed: a present inventory with a blank sha256 for a required artifact
+    # must raise, not silently pass
+    stage_dirs.blank_inventory_sha256("stage04", "04_diagnostics_report.json")
+    with pytest.raises(ValueError, match="sha256"):
+        run_stage(stage_dirs.config())
+
+
+def test_blocks_on_inventory_missing_row(stage_dirs: Stage05Dirs) -> None:
+    # fail-closed: a required artifact absent from the inventory must raise
+    stage_dirs.drop_inventory_row("stage03", "03_decision_record.json")
+    with pytest.raises(ValueError, match="no row for required artifact"):
         run_stage(stage_dirs.config())
 
 

@@ -381,14 +381,17 @@ def _selective_autopsy_metrics(sub: pd.DataFrame) -> dict[str, Any]:
     y_pred = sub["y_pred"].to_numpy(dtype=int)
     confidence = sub["confidence"].to_numpy(dtype=float)
     correct = sub["correct"].to_numpy(dtype=bool)
-    aurc = metrics.aurc_metrics(confidence, correct)
+    # deterministic sample_id tie-break (Stage 04 selective contract): confidence
+    # ties must not let CSV row order move the curve.
+    tie = sub["sample_id"].to_numpy() if "sample_id" in sub.columns else None
+    aurc = metrics.aurc_metrics(confidence, correct, tie_break=tie)
     return {
         "n_rows": int(len(sub)),
         "macro_f1": float(metrics.binary_macro_f1(y_true, y_pred)),
         "accuracy": float(correct.mean()),
         "aurc": float(aurc["aurc"]),
         "e_aurc": float(aurc["e_aurc"]),
-        "augrc": float(metrics.augrc(confidence, correct)),
+        "augrc": float(metrics.augrc(confidence, correct, tie_break=tie)),
         "full_coverage_risk": float(aurc["full_coverage_risk"]),
     }
 
@@ -408,11 +411,14 @@ def _selective_autopsy_seed_mean(seed_rows: list[dict[str, Any]], tercile: str) 
         finite = [float(r[col]) for r in seed_rows if _finite(r[col])]
         agg[col] = float(np.mean(finite)) if finite else float("nan")
     agg["n_rows"] = int(round(agg["n_rows"])) if _finite(agg["n_rows"]) else 0
-    clears = (
-        _finite(agg["delta_vs_dummy"]) and _finite(agg["mde_vs_dummy"])
-        and agg["delta_vs_dummy"] > agg["mde_vs_dummy"]
-    )
-    return {"activity_tercile": tercile, "seed": "seed_mean", **agg, "delta_clears_mde": bool(clears)}
+    # None = MDE unavailable for this slice (no bootstrap LCB in the frozen Stage 04
+    # artifact, e.g. per-tercile until B4 adds activity-tercile bootstrap) -- never
+    # a misleading False.
+    if not (_finite(agg["delta_vs_dummy"]) and _finite(agg["mde_vs_dummy"])):
+        clears: bool | None = None
+    else:
+        clears = bool(agg["delta_vs_dummy"] > agg["mde_vs_dummy"])
+    return {"activity_tercile": tercile, "seed": "seed_mean", **agg, "delta_clears_mde": clears}
 
 
 def build_selective_autopsy(
@@ -429,13 +435,19 @@ def build_selective_autopsy(
     On the gated/derived frozen Stage 03 validation dump, per activity tercile x
     seed: model macro-F1 / accuracy, the whole-curve selective AURC / e-AURC /
     AUGRC (Geifman & El-Yaniv 2017; Geifman et al. 2019; Traub et al. 2024) on
-    (confidence, correct), and the same-row delta-vs-dummy minimum-detectable
-    effect EXTRACTED from the frozen Stage 04 per-trading-day block bootstrap
-    (``mde = delta - lcb``; ``delta_clears_mde`` ⟺ lcb > 0). Selective metrics are
-    accuracy-based with NO cost/return component -- a diagnostic, never an
-    operating point or a tradeability claim (register F4). Wires the 0-call-site
-    ``augrc`` primitive; crosses abstention with the activity tercile (register
-    F1: the edge is in low-activity bars, below random on high-activity bars).
+    (confidence, correct) with a deterministic ``sample_id`` tie-break, and the
+    same-row delta-vs-dummy minimum-detectable effect EXTRACTED from the frozen
+    Stage 04 per-trading-day block bootstrap (``mde = delta - lcb``;
+    ``delta_clears_mde`` ⟺ lcb > 0, or ``None`` when no bootstrap LCB exists for
+    that slice). The frozen Stage 04 artifact carries bootstrap LCBs for the
+    seed and ticker axes only, so the pooled ('all') MDE is populated while the
+    per-tercile MDE stays ``None`` until B4 adds an activity-tercile bootstrap;
+    the per-tercile DELTA and the selective curves are always populated.
+    Selective metrics are accuracy-based with NO cost/return component -- a
+    diagnostic, never an operating point or a tradeability claim (register F4).
+    Wires the 0-call-site ``augrc`` primitive; crosses abstention with the
+    activity tercile (register F1: the edge is in low-activity bars, below random
+    on high-activity bars).
     """
     required = {"confidence", "correct", "y_true", "y_pred", "seed", activity_axis}
     missing = sorted(required - set(dump.columns))
@@ -458,7 +470,10 @@ def build_selective_autopsy(
                 **_selective_autopsy_metrics(sub),
                 "delta_vs_dummy": float(delta) if _finite(delta) else float("nan"),
                 "mde_vs_dummy": mde,
-                "delta_clears_mde": bool(_finite(lcb) and float(lcb) > 0.0),
+                # None = MDE unavailable (no bootstrap LCB for this slice in the
+                # frozen Stage 04 artifact); only seed/ticker axes carry bootstrap
+                # today, so per-tercile MDE needs B4 (activity-tercile bootstrap).
+                "delta_clears_mde": (bool(float(lcb) > 0.0) if _finite(lcb) else None),
             }
             rows.append(row)
             seed_rows.append(row)

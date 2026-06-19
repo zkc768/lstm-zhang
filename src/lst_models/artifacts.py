@@ -224,32 +224,57 @@ def write_artifact_inventory(output_dir: str | Path, artifact_paths: Mapping[str
     return output_path
 
 
-def require_artifacts(run_dir: str | Path, required_names: Iterable[str]) -> dict[str, Path]:
+def require_artifacts(
+    run_dir: str | Path, required_names: Iterable[str], *, strict: bool = False
+) -> dict[str, Path]:
+    """Verify required artifacts exist and (when inventoried) match their hashes.
+
+    Default (``strict=False``) is legacy-tolerant: a missing inventory, a missing
+    sha256 column, a missing row, or a blank sha256 is skipped (Stage 00/01
+    legacy runs predate hash provenance). ``strict=True`` is fail-closed for
+    non-legacy upstreams (e.g. Stage 05 reading the fully-provenanced Stage 03 /
+    Stage 04 / V2.1 artifacts): the inventory must exist, carry a sha256 column,
+    and hold a row with a non-empty sha256 for every required artifact.
+    """
     root = Path(run_dir)
     paths = {name: root / name for name in required_names}
     missing = [path for path in paths.values() if not path.exists()]
     if missing:
         missing_text = "\n".join(f"- {path}" for path in missing)
         raise FileNotFoundError(f"missing required stage artifacts:\n{missing_text}")
-    _verify_artifact_inventory_hashes(root, paths)
+    _verify_artifact_inventory_hashes(root, paths, strict=strict)
     return paths
 
 
-def _verify_artifact_inventory_hashes(root: Path, paths: Mapping[str, Path]) -> None:
+def _verify_artifact_inventory_hashes(
+    root: Path, paths: Mapping[str, Path], *, strict: bool = False
+) -> None:
     inventory_path = root / "artifact_inventory.csv"
+    required = {name: path for name, path in paths.items() if name != "artifact_inventory.csv"}
+    if strict and not inventory_path.exists() and required:
+        raise ValueError(
+            f"artifact inventory missing; cannot verify required artifact hashes: {inventory_path}"
+        )
     if not inventory_path.exists():
         return
     try:
         inventory = pd.read_csv(inventory_path)
-    except pd.errors.EmptyDataError:
+    except pd.errors.EmptyDataError as exc:
+        if strict and required:
+            raise ValueError(f"artifact inventory is empty: {inventory_path}") from exc
         return
     if inventory.empty or "sha256" not in inventory.columns:
+        if strict and required:
+            raise ValueError(f"artifact inventory has no usable sha256 column: {inventory_path}")
         return
-    for required_name, path in paths.items():
-        if required_name == "artifact_inventory.csv":
-            continue
+    for required_name, path in required.items():
         row = _artifact_inventory_row(inventory, required_name)
         if row is None:
+            if strict:
+                raise ValueError(
+                    f"artifact inventory has no row for required artifact {required_name!r}: "
+                    f"{inventory_path}"
+                )
             continue
         exists_value = row.get("exists")
         if exists_value is not None and str(exists_value).strip().lower() in {"false", "0", "no"}:
@@ -263,13 +288,18 @@ def _verify_artifact_inventory_hashes(root: Path, paths: Mapping[str, Path]) -> 
                     f"expected {int(expected_bytes)}, observed {observed_bytes}"
                 )
         expected_sha256 = row.get("sha256")
-        if pd.notna(expected_sha256) and str(expected_sha256).strip():
-            observed_sha256 = hash_file(path)
-            if observed_sha256 != str(expected_sha256).strip().lower():
+        if pd.isna(expected_sha256) or not str(expected_sha256).strip():
+            if strict:
                 raise ValueError(
-                    f"artifact sha256 mismatch for {path}: "
-                    f"expected {expected_sha256}, observed {observed_sha256}"
+                    f"artifact inventory row for {required_name!r} has no sha256: {inventory_path}"
                 )
+            continue
+        observed_sha256 = hash_file(path)
+        if observed_sha256 != str(expected_sha256).strip().lower():
+            raise ValueError(
+                f"artifact sha256 mismatch for {path}: "
+                f"expected {expected_sha256}, observed {observed_sha256}"
+            )
 
 
 def _artifact_inventory_row(inventory: pd.DataFrame, required_name: str) -> pd.Series | None:
@@ -349,6 +379,7 @@ def stage05_synthesis_code_sha256() -> str:
     forbidden-wording gate). Domain functions only — Stage 05 does no fit,
     feature rebuild, or scoring, so this hash is independent of the rebuild
     chain and of stage orchestration."""
+    from lst_models import diagnostics as diagnostics_module
     from lst_models import metrics as metrics_module
     from lst_models import synthesis as synthesis_module
 
@@ -382,6 +413,14 @@ def stage05_synthesis_code_sha256() -> str:
             metrics_module.aggregate_family_delta_cis
         ),
         "compute_metric_lcb": inspect.getsource(metrics_module.compute_metric_lcb),
+        # B7 selective-autopsy transitive path: the dump gate/derivation and the
+        # selective-metric primitives are part of the Stage 05 mechanism.
+        "gate_and_derive_dump": inspect.getsource(diagnostics_module.gate_and_derive_dump),
+        "activity_terciles": inspect.getsource(diagnostics_module.activity_terciles),
+        "aurc_metrics": inspect.getsource(metrics_module.aurc_metrics),
+        "risk_coverage_curve": inspect.getsource(metrics_module.risk_coverage_curve),
+        "binary_macro_f1": inspect.getsource(metrics_module.binary_macro_f1),
+        "top_label_confidence": inspect.getsource(metrics_module.top_label_confidence),
     }
     payload = json.dumps(code_payload, sort_keys=True).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
