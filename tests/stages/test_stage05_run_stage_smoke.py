@@ -177,8 +177,33 @@ class Stage05Dirs:
                     [{"Model": "TCN", "Mean delta vs Dummy": 0.0054},
                      {"Model": "LightGBM", "Mean delta vs Dummy": 0.0069}]
                 ),
+                "v2_1_walkforward_readout.csv": self._v2_1_readout(),
             },
         )
+
+    def _v2_1_readout(self) -> pd.DataFrame:
+        # 4 families x 7 periods x 2 seeds = 56 completed model rows
+        families = {
+            "tcn_frozen_primary": 0.0050,
+            "lightgbm_family_best": 0.0069,
+            "standard_dlinear_family_best": 0.0042,
+            "ms_dlinear_tcn_family_best": 0.0055,
+        }
+        rows = []
+        for family, base in families.items():
+            for period_index in range(7):
+                period_offset = (period_index - 3) * 0.0008
+                for seed in (101, 202):
+                    seed_jitter = 0.0003 if seed == 101 else -0.0003
+                    rows.append({
+                        "table_row_id": family, "row_kind": "model",
+                        "model_family": family.split("_")[0],
+                        "period_id": f"wf_p{period_index + 1}", "seed": seed,
+                        "delta_macro_f1_vs_stratified_dummy_train_prior":
+                            base + period_offset + seed_jitter,
+                        "fit_status": "completed",
+                    })
+        return pd.DataFrame(rows)
 
     # ----------------------------------------------------------- config ---
     def config(self) -> dict:
@@ -283,9 +308,34 @@ def test_no_forbidden_wording_in_any_output(stage_dirs: Stage05Dirs) -> None:
     run_stage(config)
     run_dir = stage_dirs.single_run_dir()
     for name in ("05_claim_boundary_register.csv", "05_expectation_calibration.csv",
-                 "05_thesis_synthesis_report.json", "05_validation_budget_ledger.csv"):
+                 "05_multiplicity_discount.csv", "05_thesis_synthesis_report.json",
+                 "05_validation_budget_ledger.csv"):
         text = (run_dir / name).read_text(encoding="utf-8")
         assert not synthesis.find_forbidden_wording(text, forbidden), name
+
+
+def test_multiplicity_discount_descriptive_pbo_and_min_family_lcb(stage_dirs: Stage05Dirs) -> None:
+    run_stage(stage_dirs.config())
+    run_dir = stage_dirs.single_run_dir()
+    table = pd.read_csv(run_dir / "05_multiplicity_discount.csv")
+    assert list(table.columns) == synthesis.MULTIPLICITY_DISCOUNT_COLUMNS
+    family_rows = table.loc[table["row_kind"].eq("family")]
+    summary = table.loc[table["row_kind"].eq("summary")]
+    assert len(family_rows) == 4  # one per guarded family (trials)
+    assert len(summary) == 1
+    assert set(family_rows["n_periods"]) == {7}
+    srow = summary.iloc[0]
+    assert int(srow["pbo_n_trials"]) == 4 and int(srow["pbo_n_blocks"]) == 7
+    assert 0.0 <= float(srow["pbo"]) <= 1.0
+    # min_family_lcb is the worst family's LCB -> <= every family's own LCB
+    assert float(srow["min_family_lcb"]) <= float(family_rows["period_delta_lcb"].min()) + 1e-12
+    assert float(srow["max_family_mean"]) == pytest.approx(float(family_rows["mean_delta"].max()))
+    # descriptive surface echoed in the report
+    report = json.loads(stage_dirs.read_output("05_thesis_synthesis_report.json"))
+    md = report["multiplicity_discount"]
+    assert md["descriptive_only"] is True
+    assert md["pbo_n_trials"] == 4 and md["pbo_n_blocks"] == 7
+    assert md["min_family_lcb"] == pytest.approx(float(srow["min_family_lcb"]))
 
 
 def test_claim_register_tags_domains_and_limitations(stage_dirs: Stage05Dirs) -> None:

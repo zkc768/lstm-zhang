@@ -15,7 +15,10 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
+import numpy as np
 import pandas as pd
+
+from lst_models import metrics
 
 # Canonical evidence domains (protocol 05 §3). Never mix two in one claim.
 EVIDENCE_DOMAINS = ("official_validation", "train_inner_control", "guarded_walkforward")
@@ -30,6 +33,11 @@ CLAIM_BOUNDARY_REGISTER_COLUMNS = [
 ]
 EXPECTATION_CALIBRATION_COLUMNS = [
     "metric_id", "label", "value", "metric_kind", "value_source", "citation", "context",
+]
+MULTIPLICITY_DISCOUNT_COLUMNS = [
+    "row_kind", "family", "n_periods", "positive_periods", "mean_delta",
+    "period_delta_lcb", "min_family_lcb", "median_family_lcb", "max_family_mean",
+    "pbo", "pbo_n_combinations", "pbo_n_trials", "pbo_n_blocks", "note",
 ]
 
 _FIELD_MISSING = object()
@@ -220,6 +228,79 @@ def build_expectation_calibration(
             "context": context,
         })
     return pd.DataFrame(rows)[EXPECTATION_CALIBRATION_COLUMNS]
+
+
+def build_multiplicity_discount(
+    readout: pd.DataFrame,
+    *,
+    family_axis: str,
+    period_axis: str,
+    delta_field: str,
+    completed_status_field: str = "fit_status",
+    completed_status_value: str = "completed",
+    model_row_kind: str | None = "model",
+    is_block_count: int | None = None,
+    descriptive_note: str = "",
+) -> pd.DataFrame:
+    """B6 descriptive multiplicity discount over the per-(family, period) delta
+    matrix (families as trials, periods as blocks).
+
+    Per family: the period-level Student-t LCB over its period deltas and the
+    positive-period count. Across families: the multiple-comparison-aware
+    ``min_family_lcb`` (the worst family must still clear the baseline) and a
+    CSCV ``pbo`` overfitting share. All values are DESCRIPTIVE discounts -- never
+    promoted to a 'statistically significant' claim (register Tier 1 caveat).
+    Wires the built-but-unused primitives ``compute_metric_lcb``,
+    ``aggregate_family_delta_cis``, and ``cscv_pbo``.
+    """
+    missing = sorted({family_axis, period_axis, delta_field} - set(readout.columns))
+    if missing:
+        raise ValueError(f"multiplicity_discount: readout missing columns {missing}")
+    frame = readout
+    if completed_status_field in frame.columns:
+        frame = frame[frame[completed_status_field].astype(str) == str(completed_status_value)]
+    if model_row_kind is not None and "row_kind" in frame.columns:
+        frame = frame[frame["row_kind"].astype(str) == str(model_row_kind)]
+    if frame.empty:
+        raise ValueError("multiplicity_discount: no completed model rows in the readout")
+    # mean over seeds -> families (rows) x periods (cols) delta matrix
+    pivot = (
+        frame.groupby([family_axis, period_axis])[delta_field].mean().unstack(period_axis)
+    )
+    pivot = pivot.sort_index().sort_index(axis=1)
+    family_cis: dict[str, dict[str, float]] = {}
+    rows: list[dict[str, Any]] = []
+    for family in pivot.index:
+        period_deltas = pivot.loc[family].to_numpy(dtype=float)
+        observed = period_deltas[np.isfinite(period_deltas)]
+        lcb = float(metrics.compute_metric_lcb(observed)) if observed.size else float("nan")
+        mean = float(np.mean(observed)) if observed.size else float("nan")
+        family_cis[str(family)] = {"lcb": lcb, "mean": mean}
+        rows.append({
+            "row_kind": "family", "family": str(family),
+            "n_periods": int(observed.size),
+            "positive_periods": int(np.sum(observed > 0)),
+            "mean_delta": mean, "period_delta_lcb": lcb,
+            "min_family_lcb": None, "median_family_lcb": None, "max_family_mean": None,
+            "pbo": None, "pbo_n_combinations": None, "pbo_n_trials": None,
+            "pbo_n_blocks": None, "note": "",
+        })
+    aggregate = metrics.aggregate_family_delta_cis(family_cis)
+    # CSCV needs a complete matrix: keep only periods scored for every family
+    complete = pivot.dropna(axis=1, how="any")
+    pbo = metrics.cscv_pbo(complete.to_numpy(dtype=float), is_block_count=is_block_count)
+    rows.append({
+        "row_kind": "summary", "family": "all",
+        "n_periods": int(complete.shape[1]), "positive_periods": None,
+        "mean_delta": None, "period_delta_lcb": None,
+        "min_family_lcb": aggregate["min_family_lcb"],
+        "median_family_lcb": aggregate["median_family_lcb"],
+        "max_family_mean": aggregate["max_family_mean"],
+        "pbo": pbo["pbo"], "pbo_n_combinations": pbo["n_combinations"],
+        "pbo_n_trials": pbo["n_trials"], "pbo_n_blocks": pbo["n_blocks"],
+        "note": str(descriptive_note),
+    })
+    return pd.DataFrame(rows)[MULTIPLICITY_DISCOUNT_COLUMNS]
 
 
 def collect_pooled_delta_estimands(v2_1_record: Mapping[str, Any]) -> dict[str, Any]:

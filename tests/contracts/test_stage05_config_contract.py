@@ -58,6 +58,7 @@ def test_required_upstream_artifacts_cover_decision_records() -> None:
     assert "04_sentinel_summary.csv" in inputs["required_stage04_artifacts"]
     assert "04_robustness_slices.csv" in inputs["required_stage04_artifacts"]
     assert "v2_1_comparison_table.csv" in inputs["required_v2_1_artifacts"]
+    assert "v2_1_walkforward_readout.csv" in inputs["required_v2_1_artifacts"]  # B6 delta matrix
     for key in UPSTREAM_KEYS:
         for name in ("run_manifest.json", "artifact_inventory.csv"):
             assert name in inputs[f"required_{key}_artifacts"]
@@ -87,7 +88,7 @@ def test_required_artifact_list_closes_with_runner_constant() -> None:
     assert sorted(REQUIRED_STAGE05_ARTIFACTS) == stage_artifacts
     assert "drive_backup_manifest.json" not in REQUIRED_STAGE05_ARTIFACTS
     for key in ("validation_budget_ledger", "claim_boundary_register",
-                "expectation_calibration", "synthesis_report"):
+                "expectation_calibration", "multiplicity_discount", "synthesis_report"):
         assert outputs[key].startswith("05_")
 
 
@@ -169,6 +170,19 @@ def test_guardrails_and_deferred_items_present() -> None:
     assert CONFIG["kb_wording_guardrails"], "KB wording guardrails must be present (S5.5)"
     deferred = CONFIG["deferred_synthesis_items"]
     joined = " ".join(deferred).lower()
-    assert "pbo" in joined and "min_family_lcb" in joined  # B6 named
-    assert "augrc" in joined and "abstention" in joined  # B7 named
-    assert "estimand" in joined and "leave_one_period_out" in joined  # B8 named
+    # B6 (PBO/CSCV + min_family_lcb) is now BUILT, so it is no longer deferred
+    assert "pbo" not in joined and "min_family_lcb" not in joined
+    assert "augrc" in joined and "abstention" in joined  # B7 still deferred
+    assert "estimand" in joined and "leave_one_period_out" in joined  # B8 still deferred
+
+
+def test_multiplicity_discount_block_well_formed() -> None:
+    block = CONFIG["multiplicity_discount"]
+    assert block["source_key"] == "v2_1"
+    assert block["source_artifact"] == "v2_1_walkforward_readout.csv"
+    assert block["family_axis"] == "table_row_id"
+    assert block["period_axis"] == "period_id"
+    assert block["delta_field"] == "delta_macro_f1_vs_stratified_dummy_train_prior"
+    assert block["model_row_kind"] == "model"
+    # descriptive note must not itself contain a forbidden phrase
+    assert not synthesis.find_forbidden_wording(block["descriptive_note"], CONFIG["forbidden"]["wording"])

@@ -54,6 +54,7 @@ CELL_SPECS = [
         "  05_validation_budget_ledger.csv\n"
         "  05_claim_boundary_register.csv\n"
         "  05_expectation_calibration.csv\n"
+        "  05_multiplicity_discount.csv\n"
         "  05_thesis_synthesis_report.json\n"
         "  run_manifest.json\n"
         "  artifact_inventory.csv\n"
@@ -393,7 +394,7 @@ CELL_SPECS = [
     (
         "markdown",
         "## Durable Drive Result Save\n\n"
-        "Immediately after `run_stage` returns, this cell validates the six "
+        "Immediately after `run_stage` returns, this cell validates the seven "
         "required Stage 05 outputs (imported from the stage module, never "
         "retyped), refuses upload unless the run manifest records "
         "`new_scoring_events=0`, "
@@ -498,6 +499,7 @@ CELL_SPECS = [
         "        \"v2_1_decision\": report.get(\"v2_1_decision\"),\n"
         "        \"scoring_event_budget\": report.get(\"scoring_event_budget\"),\n"
         "        \"v2_1_pooled_delta_estimands\": report.get(\"v2_1_pooled_delta_estimands\"),\n"
+        "        \"multiplicity_discount\": report.get(\"multiplicity_discount\"),\n"
         "        \"claim_count\": report.get(\"claim_count\"),\n"
         "        \"limitation_count\": report.get(\"limitation_count\"),\n"
         "        \"deferred_synthesis_items\": report.get(\"deferred_synthesis_items\"),\n"
@@ -505,6 +507,7 @@ CELL_SPECS = [
         "    display(pd.read_csv(run_dir / \"05_validation_budget_ledger.csv\"))\n"
         "    display(pd.read_csv(run_dir / \"05_claim_boundary_register.csv\"))\n"
         "    display(pd.read_csv(run_dir / \"05_expectation_calibration.csv\"))\n"
+        "    display(pd.read_csv(run_dir / \"05_multiplicity_discount.csv\"))\n"
         "else:\n"
         "    print(\"RUN_ARTIFACT_DISPLAY=False; no Stage 05 artifacts displayed.\")\n",
     ),

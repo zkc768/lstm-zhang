@@ -37,6 +37,7 @@ inputs:
     - artifact_inventory.csv
     - v2_1_decision_record.json
     - v2_1_comparison_table.csv
+    - v2_1_walkforward_readout.csv
   notebook_path: notebooks/05_thesis_synthesis_colab.ipynb
   protocol_path: docs/protocols/05_thesis_synthesis_protocol.md
 
@@ -54,6 +55,7 @@ outputs:
   validation_budget_ledger: 05_validation_budget_ledger.csv
   claim_boundary_register: 05_claim_boundary_register.csv
   expectation_calibration: 05_expectation_calibration.csv
+  multiplicity_discount: 05_multiplicity_discount.csv
   synthesis_report: 05_thesis_synthesis_report.json
 
 # The three canonical evidence domains (protocol §3). Every synthesized row is
@@ -226,6 +228,22 @@ expectation_calibration:
       value_field: pooled_delta_equal_weight
       context: "guarded_walkforward domain; equal-weight-per-period companion (register FIX-1 / F9)"
 
+# B6 descriptive multiplicity discount over the per-(family, period) guarded
+# delta matrix (read from v2_1_walkforward_readout.csv). PBO (CSCV) and the
+# multiple-comparison-aware min_family_lcb are DESCRIPTIVE discounts only -- never
+# a significance test (register Tier 1). families = trials, periods = blocks.
+multiplicity_discount:
+  source_key: v2_1
+  source_artifact: v2_1_walkforward_readout.csv
+  family_axis: table_row_id
+  period_axis: period_id
+  delta_field: delta_macro_f1_vs_stratified_dummy_train_prior
+  completed_status_field: fit_status
+  completed_status_value: completed
+  model_row_kind: model
+  is_block_count: null  # default floor(n_periods / 2); 7 periods -> 3 in-sample
+  descriptive_note: "Descriptive multiplicity discount over the 4-family x 2-seed x 7-period guarded roster; CSCV PBO (Bailey et al. 2017) and the worst-family min_family_lcb are overfitting/uncertainty discounts, never a significance test and never a significance claim."
+
 # S5.5 KB wording guardrails carried into the synthesis report DO-NOT list.
 kb_wording_guardrails:
   - "Do not call DLinear-classification a published standard."
@@ -238,7 +256,6 @@ kb_wording_guardrails:
 # Measure-only synthesis names the heavier analyses this home unblocks; the runner
 # echoes them in the report as deferred_synthesis_items (no silent omission).
 deferred_synthesis_items:
-  - descriptive_pbo_cscv_and_min_family_lcb_over_56_event_guarded_ledger
   - augrc_and_minimum_detectable_effect_and_abstention_by_activity_tercile
   - four_estimand_recompute_and_leave_one_period_out_and_leave_one_ticker_out
 

@@ -46,14 +46,16 @@ REQUIRED_STAGE05_ARTIFACTS = [
     "05_validation_budget_ledger.csv",
     "05_claim_boundary_register.csv",
     "05_expectation_calibration.csv",
+    "05_multiplicity_discount.csv",
     "05_thesis_synthesis_report.json",
 ]
 
-# output config key -> (frame builder key, columns constant)
+# output config key -> frozen columns contract
 _FRAME_OUTPUTS = {
     "validation_budget_ledger": synthesis.VALIDATION_BUDGET_LEDGER_COLUMNS,
     "claim_boundary_register": synthesis.CLAIM_BOUNDARY_REGISTER_COLUMNS,
     "expectation_calibration": synthesis.EXPECTATION_CALIBRATION_COLUMNS,
+    "multiplicity_discount": synthesis.MULTIPLICITY_DISCOUNT_COLUMNS,
 }
 
 
@@ -105,6 +107,7 @@ def _validate_config(config: Mapping[str, Any]) -> None:
     require_mapping(config["budget_ledger"], "budget_ledger")
     require_mapping(config["claim_boundary_register"], "claim_boundary_register")
     require_mapping(config["expectation_calibration"], "expectation_calibration")
+    require_mapping(config["multiplicity_discount"], "multiplicity_discount")
     if not list(config.get("evidence_domains", [])):
         raise ValueError("Stage 05 requires a non-empty evidence_domains list")
     require_mapping(config["required_upstream_decisions"], "required_upstream_decisions")
@@ -304,10 +307,25 @@ def _build_frames(
         inputs.records_by_key,
         forbidden,
     )
+    multiplicity_cfg = require_mapping(config["multiplicity_discount"], "multiplicity_discount")
+    source_key = str(multiplicity_cfg["source_key"])
+    readout = pd.read_csv(inputs.stage_paths[source_key][str(multiplicity_cfg["source_artifact"])])
+    multiplicity = synthesis.build_multiplicity_discount(
+        readout,
+        family_axis=str(multiplicity_cfg["family_axis"]),
+        period_axis=str(multiplicity_cfg["period_axis"]),
+        delta_field=str(multiplicity_cfg["delta_field"]),
+        completed_status_field=str(multiplicity_cfg.get("completed_status_field", "fit_status")),
+        completed_status_value=str(multiplicity_cfg.get("completed_status_value", "completed")),
+        model_row_kind=multiplicity_cfg.get("model_row_kind"),
+        is_block_count=multiplicity_cfg.get("is_block_count"),
+        descriptive_note=str(multiplicity_cfg.get("descriptive_note", "")),
+    )
     return {
         "validation_budget_ledger": budget,
         "claim_boundary_register": register,
         "expectation_calibration": expectation,
+        "multiplicity_discount": multiplicity,
     }
 
 
@@ -317,6 +335,30 @@ def _source_run_id_fields(config: Mapping[str, Any]) -> dict[str, Any]:
         "source_stage03_run_id": str(inputs["stage03_run_id"]),
         "source_stage04_run_id": str(inputs["stage04_run_id"]),
         "source_v2_1_run_id": str(inputs["v2_1_run_id"]),
+    }
+
+
+def _multiplicity_summary(frame: pd.DataFrame) -> dict[str, Any]:
+    summary = frame.loc[frame["row_kind"].eq("summary")]
+    if summary.empty:
+        return {}
+    row = summary.iloc[0]
+
+    def _num(value: Any) -> float | None:
+        return None if pd.isna(value) else float(value)
+
+    def _int(value: Any) -> int | None:
+        return None if pd.isna(value) else int(value)
+
+    return {
+        "min_family_lcb": _num(row["min_family_lcb"]),
+        "median_family_lcb": _num(row["median_family_lcb"]),
+        "max_family_mean": _num(row["max_family_mean"]),
+        "pbo": _num(row["pbo"]),
+        "pbo_n_trials": _int(row["pbo_n_trials"]),
+        "pbo_n_blocks": _int(row["pbo_n_blocks"]),
+        "pbo_n_combinations": _int(row["pbo_n_combinations"]),
+        "descriptive_only": True,
     }
 
 
@@ -339,6 +381,7 @@ def _synthesis_report(
         "stage03_decision": str(inputs.records_by_key["stage03"].get("decision")),
         "v2_1_decision": str(v2_1_record.get("decision")),
         "v2_1_pooled_delta_estimands": synthesis.collect_pooled_delta_estimands(v2_1_record),
+        "multiplicity_discount": _multiplicity_summary(frames["multiplicity_discount"]),
         "scoring_event_budget": {
             str(row["stage_name"]): int(row["scoring_events"])
             for _, row in budget.iterrows()

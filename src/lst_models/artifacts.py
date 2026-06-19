@@ -349,6 +349,7 @@ def stage05_synthesis_code_sha256() -> str:
     forbidden-wording gate). Domain functions only — Stage 05 does no fit,
     feature rebuild, or scoring, so this hash is independent of the rebuild
     chain and of stage orchestration."""
+    from lst_models import metrics as metrics_module
     from lst_models import synthesis as synthesis_module
 
     code_payload = {
@@ -366,9 +367,17 @@ def stage05_synthesis_code_sha256() -> str:
         "build_expectation_calibration": inspect.getsource(
             synthesis_module.build_expectation_calibration
         ),
+        "build_multiplicity_discount": inspect.getsource(
+            synthesis_module.build_multiplicity_discount
+        ),
         "collect_pooled_delta_estimands": inspect.getsource(
             synthesis_module.collect_pooled_delta_estimands
         ),
+        "cscv_pbo": inspect.getsource(metrics_module.cscv_pbo),
+        "aggregate_family_delta_cis": inspect.getsource(
+            metrics_module.aggregate_family_delta_cis
+        ),
+        "compute_metric_lcb": inspect.getsource(metrics_module.compute_metric_lcb),
     }
     payload = json.dumps(code_payload, sort_keys=True).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()

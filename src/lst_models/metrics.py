@@ -310,6 +310,69 @@ def aggregate_family_delta_cis(
     }
 
 
+def cscv_pbo(
+    performance_matrix: np.ndarray,
+    *,
+    is_block_count: int | None = None,
+) -> dict[str, float]:
+    """Descriptive Probability of Backtest Overfitting via Combinatorially-
+    Symmetric Cross-Validation (Bailey, Borwein, Lopez de Prado & Zhu 2017).
+
+    ``performance_matrix`` is ``(n_trials, n_blocks)`` with higher = better
+    (here: per-(family, period) macro-F1 deltas, families as trials, periods as
+    blocks). For every way of choosing ``is_block_count`` blocks as in-sample
+    (default ``n_blocks // 2``; the rest are out-of-sample), the in-sample-best
+    trial's OUT-of-sample relative rank ``omega in (0,1)`` gives a logit
+    ``lambda = ln(omega/(1-omega))``; PBO is the share of combinations with
+    ``lambda < 0`` (the IS winner lands below the OS median). With an odd block
+    count the split is floor/ceil rather than symmetric -- recorded in
+    ``is_block_count``.
+
+    DESCRIPTIVE ONLY: an overfitting discount, never a significance test. With a
+    small trial/block roster the estimate is coarse (report ``n_trials`` /
+    ``n_blocks`` / ``n_combinations`` alongside it). NaN when fewer than 2 trials
+    or 2 blocks.
+    """
+    from itertools import combinations
+
+    matrix = np.asarray(performance_matrix, dtype=float)
+    if matrix.ndim != 2:
+        raise ValueError(f"performance_matrix must be 2-D, got shape {matrix.shape}")
+    n_trials, n_blocks = matrix.shape
+    nan_result = {
+        "pbo": float("nan"), "n_combinations": 0, "n_trials": int(n_trials),
+        "n_blocks": int(n_blocks), "is_block_count": 0, "median_logit": float("nan"),
+    }
+    if n_trials < 2 or n_blocks < 2 or not np.isfinite(matrix).all():
+        return nan_result
+    k = n_blocks // 2 if is_block_count is None else int(is_block_count)
+    k = max(1, min(k, n_blocks - 1))
+    logits: list[float] = []
+    below = 0
+    for is_blocks in combinations(range(n_blocks), k):
+        is_set = set(is_blocks)
+        os_blocks = [b for b in range(n_blocks) if b not in is_set]
+        is_perf = matrix[:, list(is_blocks)].mean(axis=1)
+        os_perf = matrix[:, os_blocks].mean(axis=1)
+        best_is = int(np.argmax(is_perf))
+        order = np.argsort(os_perf, kind="stable")  # ascending OS performance
+        os_rank = int(np.flatnonzero(order == best_is)[0]) + 1  # 1 (worst) .. n (best)
+        omega = min(max(os_rank / (n_trials + 1), 1e-12), 1.0 - 1e-12)
+        lam = float(np.log(omega / (1.0 - omega)))
+        logits.append(lam)
+        if lam < 0.0:
+            below += 1
+    n_comb = len(logits)
+    return {
+        "pbo": float(below / n_comb),
+        "n_combinations": int(n_comb),
+        "n_trials": int(n_trials),
+        "n_blocks": int(n_blocks),
+        "is_block_count": int(k),
+        "median_logit": float(np.median(logits)),
+    }
+
+
 def classification_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
     accuracy = float((y_true == y_pred).mean()) if len(y_true) else np.nan
     return {

@@ -141,6 +141,30 @@ def test_aggregate_family_delta_cis_is_conservative() -> None:
     assert aggregate["max_family_mean"] == 0.03
 
 
+def test_cscv_pbo_separable_matrix_has_zero_overfitting() -> None:
+    # trial 0 strictly dominates every block -> IS winner is always OS-best -> PBO 0
+    matrix = np.array([[3.0, 3.0, 3.0, 3.0], [1.0, 1.0, 1.0, 1.0]])
+    out = metrics.cscv_pbo(matrix)
+    assert out["n_trials"] == 2 and out["n_blocks"] == 4
+    assert out["is_block_count"] == 2 and out["n_combinations"] == 6  # C(4,2)
+    assert out["pbo"] == 0.0
+    assert out["median_logit"] > 0.0  # IS winner consistently OS-above-median
+
+
+def test_cscv_pbo_block_dependent_winner_overfits() -> None:
+    # trial 0 wins blocks 0,1; trial 1 wins blocks 2,3 -> IS winner flips OS -> PBO 1
+    matrix = np.array([[3.0, 3.0, 1.0, 1.0], [1.0, 1.0, 3.0, 3.0]])
+    out = metrics.cscv_pbo(matrix)
+    assert out["pbo"] == 1.0
+    assert out["median_logit"] < 0.0
+
+
+def test_cscv_pbo_degenerate_inputs_are_nan() -> None:
+    assert np.isnan(metrics.cscv_pbo(np.array([[1.0, 2.0, 3.0]]))["pbo"])  # 1 trial
+    assert np.isnan(metrics.cscv_pbo(np.array([[1.0], [2.0]]))["pbo"])  # 1 block
+    assert np.isnan(metrics.cscv_pbo(np.array([[1.0, np.nan], [2.0, 3.0]]))["pbo"])  # NaN cell
+
+
 def test_reliability_bins_and_ece_equal_width_golden() -> None:
     y_true = np.array([1, 0, 1, 1, 0, 0, 1, 0])
     p_up = np.array([0.9, 0.8, 0.7, 0.65, 0.3, 0.2, 0.25, 0.1])
