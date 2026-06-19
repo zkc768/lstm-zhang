@@ -39,11 +39,15 @@ def test_scope_and_measure_only_flags() -> None:
 
 def test_upstream_run_id_chain_matches_stage04_and_v2_1_configs() -> None:
     inputs = CONFIG["inputs"]
-    # Stage 05 chains to the same Stage 03 as Stage 04 and V2.1.
+    # The binding invariant is a SHARED frozen Stage 03 (what the runtime gate
+    # enforces): Stage 05, the Stage 04 config, and V2.1 all chain to it.
     assert inputs["stage03_run_id"] == STAGE04_CONFIG["inputs"]["stage03_run_id"]
     assert inputs["stage03_run_id"] == V2_1_CONFIG["inputs"]["stage03_run_id"]
-    # Stage 05 reads the exact Stage 04 run V2.1 itself consumed.
-    assert inputs["stage04_run_id"] == V2_1_CONFIG["inputs"]["stage04_run_id"]
+    # B4: Stage 05 intentionally reads the LATEST Stage 04 diagnostics run (the B4
+    # re-run with the per-tercile bootstrap), which is newer than the Stage 04 run
+    # V2.1 consumed. Both use the same Stage 04 config (same Stage 03), so they are
+    # NOT required to be the same run id -- only siblings off the shared Stage 03.
+    assert inputs["stage04_run_id"] >= V2_1_CONFIG["inputs"]["stage04_run_id"]
     for key in UPSTREAM_KEYS:
         assert inputs[f"{key}_run_id"] in inputs[f"{key}_runtime_run_dir"]
         assert inputs[f"{key}_run_id"] in str(inputs[f"{key}_drive_path_parts"])

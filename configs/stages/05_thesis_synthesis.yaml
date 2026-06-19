@@ -21,13 +21,15 @@ inputs:
     - artifact_inventory.csv
     - 03_decision_record.json
     - 03_validation_predictions.csv
-  # Canonical Stage 04 diagnostics run (the sentinel re-run, with
-  # 04_sentinel_summary.csv + activity-tercile robustness slices). This may differ
-  # from the Stage 04 run V2.1 sequenced after (v2_1 source_stage04_run_id) -- both
-  # chain to the same Stage 03; the divergence is recorded, not gated (protocol §2).
-  stage04_run_id: "20260618_234011_838683"
-  stage04_runtime_run_dir: /content/lst_models_results/04_diagnostics_ablation/20260618_234011_838683
-  stage04_drive_path_parts: [lst_models, results, 04_diagnostics_ablation, "20260618_234011_838683"]
+  # Canonical Stage 04 diagnostics run: the B4 re-run, which adds the
+  # per-activity-tercile block-bootstrap CI (so Stage 05's per-tercile MDE is
+  # reportable, closing C3.4) on top of the sentinel + tercile robustness slices.
+  # This is NEWER than the Stage 04 run V2.1 consumed (v2_1 source_stage04_run_id);
+  # all chain to the same Stage 03 -- the runtime gate binds only that shared
+  # Stage 03 (protocol §2), and the sentinel is byte-identical to the prior run.
+  stage04_run_id: "20260619_082125_765984"
+  stage04_runtime_run_dir: /content/lst_models_results/04_diagnostics_ablation/20260619_082125_765984
+  stage04_drive_path_parts: [lst_models, results, 04_diagnostics_ablation, "20260619_082125_765984"]
   required_stage04_artifacts:
     - run_manifest.json
     - artifact_inventory.csv
