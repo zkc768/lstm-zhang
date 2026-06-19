@@ -1,0 +1,76 @@
+{
+  "claim_count": 11,
+  "clean_test_claim": false,
+  "deferred_synthesis_items": [
+    "four_estimand_recompute_and_leave_one_period_out_and_leave_one_ticker_out"
+  ],
+  "evidence_domains": [
+    "official_validation",
+    "train_inner_control",
+    "guarded_walkforward"
+  ],
+  "holdout_boundary": "2017-01-25",
+  "holdout_test_contact": false,
+  "kb_wording_guardrails": [
+    "Do not call DLinear-classification a published standard.",
+    "Do not present drop-neutral binary results as full-market deployment performance.",
+    "Do not compare V1 labels with V2 no-trade labels as the same task.",
+    "Never frame the low-activity (calm-bar) edge as a feature/innovation; it is a conditional-signal limitation.",
+    "Complex / neural sequence models do not clearly beat tree baselines; never name a single winning or superior model.",
+    "Never assert the model is well-calibrated (low resolution)."
+  ],
+  "limitation_count": 4,
+  "multiplicity_discount": {
+    "descriptive_only": true,
+    "max_family_mean": 0.006950003903129272,
+    "median_family_lcb": -0.0002732599132531646,
+    "min_family_lcb": -0.0046447337048431845,
+    "pbo": 0.5142857142857142,
+    "pbo_method": "cscv_odd_block_floor_ceil_adaptation",
+    "pbo_n_blocks": 7,
+    "pbo_n_combinations": 35,
+    "pbo_n_trials": 4,
+    "seed_aggregation": "mean_over_seeds"
+  },
+  "new_scoring_events": 0,
+  "no_final_model_selected": true,
+  "official_validation_contact": "read_frozen_artifacts_only",
+  "reads_guarded_walkforward_artifacts": true,
+  "route": "lst_models",
+  "run_id": "20260619_053750_244288",
+  "scope": "synthesis_measure_only",
+  "scoring_event_budget": {
+    "03_frozen_validation_readout": 2,
+    "04_diagnostics_ablation": 0,
+    "total": 58,
+    "v2_1_guarded_walkforward_readout": 56
+  },
+  "selective_autopsy": {
+    "delta_clears_mde_by_tercile": {
+      "high": null,
+      "low": null,
+      "mid": null
+    },
+    "descriptive_only": true,
+    "note": "Selective metrics are accuracy-based (no cost/return); abstention is a diagnostic, not an operating point or a tradeability claim (register F4). e-AURC/AUGRC describe whole curves and mark no operating point; MDE is extracted from the frozen Stage 04 per-trading-day block bootstrap (delta minus lcb). The abstention cross is read with register F1: the edge sits in low-activity bars and is below the random prior on high-activity bars.",
+    "pooled_augrc": 0.23687237217934656,
+    "pooled_e_aurc": 0.3302190576441245,
+    "pooled_full_coverage_risk": 0.48081938780914046,
+    "selective_metric_basis": "accuracy_no_cost_or_return"
+  },
+  "source_stage03_run_id": "20260610_133305_716174",
+  "source_stage04_run_id": "20260618_234011_838683",
+  "source_v2_1_run_id": "20260618_063559_889276",
+  "stage03_decision": "met_predeclared_validation_readout_criteria",
+  "stage_name": "05_thesis_synthesis",
+  "v2_1_decision": "met_predeclared_guarded_stability_criteria",
+  "v2_1_pooled_delta_estimands": {
+    "binding_estimand": "row_pooled",
+    "pooled_delta": 0.006361602324004845,
+    "pooled_delta_equal_weight": 0.005495103879443143,
+    "pooled_delta_row_pooled": 0.006361602324004845,
+    "pooled_delta_row_pooled_available": true,
+    "positive_period_count": 5
+  },
+  "v2_1_source_stage04_run_id": "20260610_232623_326133"
+}

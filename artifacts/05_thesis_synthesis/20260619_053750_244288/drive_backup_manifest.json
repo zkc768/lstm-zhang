@@ -1,0 +1,93 @@
+{
+  "stage_name": "05_thesis_synthesis",
+  "run_id": "20260619_053750_244288",
+  "stage_run_id": "20260619_053750_244288",
+  "new_scoring_events": 0,
+  "local_output_dir": "/content/lst_models_results/05_thesis_synthesis/20260619_053750_244288",
+  "drive_path": "My Drive/lst_models/results/05_thesis_synthesis/20260619_053750_244288",
+  "drive_path_parts": [
+    "lst_models",
+    "results",
+    "05_thesis_synthesis",
+    "20260619_053750_244288"
+  ],
+  "drive_folder_id": "1qzJ52yhOiSG1mR2xyNSA2vAOncypM4O5",
+  "uploaded_file_names": [
+    "05_claim_boundary_register.csv",
+    "05_expectation_calibration.csv",
+    "05_multiplicity_discount.csv",
+    "05_selective_autopsy.csv",
+    "05_thesis_synthesis_report.json",
+    "05_validation_budget_ledger.csv",
+    "artifact_inventory.csv",
+    "run_manifest.json",
+    "drive_backup_manifest.json"
+  ],
+  "uploaded_files": [
+    {
+      "id": "1IRBMr8SUPSWPNjeTNQ3IU0UkykCJztBK",
+      "name": "05_claim_boundary_register.csv",
+      "webViewLink": "https://drive.google.com/file/d/1IRBMr8SUPSWPNjeTNQ3IU0UkykCJztBK/view?usp=drivesdk",
+      "size": "2760",
+      "bytes": 2760
+    },
+    {
+      "id": "1jdhC23DAe8uXTUXdMq6wzOpLNiewQmRI",
+      "name": "05_expectation_calibration.csv",
+      "webViewLink": "https://drive.google.com/file/d/1jdhC23DAe8uXTUXdMq6wzOpLNiewQmRI/view?usp=drivesdk",
+      "size": "1944",
+      "bytes": 1944
+    },
+    {
+      "id": "1UCSsHi43dyyRZgjolYO8v25i4D8PJZe8",
+      "name": "05_multiplicity_discount.csv",
+      "webViewLink": "https://drive.google.com/file/d/1UCSsHi43dyyRZgjolYO8v25i4D8PJZe8/view?usp=drivesdk",
+      "size": "1181",
+      "bytes": 1181
+    },
+    {
+      "id": "1KJ7g02GZaXOg6xtACDHfd_uJoJZwRvKH",
+      "name": "05_selective_autopsy.csv",
+      "webViewLink": "https://drive.google.com/file/d/1KJ7g02GZaXOg6xtACDHfd_uJoJZwRvKH/view?usp=drivesdk",
+      "size": "2030",
+      "bytes": 2030
+    },
+    {
+      "id": "1ns387rKquNWiTX21tMIfQjZk3q5O-vra",
+      "name": "05_thesis_synthesis_report.json",
+      "webViewLink": "https://drive.google.com/file/d/1ns387rKquNWiTX21tMIfQjZk3q5O-vra/view?usp=drivesdk",
+      "size": "3289",
+      "bytes": 3289
+    },
+    {
+      "id": "1vHSIygh7Gl6yctJIBgpyxqRiw_h5wuRN",
+      "name": "05_validation_budget_ledger.csv",
+      "webViewLink": "https://drive.google.com/file/d/1vHSIygh7Gl6yctJIBgpyxqRiw_h5wuRN/view?usp=drivesdk",
+      "size": "852",
+      "bytes": 852
+    },
+    {
+      "id": "1wAoowJL5_1x_2Obm_nyzoIANp-M4SEq3",
+      "name": "artifact_inventory.csv",
+      "webViewLink": "https://drive.google.com/file/d/1wAoowJL5_1x_2Obm_nyzoIANp-M4SEq3/view?usp=drivesdk",
+      "size": "1893",
+      "bytes": 1893
+    },
+    {
+      "id": "1Xql3BIB7-2HmG_izMbbZmGGh2O_O7Qve",
+      "name": "run_manifest.json",
+      "webViewLink": "https://drive.google.com/file/d/1Xql3BIB7-2HmG_izMbbZmGGh2O_O7Qve/view?usp=drivesdk",
+      "size": "3015",
+      "bytes": 3015
+    },
+    {
+      "name": "drive_backup_manifest.json",
+      "bytes": null,
+      "self_reference": true
+    }
+  ],
+  "sync_timestamp_utc": "2026-06-19T05:38:01.207303+00:00",
+  "holdout_test_contact": false,
+  "official_validation_contact": "read_frozen_artifacts_only",
+  "no_final_model_selected": true
+}

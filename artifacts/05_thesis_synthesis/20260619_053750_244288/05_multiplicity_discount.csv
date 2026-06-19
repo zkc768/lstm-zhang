@@ -1,0 +1,6 @@
+row_kind,family,n_periods,positive_periods,mean_delta,period_delta_lcb,min_family_lcb,median_family_lcb,max_family_mean,pbo,pbo_n_combinations,pbo_n_trials,pbo_n_blocks,pbo_method,seed_aggregation,note
+family,lightgbm_family_best,7,5.0,0.006950003903129272,-0.00029747629372588354,,,,,,,,,,
+family,ms_dlinear_tcn_family_best,7,6.0,0.006124999256480685,-0.00024904353278044564,,,,,,,,,,
+family,standard_dlinear_family_best,7,4.0,0.004150438008261465,-0.0046447337048431845,,,,,,,,,,
+family,tcn_frozen_primary,7,5.0,0.005495103879443121,0.00047019267802227236,,,,,,,,,,
+summary,all,7,,,,-0.0046447337048431845,-0.0002732599132531646,0.006950003903129272,0.5142857142857142,35.0,4.0,7.0,cscv_odd_block_floor_ceil_adaptation,mean_over_seeds,"Descriptive multiplicity discount over the 4-family x 2-seed x 7-period guarded roster (seeds mean-aggregated per family-period before the matrix). With 7 (odd) periods the CSCV split is a floor/ceil odd-block adaptation (3 in-sample / 4 out-of-sample), not canonical symmetric CSCV; PBO (Bailey et al. 2017) and the worst-family min_family_lcb are overfitting/uncertainty discounts, never a significance test and never a significance claim."

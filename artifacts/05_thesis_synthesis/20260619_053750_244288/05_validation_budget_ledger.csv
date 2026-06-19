@@ -1,0 +1,5 @@
+stage_name,run_id,evidence_domain,data_segment,contact_type,scoring_events,for_selection,notes
+03_frozen_validation_readout,20260610_133305_716174,official_validation,validation_2013_2017,official_validation_scored_once_per_seed,2,False,official validation scored once per frozen seed x candidate (Dwork 2015 reusable-holdout budget)
+04_diagnostics_ablation,20260618_234011_838683,train_inner_control,train_inner,read_frozen_artifacts_only,0,False,diagnosis only; reads the frozen Stage 03 dump; zero new validation fit-predict events
+v2_1_guarded_walkforward_readout,20260618_063559_889276,guarded_walkforward,guarded_holdout_2017_2024,guarded_historically_contacted,56,False,guarded walk-forward; historically contacted post-2017 segment
+total,,all,full_route,aggregate,58,False,route official-validation + guarded scoring budget (sum of stage rows)
