@@ -53,6 +53,11 @@ LOO_ROBUSTNESS_COLUMNS = [
     "estimand", "weight_unit", "left_out", "n_units_remaining",
     "delta_after_drop", "baseline_delta", "delta_shift", "sign_after_drop", "note",
 ]
+GUARDED_ACTIVITY_TERCILE_COLUMNS = [
+    "evidence_domain", "activity_tercile", "seed", "n_rows",
+    "macro_f1", "accuracy", "dummy_macro_f1", "delta_vs_dummy",
+    "below_random_prior", "note",
+]
 _ACTIVITY_TERCILE_ORDER = ("low", "mid", "high")
 
 _FIELD_MISSING = object()
@@ -840,3 +845,244 @@ def build_row_pooled_loo(
             ).strip(),
         })
     return pd.DataFrame(rows)[LOO_ROBUSTNESS_COLUMNS]
+
+
+def _guarded_tercile_row(
+    tercile: str, seed: str, cand: pd.DataFrame, base: pd.DataFrame, random_prior: float
+) -> dict[str, Any]:
+    """One (tercile, seed) guarded conditional-map cell: candidate vs same-row dummy."""
+    nan = float("nan")
+    head = {"evidence_domain": "guarded_walkforward", "activity_tercile": tercile, "seed": seed}
+    if len(cand) == 0 or len(base) == 0:
+        return {**head, "n_rows": int(len(cand)), "macro_f1": nan, "accuracy": nan,
+                "dummy_macro_f1": nan, "delta_vs_dummy": nan, "below_random_prior": False, "note": ""}
+    y_true = cand["y_true"].to_numpy(dtype=int)
+    y_pred = cand["y_pred"].to_numpy(dtype=int)
+    macro = float(metrics.binary_macro_f1(y_true, y_pred))
+    dummy = float(metrics.binary_macro_f1(
+        base["y_true"].to_numpy(dtype=int), base["y_pred"].to_numpy(dtype=int)
+    ))
+    return {
+        **head, "n_rows": int(len(cand)), "macro_f1": macro,
+        "accuracy": float((y_pred == y_true).mean()),
+        "dummy_macro_f1": dummy, "delta_vs_dummy": macro - dummy,
+        "below_random_prior": bool(macro < float(random_prior)), "note": "",
+    }
+
+
+def _guarded_tercile_seed_mean(
+    tercile: str, seed_rows: list[dict[str, Any]], random_prior: float, note: str
+) -> dict[str, Any]:
+    """Seed-mean row for a tercile (mean over the per-seed cells; finite values only).
+    Mean is linear so ``delta_vs_dummy`` stays == ``macro_f1`` - ``dummy_macro_f1``."""
+    numeric = ["n_rows", "macro_f1", "accuracy", "dummy_macro_f1", "delta_vs_dummy"]
+    agg: dict[str, Any] = {}
+    for col in numeric:
+        finite = [float(r[col]) for r in seed_rows if _finite(r[col])]
+        agg[col] = float(np.mean(finite)) if finite else float("nan")
+    agg["n_rows"] = int(round(agg["n_rows"])) if _finite(agg["n_rows"]) else 0
+    macro = agg["macro_f1"]
+    return {
+        "evidence_domain": "guarded_walkforward", "activity_tercile": tercile, "seed": "seed_mean",
+        **agg, "below_random_prior": bool(_finite(macro) and macro < float(random_prior)),
+        "note": str(note) if tercile == "all" else "",
+    }
+
+
+def build_guarded_activity_tercile(
+    primary_predictions: pd.DataFrame,
+    baseline_predictions: pd.DataFrame,
+    *,
+    primary_model: str,
+    family_axis: str = "table_row_id",
+    ticker_axis: str = "ticker",
+    trading_day_axis: str = "trading_day",
+    seed_axis: str = "seed",
+    random_prior: float = 0.5,
+    activity_tercile_fn: Any = None,
+    expected_ticker_count: int | None = None,
+    descriptive_note: str = "",
+) -> pd.DataFrame:
+    """Cross-era replication of the conditional-predictability map on the GUARDED
+    walk-forward era (closes the review blocker: the validation-era activity-tercile
+    map from Stage 03/04 was never measured on the 2017-2024 guarded segment, even
+    though the row-level guarded dump exists and was already re-aggregated for the
+    row-pooled LOO).
+
+    Reuses the EXACT validation activity proxy (``diagnostics.activity_terciles`` --
+    per-ticker terciles of the per-(ticker, trading_day) eligible-row count) so the
+    guarded map is apples-to-apples with the validation map. Per activity tercile x
+    seed (plus a seed-mean): primary candidate macro-F1, the same-row stratified-dummy
+    macro-F1, their delta, and a below-random-prior flag. Measure-only over the raw
+    frozen ``v2_1_predictions.csv`` + ``v2_1_baseline_predictions.csv`` (Drive-only);
+    no fit, no scoring, no selection. Descriptive conditional map -- never an operating
+    point or a tradeability claim (register F1/F4).
+    """
+    if activity_tercile_fn is None:
+        from lst_models.diagnostics import activity_terciles as activity_tercile_fn
+    need_c = {family_axis, ticker_axis, trading_day_axis, seed_axis, "y_true", "y_pred"}
+    need_b = {ticker_axis, trading_day_axis, seed_axis, "y_true", "y_pred"}
+    for name, frame, need in (
+        ("primary_predictions", primary_predictions, need_c),
+        ("baseline_predictions", baseline_predictions, need_b),
+    ):
+        missing = sorted(need - set(frame.columns))
+        if missing:
+            raise ValueError(f"guarded_activity_tercile: {name} missing columns {missing}")
+    cand = primary_predictions[
+        primary_predictions[family_axis].astype(str) == str(primary_model)
+    ].copy()
+    if cand.empty:
+        raise ValueError(f"guarded_activity_tercile: no rows for primary model {primary_model!r}")
+    if expected_ticker_count is not None:
+        n_tickers = int(cand[ticker_axis].nunique())
+        if n_tickers != int(expected_ticker_count):
+            raise ValueError(
+                f"guarded_activity_tercile: expected {expected_ticker_count} tickers, found {n_tickers}"
+            )
+    cand["activity_tercile"] = activity_tercile_fn(cand).astype(str)
+    # Carry the SAME (ticker, trading_day) -> tercile assignment onto the baseline
+    # rows so both sides are binned identically (they score the same eval rows).
+    day_map = (
+        cand.groupby([ticker_axis, trading_day_axis])["activity_tercile"].first().reset_index()
+    )
+    base = baseline_predictions.drop(columns=["activity_tercile"], errors="ignore").merge(
+        day_map, on=[ticker_axis, trading_day_axis], how="left"
+    )
+    if bool(base["activity_tercile"].isna().any()):
+        n_missing = int(base["activity_tercile"].isna().sum())
+        raise ValueError(
+            f"guarded_activity_tercile: {n_missing} baseline rows have no (ticker, trading_day) "
+            "match in the candidate tercile map; candidate and baseline eval rows must align"
+        )
+    present = set(cand["activity_tercile"])
+    terciles = ["all"] + [t for t in _ACTIVITY_TERCILE_ORDER if t in present]
+    seeds = sorted({int(s) for s in cand[seed_axis].tolist()})
+    rows: list[dict[str, Any]] = []
+    for tercile in terciles:
+        seed_rows: list[dict[str, Any]] = []
+        for seed in seeds:
+            c = cand[cand[seed_axis].astype(int) == int(seed)]
+            b = base[base[seed_axis].astype(int) == int(seed)]
+            if tercile != "all":
+                c = c[c["activity_tercile"] == tercile]
+                b = b[b["activity_tercile"] == tercile]
+            row = _guarded_tercile_row(tercile, str(int(seed)), c, b, random_prior)
+            rows.append(row)
+            seed_rows.append(row)
+        rows.append(_guarded_tercile_seed_mean(tercile, seed_rows, random_prior, descriptive_note))
+    return pd.DataFrame(rows)[GUARDED_ACTIVITY_TERCILE_COLUMNS]
+
+
+def build_row_pooled_multiplicity_discount(
+    primary_predictions: pd.DataFrame,
+    baseline_predictions: pd.DataFrame,
+    *,
+    families: Sequence[str] | None = None,
+    family_axis: str = "table_row_id",
+    period_axis: str = "period_id",
+    seed_axis: str = "seed",
+    is_block_count: int | None = None,
+    expected_family_count: int | None = None,
+    expected_period_count: int | None = None,
+    descriptive_note: str = "",
+) -> pd.DataFrame:
+    """B6 multiplicity discount recomputed on the BINDING row-pooled estimand
+    (closes the review blocker: the shipped ``05_multiplicity_discount.csv`` runs on
+    the equal-weight companion 0.005495, not the binding row-pooled 0.006362 that the
+    C4 headline cites).
+
+    Each (family, period) cell is the row-pooled-WITHIN-period macro-F1 delta (pool
+    the period's rows, mean over seeds -- :func:`_row_pooled_seed_mean_delta`), so the
+    CSCV PBO (Bailey et al. 2017) is block-structured over row-pooled blocks. Each
+    family's central ``mean_delta`` is the row-pooled-over-ALL-rows binding estimand
+    (the TCN primary value reproduces ``pooled_delta_row_pooled``), NOT the equal-weight
+    mean of the period cells -- so the discount now centers on the quantity the headline
+    cites. ``period_delta_lcb`` is the block Student-t LCB over the period cells; the
+    summary row carries the worst-family ``min_family_lcb`` and the descriptive PBO. All
+    values DESCRIPTIVE -- never a significance claim (register Tier 1). Emits the same
+    ``MULTIPLICITY_DISCOUNT_COLUMNS`` schema as the equal-weight discount so the two can
+    be diffed directly. Measure-only over the raw frozen dumps.
+    """
+    need_c = {family_axis, period_axis, seed_axis, "y_true", "y_pred"}
+    need_b = {period_axis, seed_axis, "y_true", "y_pred"}
+    for name, frame, need in (
+        ("primary_predictions", primary_predictions, need_c),
+        ("baseline_predictions", baseline_predictions, need_b),
+    ):
+        missing = sorted(need - set(frame.columns))
+        if missing:
+            raise ValueError(f"row_pooled_multiplicity: {name} missing columns {missing}")
+    fams = [
+        str(f) for f in (
+            families if families is not None
+            else sorted(set(primary_predictions[family_axis].astype(str)))
+        )
+    ]
+    if not fams:
+        raise ValueError("row_pooled_multiplicity: no families to score")
+    if expected_family_count is not None and len(fams) != int(expected_family_count):
+        raise ValueError(
+            f"row_pooled_multiplicity: expected {expected_family_count} families, found "
+            f"{len(fams)} ({fams})"
+        )
+    periods = sorted(set(primary_predictions[period_axis].astype(str)))
+    if expected_period_count is not None and len(periods) != int(expected_period_count):
+        raise ValueError(
+            f"row_pooled_multiplicity: expected {expected_period_count} periods, found "
+            f"{len(periods)} ({periods})"
+        )
+    base = baseline_predictions
+    matrix = np.zeros((len(fams), len(periods)), dtype=float)
+    family_cis: dict[str, dict[str, float]] = {}
+    rows: list[dict[str, Any]] = []
+    for i, family in enumerate(fams):
+        cand_all = primary_predictions[primary_predictions[family_axis].astype(str) == family]
+        if cand_all.empty:
+            raise ValueError(f"row_pooled_multiplicity: no rows for family {family!r}")
+        period_deltas: list[float] = []
+        for j, period in enumerate(periods):
+            cc = cand_all[cand_all[period_axis].astype(str) == period]
+            bb = base[base[period_axis].astype(str) == period]
+            if cc.empty or bb.empty:
+                raise ValueError(
+                    f"row_pooled_multiplicity: family {family!r} period {period!r} has no "
+                    "candidate/baseline rows; the predeclared guarded roster must be complete"
+                )
+            delta = _row_pooled_seed_mean_delta(cc, bb, seed_axis=seed_axis)
+            matrix[i, j] = delta
+            period_deltas.append(delta)
+        period_deltas_arr = np.asarray(period_deltas, dtype=float)
+        block_lcb = float(metrics.compute_metric_lcb(period_deltas_arr))
+        binding_central = _row_pooled_seed_mean_delta(cand_all, base, seed_axis=seed_axis)
+        family_cis[family] = {"lcb": block_lcb, "mean": binding_central}
+        rows.append({
+            "row_kind": "family", "family": family,
+            "n_periods": int(period_deltas_arr.size),
+            "positive_periods": int(np.sum(period_deltas_arr > 0)),
+            "mean_delta": binding_central, "period_delta_lcb": block_lcb,
+            "min_family_lcb": None, "median_family_lcb": None, "max_family_mean": None,
+            "pbo": None, "pbo_n_combinations": None, "pbo_n_trials": None,
+            "pbo_n_blocks": None, "pbo_method": None, "seed_aggregation": None, "note": "",
+        })
+    aggregate = metrics.aggregate_family_delta_cis(family_cis)
+    pbo = metrics.cscv_pbo(matrix, is_block_count=is_block_count)
+    pbo_method = "cscv_symmetric" if pbo["is_symmetric"] else "cscv_odd_block_floor_ceil_adaptation"
+    rows.append({
+        "row_kind": "summary", "family": "all",
+        "n_periods": int(len(periods)), "positive_periods": None,
+        "mean_delta": None, "period_delta_lcb": None,
+        "min_family_lcb": aggregate["min_family_lcb"],
+        "median_family_lcb": aggregate["median_family_lcb"],
+        "max_family_mean": aggregate["max_family_mean"],
+        "pbo": pbo["pbo"], "pbo_n_combinations": pbo["n_combinations"],
+        "pbo_n_trials": pbo["n_trials"], "pbo_n_blocks": pbo["n_blocks"],
+        "pbo_method": pbo_method, "seed_aggregation": "row_pooled_within_period_then_block",
+        "note": (
+            "BINDING row-pooled estimand: per-family mean_delta is the row-pooled-over-all-rows "
+            "pooled_delta (the TCN primary reproduces pooled_delta_row_pooled); PBO and per-family "
+            "period_delta_lcb are block-structured over row-pooled-within-period deltas; contrast "
+            f"with the equal-weight 05_multiplicity_discount.csv. {descriptive_note}"
+        ).strip(),
+    })
+    return pd.DataFrame(rows)[MULTIPLICITY_DISCOUNT_COLUMNS]
