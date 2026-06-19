@@ -11,7 +11,7 @@ NOTEBOOK = ROOT / "notebooks" / "04_diagnostics_ablation_colab.ipynb"
 
 # The two-step exact-commit pin (AGENTS.md section 5) updates this constant
 # together with the notebook constant in the same commit.
-EXPECTED_PROJECT_REPO_COMMIT = "7199c651165128e1e22b7e14e82b13f1f8c8a996"
+EXPECTED_PROJECT_REPO_COMMIT = "4132566dc1ec6e84aa6d4b2855e940f65416bba4"
 CURRENT_STAGE00_RUN_ID = "20260610_051705_347450"
 CURRENT_STAGE01_RUN_ID = "20260610_075002"
 CURRENT_STAGE02_RUN_ID = "20260610_082130_797479"
