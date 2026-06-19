@@ -122,7 +122,9 @@ class Stage05Dirs:
             "pooled_delta_row_pooled": 0.006362,
             "pooled_delta_row_pooled_available": True,
             "source_stage03_run_id": self.stage03_run_id,
-            "source_stage04_run_id": self.stage04_run_id,
+            # V2.1 sequenced after an EARLIER Stage 04 than the canonical sentinel
+            # run Stage 05 reads; both chain to the same Stage 03 (allowed, recorded).
+            "source_stage04_run_id": "20260610_232623_326133",
         }
 
     # --------------------------------------------------------- folders ----
@@ -335,6 +337,11 @@ def test_happy_path_writes_four_artifacts_and_report(stage_dirs: Stage05Dirs) ->
     assert report["source_stage03_run_id"] == stage_dirs.stage03_run_id
     assert report["source_v2_1_run_id"] == stage_dirs.v2_1_run_id
     assert report["v2_1_decision"] == "met_predeclared_guarded_stability_criteria"
+    # the Stage 04 diagnostics run Stage 05 reads differs from the one V2.1
+    # sequenced after; both chain to the same Stage 03 -> allowed + recorded
+    assert report["source_stage04_run_id"] == stage_dirs.stage04_run_id
+    assert report["v2_1_source_stage04_run_id"] == "20260610_232623_326133"
+    assert report["v2_1_source_stage04_run_id"] != report["source_stage04_run_id"]
     assert report["kb_wording_guardrails"]
     assert report["deferred_synthesis_items"]
 

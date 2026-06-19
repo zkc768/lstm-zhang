@@ -216,8 +216,13 @@ def _gate_stage04_measure_only(stage04_report: Mapping[str, Any]) -> None:
 def _gate_run_id_chain(
     inputs: Mapping[str, Any], records: Mapping[str, Mapping[str, Any]]
 ) -> None:
+    # Binding invariant: a SHARED frozen Stage 03. The Stage 04 diagnostics run
+    # and the V2.1 guarded readout are siblings off the same Stage 03 dump. V2.1's
+    # own source_stage04_run_id is an ordering reference (stage04_first) and MAY
+    # differ from the canonical sentinel Stage 04 diagnostics run Stage 05 reads
+    # (e.g. V2.1 sequenced after an earlier Stage 04, before the sentinel re-run);
+    # it is recorded in the report for provenance, not gated for equality.
     stage03_id = str(inputs["stage03_run_id"])
-    stage04_id = str(inputs["stage04_run_id"])
     require_run_id_chain(
         [
             (
@@ -229,11 +234,6 @@ def _gate_run_id_chain(
                 "v2_1_decision_record.json source_stage03_run_id",
                 stage03_id,
                 records["v2_1"].get("source_stage03_run_id"),
-            ),
-            (
-                "v2_1_decision_record.json source_stage04_run_id",
-                stage04_id,
-                records["v2_1"].get("source_stage04_run_id"),
             ),
         ],
         stage_label="Stage 05",
@@ -449,6 +449,10 @@ def _synthesis_report(
         **_source_run_id_fields(config),
         "stage03_decision": str(inputs.records_by_key["stage03"].get("decision")),
         "v2_1_decision": str(v2_1_record.get("decision")),
+        # provenance: the Stage 04 diagnostics run Stage 05 reads (source_stage04_run_id
+        # above) may differ from the Stage 04 V2.1 sequenced after -- both chain to the
+        # same Stage 03; the divergence is recorded, not hidden.
+        "v2_1_source_stage04_run_id": str(v2_1_record.get("source_stage04_run_id")),
         "v2_1_pooled_delta_estimands": synthesis.collect_pooled_delta_estimands(v2_1_record),
         "multiplicity_discount": _multiplicity_summary(frames["multiplicity_discount"]),
         "selective_autopsy": _selective_autopsy_summary(

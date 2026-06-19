@@ -104,10 +104,14 @@ reads describes a guarded historically-contacted contact that ALREADY
 happened; Stage 05 itself makes no new contact (its own manifest records
 `holdout_test_contact=false`, `new_scoring_events=0`).
 
-Run-id chain: the Stage 04 report and the V2.1 record must both record the
-configured Stage 03 run id as their `source_stage03_run_id`, and the V2.1
-record must record the configured Stage 04 run id as its `source_stage04_run_id`.
-A mismatch fails the entry gate closed.
+Run-id chain (binding invariant = a SHARED frozen Stage 03): the Stage 04
+diagnostics report and the V2.1 record must both record the configured Stage 03
+run id as their `source_stage03_run_id`; a mismatch fails the entry gate closed.
+The Stage 04 diagnostics run Stage 05 reads is the canonical sentinel run; the
+Stage 04 run V2.1 sequenced after (its `source_stage04_run_id`, an ordering
+reference, e.g. an earlier Stage 04 produced before the sentinel re-run) MAY
+differ and is recorded in the report (`v2_1_source_stage04_run_id`) for
+provenance, not gated for equality — both still chain to the same Stage 03.
 
 ## 3. Three Evidence Domains (never mixed in one sentence)
 
