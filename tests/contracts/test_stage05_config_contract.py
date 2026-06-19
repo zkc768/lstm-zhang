@@ -184,5 +184,11 @@ def test_multiplicity_discount_block_well_formed() -> None:
     assert block["period_axis"] == "period_id"
     assert block["delta_field"] == "delta_macro_f1_vs_stratified_dummy_train_prior"
     assert block["model_row_kind"] == "model"
+    # fail-closed roster expectations (the predeclared 56-event ledger)
+    assert block["expected_family_count"] == 4
+    assert block["expected_period_count"] == 7
+    assert block["expected_seeds_per_cell"] == 2
+    assert 4 * 7 * 2 == 56  # roster closes to the guarded scoring-event budget
+    assert block["seed_aggregation"] == "mean_over_seeds"  # seed aggregation is explicit
     # descriptive note must not itself contain a forbidden phrase
     assert not synthesis.find_forbidden_wording(block["descriptive_note"], CONFIG["forbidden"]["wording"])

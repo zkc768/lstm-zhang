@@ -319,6 +319,10 @@ def _build_frames(
         completed_status_value=str(multiplicity_cfg.get("completed_status_value", "completed")),
         model_row_kind=multiplicity_cfg.get("model_row_kind"),
         is_block_count=multiplicity_cfg.get("is_block_count"),
+        expected_family_count=multiplicity_cfg.get("expected_family_count"),
+        expected_period_count=multiplicity_cfg.get("expected_period_count"),
+        expected_seeds_per_cell=multiplicity_cfg.get("expected_seeds_per_cell"),
+        seed_aggregation=str(multiplicity_cfg.get("seed_aggregation", "mean_over_seeds")),
         descriptive_note=str(multiplicity_cfg.get("descriptive_note", "")),
     )
     return {
@@ -358,6 +362,8 @@ def _multiplicity_summary(frame: pd.DataFrame) -> dict[str, Any]:
         "pbo_n_trials": _int(row["pbo_n_trials"]),
         "pbo_n_blocks": _int(row["pbo_n_blocks"]),
         "pbo_n_combinations": _int(row["pbo_n_combinations"]),
+        "pbo_method": None if pd.isna(row["pbo_method"]) else str(row["pbo_method"]),
+        "seed_aggregation": None if pd.isna(row["seed_aggregation"]) else str(row["seed_aggregation"]),
         "descriptive_only": True,
     }
 

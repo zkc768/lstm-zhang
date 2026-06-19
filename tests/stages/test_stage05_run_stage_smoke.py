@@ -230,6 +230,14 @@ class Stage05Dirs:
     def remove_artifact(self, key: str, name: str) -> None:
         (self.dirs[key] / name).unlink()
 
+    def rewrite_v2_1_readout(self, frame: pd.DataFrame) -> None:
+        frame.to_csv(self.dirs["v2_1"] / "v2_1_walkforward_readout.csv", index=False)
+        names = [
+            p.name for p in self.dirs["v2_1"].iterdir()
+            if p.is_file() and p.name != "artifact_inventory.csv"
+        ]
+        write_artifact_inventory(self.dirs["v2_1"], {n: self.dirs["v2_1"] / n for n in names})
+
     def single_run_dir(self) -> Path:
         run_dirs = [path for path in self.output_dir.iterdir() if path.is_dir()]
         assert len(run_dirs) == 1, f"expected one run folder, got {len(run_dirs)}"
@@ -327,6 +335,9 @@ def test_multiplicity_discount_descriptive_pbo_and_min_family_lcb(stage_dirs: St
     srow = summary.iloc[0]
     assert int(srow["pbo_n_trials"]) == 4 and int(srow["pbo_n_blocks"]) == 7
     assert 0.0 <= float(srow["pbo"]) <= 1.0
+    # 7 odd periods -> floor/ceil odd-block CSCV adaptation, labeled (not canonical)
+    assert srow["pbo_method"] == "cscv_odd_block_floor_ceil_adaptation"
+    assert srow["seed_aggregation"] == "mean_over_seeds"  # seed aggregation is explicit
     # min_family_lcb is the worst family's LCB -> <= every family's own LCB
     assert float(srow["min_family_lcb"]) <= float(family_rows["period_delta_lcb"].min()) + 1e-12
     assert float(srow["max_family_mean"]) == pytest.approx(float(family_rows["mean_delta"].max()))
@@ -335,7 +346,31 @@ def test_multiplicity_discount_descriptive_pbo_and_min_family_lcb(stage_dirs: St
     md = report["multiplicity_discount"]
     assert md["descriptive_only"] is True
     assert md["pbo_n_trials"] == 4 and md["pbo_n_blocks"] == 7
+    assert md["pbo_method"] == "cscv_odd_block_floor_ceil_adaptation"
+    assert md["seed_aggregation"] == "mean_over_seeds"
     assert md["min_family_lcb"] == pytest.approx(float(srow["min_family_lcb"]))
+
+
+def test_multiplicity_discount_fails_closed_on_missing_cell(stage_dirs: Stage05Dirs) -> None:
+    # drop a whole (family, period) cell -> incomplete matrix -> fail closed,
+    # never silently shrink pbo_n_blocks (the reviewer's P1 risk)
+    readout = stage_dirs._v2_1_readout()
+    keep = ~(readout["table_row_id"].eq("tcn_frozen_primary") & readout["period_id"].eq("wf_p3"))
+    stage_dirs.rewrite_v2_1_readout(readout[keep])
+    with pytest.raises(ValueError, match="incomplete family"):
+        run_stage(stage_dirs.config())
+
+
+def test_multiplicity_discount_fails_closed_on_wrong_seed_count(stage_dirs: Stage05Dirs) -> None:
+    # drop one seed row for one cell -> cell has 1 seed, not 2 -> fail closed
+    readout = stage_dirs._v2_1_readout()
+    drop = (
+        readout["table_row_id"].eq("lightgbm_family_best")
+        & readout["period_id"].eq("wf_p1") & readout["seed"].eq(202)
+    )
+    stage_dirs.rewrite_v2_1_readout(readout[~drop])
+    with pytest.raises(ValueError, match="seed rows"):
+        run_stage(stage_dirs.config())
 
 
 def test_claim_register_tags_domains_and_limitations(stage_dirs: Stage05Dirs) -> None:

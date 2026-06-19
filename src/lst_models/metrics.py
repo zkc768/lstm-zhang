@@ -324,9 +324,12 @@ def cscv_pbo(
     (default ``n_blocks // 2``; the rest are out-of-sample), the in-sample-best
     trial's OUT-of-sample relative rank ``omega in (0,1)`` gives a logit
     ``lambda = ln(omega/(1-omega))``; PBO is the share of combinations with
-    ``lambda < 0`` (the IS winner lands below the OS median). With an odd block
-    count the split is floor/ceil rather than symmetric -- recorded in
-    ``is_block_count``.
+    ``lambda < 0`` (the IS winner lands below the OS median). The OS rank uses
+    AVERAGE ranks, so tied performance is neutral (``omega = 0.5``, ``lambda =
+    0``) rather than order-biased -- an all-equal roster returns ``pbo = 0``, not
+    a spurious 1. With an odd block count the split is floor/ceil
+    (``is_symmetric=False``) rather than canonical symmetric CSCV -- recorded in
+    ``is_block_count`` / ``os_block_count`` / ``is_symmetric``.
 
     DESCRIPTIVE ONLY: an overfitting discount, never a significance test. With a
     small trial/block roster the estimate is coarse (report ``n_trials`` /
@@ -335,13 +338,16 @@ def cscv_pbo(
     """
     from itertools import combinations
 
+    from scipy.stats import rankdata
+
     matrix = np.asarray(performance_matrix, dtype=float)
     if matrix.ndim != 2:
         raise ValueError(f"performance_matrix must be 2-D, got shape {matrix.shape}")
     n_trials, n_blocks = matrix.shape
     nan_result = {
         "pbo": float("nan"), "n_combinations": 0, "n_trials": int(n_trials),
-        "n_blocks": int(n_blocks), "is_block_count": 0, "median_logit": float("nan"),
+        "n_blocks": int(n_blocks), "is_block_count": 0, "os_block_count": 0,
+        "is_symmetric": False, "median_logit": float("nan"),
     }
     if n_trials < 2 or n_blocks < 2 or not np.isfinite(matrix).all():
         return nan_result
@@ -355,8 +361,8 @@ def cscv_pbo(
         is_perf = matrix[:, list(is_blocks)].mean(axis=1)
         os_perf = matrix[:, os_blocks].mean(axis=1)
         best_is = int(np.argmax(is_perf))
-        order = np.argsort(os_perf, kind="stable")  # ascending OS performance
-        os_rank = int(np.flatnonzero(order == best_is)[0]) + 1  # 1 (worst) .. n (best)
+        # average ranks -> ties are neutral, not order-biased; 1 (worst) .. n (best)
+        os_rank = float(rankdata(os_perf, method="average")[best_is])
         omega = min(max(os_rank / (n_trials + 1), 1e-12), 1.0 - 1e-12)
         lam = float(np.log(omega / (1.0 - omega)))
         logits.append(lam)
@@ -369,6 +375,8 @@ def cscv_pbo(
         "n_trials": int(n_trials),
         "n_blocks": int(n_blocks),
         "is_block_count": int(k),
+        "os_block_count": int(n_blocks - k),
+        "is_symmetric": bool(n_blocks % 2 == 0 and k == n_blocks - k),
         "median_logit": float(np.median(logits)),
     }
 

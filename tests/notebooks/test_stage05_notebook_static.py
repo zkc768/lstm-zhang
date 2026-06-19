@@ -175,3 +175,7 @@ def test_stage05_notebook_forbidden_active_patterns_absent() -> None:
     assert "guarded historically-contacted" in markdown_text
     assert "conditional-signal limitation" in markdown_text
     assert "deferred_synthesis_items" in markdown_text
+    # B6 is BUILT: it must be documented as produced, never as deferred/uncomputed
+    assert "05_multiplicity_discount.csv" in markdown_text
+    assert "descriptive multiplicity discount" in markdown_text
+    assert "not yet computed" not in markdown_text

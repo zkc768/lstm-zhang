@@ -38,12 +38,16 @@ CELL_SPECS = [
         "- S5.3 expectation calibration: the measured deltas situated against "
         "the published direction-classification context (~50% floor; low-to-mid "
         "50s% ceiling); measured values resolved from frozen records.\n"
+        "- B6 (BUILT): a descriptive multiplicity discount -- CSCV PBO "
+        "(odd-block floor/ceil adaptation for 7 periods) + the worst-family "
+        "`min_family_lcb` over the per-(family, period) guarded delta matrix -> "
+        "`05_multiplicity_discount.csv`. Descriptive discounts only, never a "
+        "significance claim.\n"
         "- The V2.1 record describes a guarded historically-contacted contact "
         "that ALREADY happened; Stage 05 itself makes no new contact "
-        "(`holdout_test_contact=false`, `new_scoring_events=0`). The heavier "
-        "measure-only analyses this home unblocks (descriptive PBO/CSCV + "
-        "`min_family_lcb`, AUGRC/MDE/abstention-by-activity, the four-estimand "
-        "recompute + LOO) are recorded as `deferred_synthesis_items`.\n",
+        "(`holdout_test_contact=false`, `new_scoring_events=0`). Still "
+        "`deferred_synthesis_items`: AUGRC/MDE/abstention-by-activity (B7) and "
+        "the four-estimand recompute + LOO (B8).\n",
     ),
     (
         "markdown",
@@ -533,9 +537,11 @@ CELL_SPECS = [
         "realized volume or liquidity.\n"
         "- A small macro-F1 delta is not evidence of tradeability; no economic "
         "analysis is performed or claimed.\n"
-        "- The heavier measure-only analyses (descriptive PBO/CSCV, AUGRC/MDE, "
-        "the four-estimand recompute) are listed as `deferred_synthesis_items` "
-        "and are not yet computed in this bundle.\n",
+        "- The descriptive multiplicity discount (CSCV PBO + `min_family_lcb`) "
+        "IS computed in this bundle (`05_multiplicity_discount.csv`); PBO/LCB are "
+        "descriptive discounts, never a significance claim, and PBO uses an "
+        "odd-block floor/ceil CSCV adaptation for the 7 periods. AUGRC/MDE and "
+        "the four-estimand recompute remain `deferred_synthesis_items`.\n",
     ),
 ]
 

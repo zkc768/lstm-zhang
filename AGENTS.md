@@ -92,9 +92,9 @@ never reopens Stage 00-02 selection). Its sidecar bundle is
 The route also carries **measure-only analyses** layered on the frozen dumps,
 with zero new scoring: Stage 04 hosts calibration / selective-AURC / robustness
 LOO / the leakage sentinel; Stage 05 (thesis synthesis) aggregates the
-validation-budget ledger, claim boundary register, and expectation calibration,
-and is the home for the deferred descriptive PBO/CSCV + `min_family_lcb`,
-AUGRC/MDE, and four-estimand analyses.
+validation-budget ledger, claim boundary register, expectation calibration, and
+the descriptive multiplicity discount (CSCV PBO + `min_family_lcb`, BUILT), and
+is the home for the still-deferred AUGRC/MDE and four-estimand analyses.
 
 Build status (2026-06-18): stages 00-05 and the V2.1 branch have full sidecar
 bundles (notebook + protocol + config + entry point + tests). Stage 06

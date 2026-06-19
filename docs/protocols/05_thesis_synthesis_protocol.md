@@ -7,6 +7,16 @@ Stage 03 / Stage 04 / V2.1 artifacts and emits synthesis tables. It performs
 
 Revision record:
 
+- 2026-06-18 (B6 + review hardening): built the descriptive multiplicity
+  discount (CSCV PBO + worst-family `min_family_lcb`) over the
+  per-(family, period) guarded delta matrix → `05_multiplicity_discount.csv`.
+  PBO uses average ranks (ties neutral) and a labeled odd-block floor/ceil CSCV
+  adaptation for the 7 periods; it FAILS CLOSED on an incomplete 4×7×2 roster;
+  seed aggregation (`mean_over_seeds`) is surfaced. PBO/LCB are descriptive
+  discounts only. Also hardened the home from adversarial review: claim→artifact
+  gating, an upstream-decision gate, scoring-event ledger-length integrity, and
+  accuracy-vs-macro-F1 metric labeling. Still deferred: B7 (AUGRC/MDE/
+  abstention) and B8 (four-estimand + LOO).
 - 2026-06-18: initial bundle (B5). S5.1 validation-budget ledger, S5.2 claim
   boundary register, S5.3 expectation calibration, S5.5 KB wording guardrails,
   plus the synthesis report and manifest. The heavier measure-only analyses

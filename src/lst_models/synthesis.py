@@ -37,7 +37,8 @@ EXPECTATION_CALIBRATION_COLUMNS = [
 MULTIPLICITY_DISCOUNT_COLUMNS = [
     "row_kind", "family", "n_periods", "positive_periods", "mean_delta",
     "period_delta_lcb", "min_family_lcb", "median_family_lcb", "max_family_mean",
-    "pbo", "pbo_n_combinations", "pbo_n_trials", "pbo_n_blocks", "note",
+    "pbo", "pbo_n_combinations", "pbo_n_trials", "pbo_n_blocks", "pbo_method",
+    "seed_aggregation", "note",
 ]
 
 _FIELD_MISSING = object()
@@ -240,6 +241,10 @@ def build_multiplicity_discount(
     completed_status_value: str = "completed",
     model_row_kind: str | None = "model",
     is_block_count: int | None = None,
+    expected_family_count: int | None = None,
+    expected_period_count: int | None = None,
+    expected_seeds_per_cell: int | None = None,
+    seed_aggregation: str = "mean_over_seeds",
     descriptive_note: str = "",
 ) -> pd.DataFrame:
     """B6 descriptive multiplicity discount over the per-(family, period) delta
@@ -252,6 +257,13 @@ def build_multiplicity_discount(
     promoted to a 'statistically significant' claim (register Tier 1 caveat).
     Wires the built-but-unused primitives ``compute_metric_lcb``,
     ``aggregate_family_delta_cis``, and ``cscv_pbo``.
+
+    FAIL-CLOSED on roster incompleteness: the predeclared guarded roster is
+    ``expected_family_count`` x ``expected_period_count`` with
+    ``expected_seeds_per_cell`` seed rows per cell (the 56-event ledger), and any
+    missing (family, period) cell raises rather than silently shrinking the PBO
+    block count. Seeds are aggregated by ``seed_aggregation`` before the matrix is
+    formed (surfaced in the output, not implicit).
     """
     missing = sorted({family_axis, period_axis, delta_field} - set(readout.columns))
     if missing:
@@ -263,41 +275,68 @@ def build_multiplicity_discount(
         frame = frame[frame["row_kind"].astype(str) == str(model_row_kind)]
     if frame.empty:
         raise ValueError("multiplicity_discount: no completed model rows in the readout")
-    # mean over seeds -> families (rows) x periods (cols) delta matrix
+    cell_sizes = frame.groupby([family_axis, period_axis]).size()
+    if expected_seeds_per_cell is not None:
+        offenders = cell_sizes[cell_sizes != int(expected_seeds_per_cell)]
+        if not offenders.empty:
+            raise ValueError(
+                f"multiplicity_discount: {len(offenders)} (family, period) cells lack the "
+                f"expected {expected_seeds_per_cell} seed rows: {dict(list(offenders.items())[:8])}"
+            )
+    # aggregate seeds -> families (rows) x periods (cols) delta matrix
     pivot = (
         frame.groupby([family_axis, period_axis])[delta_field].mean().unstack(period_axis)
     )
     pivot = pivot.sort_index().sort_index(axis=1)
+    if bool(pivot.isna().any().any()):
+        gaps = [
+            (str(fam), str(period))
+            for fam in pivot.index for period in pivot.columns
+            if pd.isna(pivot.loc[fam, period])
+        ]
+        raise ValueError(
+            f"multiplicity_discount: incomplete family x period matrix; {len(gaps)} missing "
+            f"cell(s) e.g. {gaps[:8]}; the predeclared guarded roster must be complete"
+        )
+    if expected_family_count is not None and pivot.shape[0] != int(expected_family_count):
+        raise ValueError(
+            f"multiplicity_discount: expected {expected_family_count} families, found "
+            f"{pivot.shape[0]} ({[str(f) for f in pivot.index]})"
+        )
+    if expected_period_count is not None and pivot.shape[1] != int(expected_period_count):
+        raise ValueError(
+            f"multiplicity_discount: expected {expected_period_count} periods, found "
+            f"{pivot.shape[1]} ({[str(p) for p in pivot.columns]})"
+        )
     family_cis: dict[str, dict[str, float]] = {}
     rows: list[dict[str, Any]] = []
     for family in pivot.index:
         period_deltas = pivot.loc[family].to_numpy(dtype=float)
-        observed = period_deltas[np.isfinite(period_deltas)]
-        lcb = float(metrics.compute_metric_lcb(observed)) if observed.size else float("nan")
-        mean = float(np.mean(observed)) if observed.size else float("nan")
+        lcb = float(metrics.compute_metric_lcb(period_deltas))
+        mean = float(np.mean(period_deltas))
         family_cis[str(family)] = {"lcb": lcb, "mean": mean}
         rows.append({
             "row_kind": "family", "family": str(family),
-            "n_periods": int(observed.size),
-            "positive_periods": int(np.sum(observed > 0)),
+            "n_periods": int(period_deltas.size),
+            "positive_periods": int(np.sum(period_deltas > 0)),
             "mean_delta": mean, "period_delta_lcb": lcb,
             "min_family_lcb": None, "median_family_lcb": None, "max_family_mean": None,
             "pbo": None, "pbo_n_combinations": None, "pbo_n_trials": None,
-            "pbo_n_blocks": None, "note": "",
+            "pbo_n_blocks": None, "pbo_method": None, "seed_aggregation": None, "note": "",
         })
     aggregate = metrics.aggregate_family_delta_cis(family_cis)
-    # CSCV needs a complete matrix: keep only periods scored for every family
-    complete = pivot.dropna(axis=1, how="any")
-    pbo = metrics.cscv_pbo(complete.to_numpy(dtype=float), is_block_count=is_block_count)
+    pbo = metrics.cscv_pbo(pivot.to_numpy(dtype=float), is_block_count=is_block_count)
+    pbo_method = "cscv_symmetric" if pbo["is_symmetric"] else "cscv_odd_block_floor_ceil_adaptation"
     rows.append({
         "row_kind": "summary", "family": "all",
-        "n_periods": int(complete.shape[1]), "positive_periods": None,
+        "n_periods": int(pivot.shape[1]), "positive_periods": None,
         "mean_delta": None, "period_delta_lcb": None,
         "min_family_lcb": aggregate["min_family_lcb"],
         "median_family_lcb": aggregate["median_family_lcb"],
         "max_family_mean": aggregate["max_family_mean"],
         "pbo": pbo["pbo"], "pbo_n_combinations": pbo["n_combinations"],
         "pbo_n_trials": pbo["n_trials"], "pbo_n_blocks": pbo["n_blocks"],
+        "pbo_method": pbo_method, "seed_aggregation": str(seed_aggregation),
         "note": str(descriptive_note),
     })
     return pd.DataFrame(rows)[MULTIPLICITY_DISCOUNT_COLUMNS]

@@ -147,15 +147,26 @@ def test_cscv_pbo_separable_matrix_has_zero_overfitting() -> None:
     out = metrics.cscv_pbo(matrix)
     assert out["n_trials"] == 2 and out["n_blocks"] == 4
     assert out["is_block_count"] == 2 and out["n_combinations"] == 6  # C(4,2)
+    assert out["is_symmetric"] is True  # even blocks, equal split
     assert out["pbo"] == 0.0
     assert out["median_logit"] > 0.0  # IS winner consistently OS-above-median
 
 
+def test_cscv_pbo_all_equal_is_neutral_not_max_overfit() -> None:
+    # regression: average ranks make a tied roster neutral (omega 0.5, logit 0),
+    # NOT a spurious PBO 1 from argmax/argsort order bias.
+    out = metrics.cscv_pbo(np.ones((4, 7)))
+    assert out["pbo"] == 0.0
+    assert out["median_logit"] == pytest.approx(0.0)
+    assert out["is_block_count"] == 3 and out["os_block_count"] == 4
+    assert out["is_symmetric"] is False  # 7 blocks -> floor/ceil odd-block split
+
+
 def test_cscv_pbo_block_dependent_winner_overfits() -> None:
-    # trial 0 wins blocks 0,1; trial 1 wins blocks 2,3 -> IS winner flips OS -> PBO 1
-    matrix = np.array([[3.0, 3.0, 1.0, 1.0], [1.0, 1.0, 3.0, 3.0]])
+    # IS winner is OS-poor on most splits -> high PBO, negative median logit
+    matrix = np.array([[4.0, 3.0, 1.0, 0.0], [0.0, 1.0, 3.0, 5.0]])
     out = metrics.cscv_pbo(matrix)
-    assert out["pbo"] == 1.0
+    assert out["pbo"] > 0.5
     assert out["median_logit"] < 0.0
 
 

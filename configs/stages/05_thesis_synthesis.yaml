@@ -241,8 +241,14 @@ multiplicity_discount:
   completed_status_field: fit_status
   completed_status_value: completed
   model_row_kind: model
-  is_block_count: null  # default floor(n_periods / 2); 7 periods -> 3 in-sample
-  descriptive_note: "Descriptive multiplicity discount over the 4-family x 2-seed x 7-period guarded roster; CSCV PBO (Bailey et al. 2017) and the worst-family min_family_lcb are overfitting/uncertainty discounts, never a significance test and never a significance claim."
+  is_block_count: null  # default floor(n_periods / 2); 7 periods -> 3 in-sample / 4 out
+  # Fail-closed roster expectations (the predeclared 56-event ledger): any missing
+  # (family, period) cell or wrong seed count raises rather than silently shrinking PBO.
+  expected_family_count: 4
+  expected_period_count: 7
+  expected_seeds_per_cell: 2
+  seed_aggregation: mean_over_seeds
+  descriptive_note: "Descriptive multiplicity discount over the 4-family x 2-seed x 7-period guarded roster (seeds mean-aggregated per family-period before the matrix). With 7 (odd) periods the CSCV split is a floor/ceil odd-block adaptation (3 in-sample / 4 out-of-sample), not canonical symmetric CSCV; PBO (Bailey et al. 2017) and the worst-family min_family_lcb are overfitting/uncertainty discounts, never a significance test and never a significance claim."
 
 # S5.5 KB wording guardrails carried into the synthesis report DO-NOT list.
 kb_wording_guardrails:
