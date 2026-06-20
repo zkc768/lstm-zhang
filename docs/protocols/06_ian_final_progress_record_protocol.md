@@ -102,9 +102,9 @@ Stage 06 inherits the Stage 03 forbidden list. Forbidden strings:
 Allowed wording: `validation-only evidence`, `official validation readout`,
 `candidate met/did not meet predeclared validation-readout criteria`.
 
-## 7. Operational Detail (to be completed in Batch E)
+## 7. Operational Detail (Batch E sidecar surface)
 
-Batch E completes the following without changing sections 2-6:
+Batch E completes the following sidecar surface without changing sections 2-6:
 
 - Exact Stage 06 artifact names, schemas, and run-folder layout.
 - `configs/stages/06_ian_final_progress_record.yaml`.
@@ -113,3 +113,7 @@ Batch E completes the following without changing sections 2-6:
   gate.
 - The filled Ian-requirement mapping rows and the route-closure or explicit
   V2.1 pre-registration statement (roadmap Phase 7 exit gate).
+
+Current operational status: the config, runner, notebook, and tests are present;
+the first Stage 06 run and Drive-backed record remain pending until a real
+`active_run_id` is written to the pipeline registry.

@@ -1,7 +1,11 @@
 # lst_models 论文格式与图表合同 (文档 A — 稳定规则)
+<!-- CONTRACT_VERSION: v1.2 / 2026-06-20 -->
+<!-- v1.2 变更: Table 2 来源对齐 claims ledger v1.12: Stage 05 本地派生核验优先,
+     upstream raw v2_1_decision_record.json 仍为 Drive-only provenance。 -->
 <!-- CONTRACT_VERSION: v1.1 / 2026-06-20 -->
 <!-- v1.1 变更: 统一引用流为 paper/references.bib, 加入 claim_id/estimand/source
-     数字门, 修正双盲 grep checklist, 并要求图表数字绑定 exact artifact root/run id。 -->
+     数字门, 修正双盲 grep checklist, 并要求图表数字绑定 exact artifact root/run id;
+     §3 图表映射同步 Doc B v1.2: Fig 3=校准+风险覆盖, Fig 4=跨期条件图谱。 -->
 <!-- 状态: 已用户确认 (2026-06-11)。任何图表制作、LaTeX 排版、投稿前检查任务
      必须先读本合同。叙事与章节内容规则见文档 B
      (lst_models_paper_narrative_and_template_papers_guide.md),
@@ -75,30 +79,35 @@ paper/
 - **表 ≤ 4 张**
 - 合计目标 7 个浮动体, 硬上限 8 个。
 
-### 现有 Stage 03/04 图的取舍映射
+### 论文图的取舍映射 (与 Doc B v1.2 对齐)
 
 | 现有产物 | 处理 | 进论文形态 |
 |---|---|---|
 | (无) | 新制 | Fig 1: 评估协议/管线示意图 (主贡献节配图, 必须有) |
-| fig_06_model_metric_comparison | 重制 | Fig 2: 多模型主结果对比 (含 dummy 基线地板线) |
-| fig_03_reliability_equal_mass_10bin | 重制 | Fig 3: 校准 reliability diagram |
-| fig_04_selective_risk_coverage | 重制 | Fig 4: 风险-覆盖曲线 |
-| fig_01_validation_delta_by_ticker | 降级 | 并入 Fig 2 面板, 或转为表格一列; 超配额时砍 |
-| fig_02_train_inner_ablation_delta | 转表 | 消融用紧凑表呈现 (Table: ablation), 不占图配额 |
-| fig_05_activity_tercile_delta | 转表 | 并入稳健性表一行/一列 |
+| fig_06_model_metric_comparison + V2.1 guarded comparison artifacts | 重制为双面板 | Fig 2: 主结果 vs same-row stratified dummy (validation / guarded 分面; 各面板各自 dummy 地板线; 不跨域并置) |
+| fig_03_reliability_equal_mass_10bin + fig_04_selective_risk_coverage | 合并重制为双面板 | Fig 3: 校准 + 风险-覆盖诊断; caption 必写 risk-coverage is accuracy-based, no cost model, no operating point selected |
+| fig_05_activity_tercile_delta + `artifacts/05_guarded_activity_tercile/` | 重制为跨期双面板 | Fig 4: 条件图谱 (validation / guarded activity-tercile delta); caption 必写 activity = eligible-row-count / no-trade-band proxy, not volume/liquidity/volatility; high<random is limitation |
+| fig_01_validation_delta_by_ticker | 降级 | 并入 Fig 2 小面板/正文, 或超配额时砍 |
+| fig_02_train_inner_ablation_delta | 转表/正文 | 并入 Table 3 子块或正文; control-row only, non full-family |
 
 ### 表配额分配
 
 | 表 | 内容 | 数据来源 |
 |---|---|---|
 | Table 1 | 数据集与切分统计 (ticker 数/样本量/时间边界/标签分布) | stage00 manifests |
-| Table 2 | 主结果: official-validation 与 guarded 域分块标注, mean ± std (n seeds), 含 stratified dummy 行 | `artifacts/05_thesis_synthesis/20260619_090454_562658/` + `v2_1_decision_record.json` |
+| Table 2 | 主结果: official-validation 与 guarded 域分块标注, mean ± std (n seeds), 含 stratified dummy 行 | `artifacts/05_thesis_synthesis/20260619_090454_562658/05_thesis_synthesis_report.json` + `05_estimand_contrast.csv` + `05_validation_budget_ledger.csv`; upstream raw `v2_1_decision_record.json` remains Drive-only provenance |
 | Table 3 | 稳健性/折扣合并: 多重性 per-family mean+period-LCB+PBO+min_family_lcb, 四估计量对照, LOO, 基率 | `artifacts/05_thesis_synthesis/20260619_090454_562658/` + `artifacts/05_row_pooled_multiplicity/` + `artifacts/05_row_pooled_loo/` + `artifacts/05_guarded_base_rates/` |
-| Table 4 | 条件/选择性摘要: 活跃度三分位 delta, e-AURC/AUGRC/ECE/Brier-resolution, label-shuffle sentinel pass | `artifacts/05_guarded_activity_tercile/` + `artifacts/05_label_shuffle_sentinel/` + Stage 05 selective/autopsy artifacts |
+| Table 4 | 条件/选择性摘要: 活跃度三分位 delta, e-AURC/AUGRC/ECE/Brier-resolution, label-shuffle sentinel pass; 空间紧时并入 Fig 4 图注/正文 | `artifacts/05_guarded_activity_tercile/` + `artifacts/05_guarded_base_rates/` + `artifacts/05_label_shuffle_sentinel/` + ledger-bound `artifacts/05_thesis_synthesis/20260619_090454_562658/` selective/autopsy outputs |
 
 超配额裁剪顺序 (没有附录可塞, 砍 = 真删):
-① fig_01 per-ticker 面板 → ② Table 4 并入正文文字 →
-③ Fig 3/Fig 4 合并为双面板一张图。
+① fig_01 per-ticker 面板 → ② train-inner ablation 压到正文 →
+③ Table 4 并入 Fig 4 图注/正文 →
+④ 仍超额时, Fig 3/Fig 4 才可合成一张四面板 diagnostics figure, 但必须保留各自 caption 红线。
+
+图 3/4 红线: Fig 3 不得写 "well-calibrated"; calibration 只能写 small ECE with near-zero
+resolution, risk-coverage 只能写 accuracy-based diagnostic, no cost model, no operating point.
+Fig 4 的 activity 是 eligible-row-count / no-trade-band proxy, 不是 volume/liquidity/volatility;
+validation 与 guarded 必须分面/分域标注; high<random 是限定和风险, 不是正边际。
 
 ## 4. 图规范 (matplotlib 统一)
 

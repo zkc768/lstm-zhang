@@ -1,4 +1,8 @@
 # lst_models 论文叙事与范文指南 (文档 B — 随写作演进)
+<!-- GUIDE_VERSION: v1.3 / 2026-06-20 -->
+<!-- v1.3: 对齐 claims ledger v1.12 证据卫生: claims-ledger 版本号更新;
+     §7 Guarded 素材来源改为 Stage 05 本地派生核验 + Drive-only raw provenance 边界,
+     去掉裸 decision_record 作为 paper-facing source; 当前贡献/自查清单同步 v1.12。 -->
 <!-- GUIDE_VERSION: v1.2 / 2026-06-20 -->
 <!-- v1.2: 按本地合同主控 + ARS 辅助编排修复:
      (1) 优先级改为 AGENTS.md > claims ledger > 翻译保真;
@@ -26,7 +30,7 @@
 <!-- 状态: agent 重写, 待用户确认。任何论文 prose 起草/修改任务必须先读:
      翻译防漂移指南 + 本文档。格式与图表规则见文档 A
      (lst_models_paper_format_and_figures_contract.md)。事实/数字/证据域以
-     claims ledger (paper/outline_and_claims.md, 现 v1.10) 为最终来源。 -->
+     claims ledger (paper/outline_and_claims.md, 现 v1.12) 为最终来源。 -->
 
 适用范围: 论文写什么、按什么顺序、各节怎么组织、向哪些范文学什么。
 本文档随写作进度更新 (版本 +0.1); 格式合同 (文档 A) 保持稳定。
@@ -37,7 +41,7 @@
 
 ```text
 研究安全 (AGENTS.md)
-> claims ledger (paper/outline_and_claims.md, 现 v1.10) + limitation register
+> claims ledger (paper/outline_and_claims.md, 现 v1.12) + limitation register
   (docs/v2_1_limitation_claim_register_20260617.md) —— 数字/主张/证据域/措辞红线的最终事实
 > 翻译保真 (翻译指南第 3 节)
 > 本文档 (叙事与章节计划)
@@ -71,7 +75,7 @@ strong-baseline 子结果; 条件可预测性为诊断局限。**
 在严格时序控制下, 若干标准神经/线性/树模型相对 same-row dummy 基线保留**薄边际**,
 但证据仍是历史接触的, **不支持干净外测、最终选模、或交易 alpha 主张**。
 
-四条贡献声明 (每条挂 ledger 行 + artifact; 数字以 ledger v1.10 为准):
+四条贡献声明 (每条挂 ledger 行 + artifact; 数字以 claims ledger v1.12 为准):
 
 ```text
 C1 协议/纪律 [主贡献]: 面向日内方向分类的 guarded 评估纪律 —— no-trade band 标签
@@ -154,10 +158,19 @@ manuscript 主张。
   ("评估泄漏 → 收益虚高 → 受控评估下还剩什么"); 本文的纪律主角叙事即此范式的金融日内落地。
 - **Chalkidis & Savani 2021 (ICAIF)**: 选择性分类在金融的诚实呈现范式 (foil)。
 
+§2 6-line citekey checklist (写作清单, 非逐条必引; must-cite 优先, optional 只在空间允许时用):
+1. 金融预测基线与深度方向预测: must `gu2020empirical`, `zhang2019deeplob`; optional `fischer2018deep`, `ntakaris2018benchmark`。
+2. 泄漏/时序验证纪律: must `kapoor2023leakage`, `zhang2026whenalpha`; optional `hyndman2021forecasting`, `hofman2023preregistration`。
+3. 模型家族定位: must `bai2018empirical`, `zeng2023dlinear`, `ke2017lightgbm`; optional `grinsztajn2022tree`。
+4. 选择性与校准诊断: must `chalkidis2021trading`, `geifman2017selective`, `guo2017calibration`; optional `traub2024overcoming`, `brier1950verification`, `murphy1973vector`。
+5. 多重性/backtest-overfitting: must `bailey2016probability`, `harvey2016cross`; optional `white2000reality`, `bailey2014deflated`。
+6. 微结构与长窗稳健性 foils: must `roll1984simple`, `lo1990nonsynchronous`, `li2026finsaber`; optional `heston2010intraday`, `andersen1997periodicity`。
+
 使用规则: 范文用于结构与表达模式, **不抄句式短语**; 语言一律走翻译指南。写某节前重读对应范文
 同名节, 记 3 条结构观察再动笔。BibTeX 唯一入口是 `paper/references.bib`;
-新增条目必须带 KB、用户批准或 publisher-source provenance。GKX/DeepLOB/F&K/DLinear
-**均已在本地 references.bib 登记**, v1.0 "需补登记" 已过时; 投稿前仍做 publisher-page 复核。
+新增条目必须带 KB、用户批准或 publisher-source provenance。GKX/DeepLOB/F&K/DLinear/
+When-Alpha/FINSABER/Brier/Murphy **均已在本地 references.bib 登记**,
+v1.0/v1.1 早期 "需补登记" 已过时; 投稿前仍做 publisher-page 复核。
 
 ## 3. 章节蓝图 (8 页含图表文献; v1.1 重排, 行和必须等于表头)
 
@@ -172,7 +185,7 @@ manuscript 主张。
 | 4 | Models | 0.6 | 四家族结构各一段: **TCN(主)/standard-DLinear/MS-DLinear+TCN/LightGBM** (无 LSTM); 共享训练框架; 搜索空间引用 | docs/protocols/02 + configs/models/ |
 | 5 | Experimental Setup | 0.45 | 数据范围+统计 (Table 1); HPO; n=2 seeds; frozen params 选择规则; 设备一句 | stage00/02 manifests |
 | 6 | Validation Results [Tier-V] | 1.0 | 主表 (Table 2, validation 块) 谁过 dummy 地板; 模型间差距 vs 种子方差; per-ticker; **C2.3 control-row spread 仅作受控对比, 不与验证边际 apples-to-apples** | 05_thesis_synthesis report + ian tables/01-04,13 |
-| 7 | Guarded Walk-Forward Readout [Tier-G] | 0.7 | C4.1-C4.4: met 判据 (门槛 ≥2/7 诚实); 四估计量对照; 绑定 row-pooled +0.636pp; 多重性折扣 (descriptive); LightGBM 数值最高但不选 | 05_estimand_contrast / 05_multiplicity_discount / 05_row_pooled_* + v2_1_decision_record |
+| 7 | Guarded Walk-Forward Readout [Tier-G] | 0.7 | C4.1-C4.4: met 判据 (门槛 ≥2/7 诚实); 四估计量对照; 绑定 row-pooled +0.636pp; 多重性折扣 (descriptive); LightGBM 数值最高但不选 | Stage 05 local-derived: 05_thesis_synthesis_report / 05_validation_budget_ledger / 05_estimand_contrast / 05_multiplicity_discount / 05_row_pooled_*; upstream raw v2_1_decision_record remains Drive-only provenance |
 | 8 | Diagnostics & Robustness [边界] | 0.95 | 跨期条件图谱 (C4.5, 限定框) + 选择性/校准 autopsy + 逐期/逐三分位基率 + label-shuffle 哨兵; 哪些提升在何条件消失 | 05_guarded_activity_tercile / 05_selective_autopsy / 05_guarded_base_rates / 05_label_shuffle_sentinel |
 | 9 | Limitations & Conclusion | 0.35 | **强制限制清单**: n=2 seeds / 单市场 / band=3bps·h=9 无扫描 / macro-F1≠经济价值 / Roll(1984) 微结构残余 / guarded≠干净外测; 协议回答了什么; 不展望空话 | register limitations |
 | — | Endmatter | 0.1 | GenAI 声明 (文档 A §8) | — |
@@ -228,10 +241,10 @@ C4.5 承载 guarded)。
 ```text
 1. §3 Protocol [V/control/G 三域纪律 + budget 账本]  ← 协议冻结, 最稳, 主贡献节
 2. §5 Setup                                          ← manifests 已有
-3. §2 Related [6 线索, Kapoor-Narayanan 范式]         ← citekey 已齐, 仅补 When-Alpha/FINSABER
+3. §2 Related [6 线索, Kapoor-Narayanan 范式]         ← citekey 已齐; When-Alpha/FINSABER/Brier/Murphy 已入 references.bib
 4. §4 Models [四家族, 无 LSTM]                        ← configs + protocol 02
 5. §6 Validation Results [Tier-V]                     ← 05 report + tables
-6. §7 Guarded Walk-Forward Readout [Tier-G]           ← 05_estimand/multiplicity/row_pooled + decision_record
+6. §7 Guarded Walk-Forward Readout [Tier-G]           ← Stage 05 local-derived report/ledger/estimand/multiplicity/row_pooled; raw v2_1_decision_record remains Drive-only provenance
 7. §8 Diagnostics & Robustness [跨期条件图谱 + 选择性/校准 + 基率 + 哨兵, 限定框]
 8. §9 Limitations (专门节, 强制清单) + §1 Intro (贡献句 + 反攻击 5 答案对齐 ledger)
 9. Abstract (最后; guarded headline + 两限制内联; 不再 "等 Tier-F")
@@ -265,7 +278,7 @@ root/run id 已明确; 对应范文同名节重读完成; chunk ≤5 段 (翻译
 chunk 完成自查 (叠加翻译指南 §8 清单):
 
 ```text
-[ ] 本 chunk 主张全部能在 ledger v1.10 找到行 + artifact 出处
+[ ] 本 chunk 主张全部能在 claims ledger v1.12 找到行 + artifact 出处
 [ ] 每个结果句记录 claim_id / evidence_domain / estimand / weight_unit / source_artifact
 [ ] 证据域正确且未混写 (每对比点名 V / control / G; 无 clean-test/out-of-sample)
 [ ] §1 红线块 8/9 条逐条不违 (no-final-model / LightGBM-非best / calm-bar=限定 / activity=行计数 /
@@ -301,7 +314,7 @@ chunk 完成自查 (叠加翻译指南 §8 清单):
   - Doc A §3 图表映射已同步; 后续写图/表时仍需继续对齐本文档 §3 浮动体配额。
   - 第 8 道项目专属红线 grep 门已落翻译指南 v1.2, 见本文 §7。
   - ledger 治理倒置已在本轮修为 "claims ledger 事实优先, 本文只管 prose"。
-  - references.bib 需补 When-Alpha-Disappears / FINSABER (并发工作区分句用)。
+  - references.bib 已补 When-Alpha-Disappears / FINSABER / Brier / Murphy; 投稿前仍需 publisher-page 复核年份、卷期、页码、DOI。
 - 与文档 A、翻译指南构成论文三合同; 优先级见 §0。ARS/外部 agent
   workflow 只能辅助执行 §0, 不得成为更高优先级事实源。
 
@@ -310,7 +323,7 @@ chunk 完成自查 (叠加翻译指南 §8 清单):
 - 范文: Gu, Kelly & Xiu 2020 (RFS); Fischer & Krauss 2018 (EJOR); Zhang, Zohren & Roberts 2019 DeepLOB
   (IEEE TSP); Zeng et al. 2023 DLinear (AAAI)。叙事范式锚点: Kapoor & Narayanan 2023; Chalkidis & Savani 2021。
 - ICAIF '25/'26 CFP (8 页含图表文献、无附录、双盲、sigconf+anonymous、2026-08-02 截稿) — 页预算依据。
-- 本项目事实来源: paper/outline_and_claims.md (claims ledger v1.10);
+- 本项目事实来源: paper/outline_and_claims.md (claims ledger v1.12);
   paper/references.bib; docs/v2_1_limitation_claim_register_20260617.md;
   docs/v2_1_third_adversarial_review_20260619.md; docs/v2_1_docb_v11_phase1_review_20260619.md (本次升级触发);
   artifacts/05_thesis_synthesis/20260619_090454_562658/ + 05_row_pooled_loo / 05_guarded_activity_tercile /

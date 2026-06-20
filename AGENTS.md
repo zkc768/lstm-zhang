@@ -97,12 +97,13 @@ descriptive multiplicity discount (CSCV PBO + `min_family_lcb`), and the
 selective autopsy (AUGRC/MDE + abstention-by-activity-tercile) -- all BUILT; the
 home for the still-deferred four-estimand / LOO analysis.
 
-Build status (2026-06-18): stages 00-05 and the V2.1 branch have full sidecar
-bundles (notebook + protocol + config + entry point + tests). Stage 06
-(`06_ian_final_progress_record`) currently has its protocol only; its config and
-notebook are pending — it is the route's closing progress record, not an
-executable scoring stage. The listing above is the route contract (intended
-shape), not an assertion that every file already exists.
+Build status (2026-06-20): stages 00-06 and the V2.1 branch have sidecar
+bundles (notebook + protocol + config + entry point where needed + tests).
+Stage 06 (`06_ian_final_progress_record`) is the route's closing progress
+record, not an executable scoring stage; its first run and Drive-backed record
+remain pending until `configs/lst_models_pipeline.yaml` receives a real
+`active_run_id`. The listing above is the route contract (intended shape), not
+an assertion that every file already has an executed run.
 
 Each executable stage has exactly one user-facing notebook. When an agent
 creates or materially changes that notebook, the same task must create or update
