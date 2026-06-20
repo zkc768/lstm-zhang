@@ -35,9 +35,19 @@ checkpoints/
 .venv/
 venv/
 
-# AI-facing docs (local only)
-docs/
+# AI-facing docs
+#
+# Keep route-critical docs visible to GitHub/Colab agents. Ignore ad hoc docs
+# by default, then un-ignore the project contracts and all protocol sidecars.
+docs/*
 !docs/protocols/
+!docs/protocols/**
+!docs/agent_capabilities_and_skill_routing.md
+!docs/lst_models_code_style_and_route_guide.md
+!docs/lst_models_google_drive_raw_data_guide.md
+!docs/lst_models_paper_translation_and_anti_ai_style_guide.md
+!docs/lst_models_paper_narrative_and_template_papers_guide.md
+!docs/lst_models_paper_format_and_figures_contract.md
 
 # Local paper workspace (Doc A contract: local-only)
 paper/
