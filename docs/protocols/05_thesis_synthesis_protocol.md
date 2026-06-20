@@ -7,6 +7,16 @@ Stage 03 / Stage 04 / V2.1 artifacts and emits synthesis tables. It performs
 
 Revision record:
 
+- 2026-06-19 (D, reconciliation): the row-pooled LOO recorded in the older bullets
+  below as a `<deferred>` marker is now CLOSED by the standalone measure-only
+  addendum `artifacts/05_row_pooled_loo/` (baseline reproduces 0.006362;
+  `loo_sign_flip=False` for both sweeps). Additional measure-only addenda over the
+  frozen V2.1 dumps now also exist: `05_row_pooled_multiplicity/`,
+  `05_guarded_activity_tercile/`, `05_guarded_base_rates/`,
+  `05_label_shuffle_sentinel/`. The frozen run `20260619_090454_562658` artifacts
+  are UNCHANGED; the deferred->closed map is in
+  `artifacts/05_thesis_synthesis/RECONCILIATION.md`. The "still deferred" wording in
+  the dated bullets below predates this entry and is superseded for the row-pooled LOO.
 - 2026-06-19 (B8): built the FIX-1 minimal analysis package (measure-only, small
   aggregates only). `05_estimand_contrast.csv` — the 2×2 {evidence domain} ×
   {aggregation} headline macro-F1 delta surface: the two guarded estimands READ

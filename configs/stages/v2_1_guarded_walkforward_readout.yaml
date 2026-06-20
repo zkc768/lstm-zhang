@@ -94,6 +94,7 @@ outputs:
   comparison_table: v2_1_comparison_table.csv
   same_row_baselines: v2_1_same_row_baselines.csv
   predictions: v2_1_predictions.csv
+  baseline_predictions: v2_1_baseline_predictions.csv  # per-row stratified-dummy preds (F10-fixed per-seed); produced by the run + consumed by Stage 05 row-pooled addenda (LOO / multiplicity / cross-era tercile / base-rate / sentinel)
   decision_record: v2_1_decision_record.json
   period_registry: v2_1_period_registry.json
 
