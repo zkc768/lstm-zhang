@@ -1,0 +1,163 @@
+stage_name: 06_ian_final_progress_record
+route: lst_models
+scope: progress_record_measure_only
+holdout_test_contact: false
+new_scoring_events: 0
+no_final_model_selected: true
+official_validation_for_selection: false
+
+# Stage 06 is a PROGRESS RECORD + reproducibility inventory (protocol 06 sections
+# 2-6). It reads each frozen upstream run's artifact_inventory.csv (sha256) and
+# run_manifest.json (git_commit); it makes zero new scoring/fits and crowns no model.
+inputs:
+  notebook_path: notebooks/06_ian_final_progress_record_colab.ipynb
+  # The active (bound) frozen run per stage. run ids are quoted (bare digit+underscore
+  # is a YAML integer literal). runtime_run_dir is a Colab path the notebook
+  # injects/normalizes before run_stage; drive_folder_id + drive_path_parts locate
+  # the durable result folder for fetch/audit.
+  upstream_runs:
+    - stage_name: 00_data_split_label_freeze
+      run_id: "20260610_051705_347450"
+      drive_folder_id: 15MJbFm97GOc_r8BSndBQZ1rgYTGmNLFt
+      drive_path_parts: [lst_models, results, 00_data_split_label_freeze, "20260610_051705_347450"]
+      runtime_run_dir: /content/lst_models_results/00_data_split_label_freeze/20260610_051705_347450
+    - stage_name: 01_feature_window_search
+      run_id: "20260610_075002"
+      drive_folder_id: 1y2shQD2E2ZF7r4oNb7pjZqZQgGhR1l_6
+      drive_path_parts: [lst_models, results, 01_feature_window_search, "20260610_075002"]
+      runtime_run_dir: /content/lst_models_results/01_feature_window_search/20260610_075002
+    - stage_name: 02_model_hpo_train_inner
+      run_id: "20260610_082130_797479"
+      drive_folder_id: 1NN0KgeuzbMhbC4EmFGN8XVhayVtU5HJU
+      drive_path_parts: [lst_models, results, 02_model_hpo_train_inner, "20260610_082130_797479"]
+      runtime_run_dir: /content/lst_models_results/02_model_hpo_train_inner/20260610_082130_797479
+    - stage_name: 03_frozen_validation_readout
+      run_id: "20260610_133305_716174"
+      drive_folder_id: 1-zHreb4SFs_M1xWOiX5POC3BjdnGCR51
+      drive_path_parts: [lst_models, results, 03_frozen_validation_readout, "20260610_133305_716174"]
+      runtime_run_dir: /content/lst_models_results/03_frozen_validation_readout/20260610_133305_716174
+    - stage_name: 04_diagnostics_ablation
+      run_id: "20260619_082125_765984"
+      drive_folder_id: 11rgSKiBcbD-T81mMny8wws94DK1yvitP
+      drive_path_parts: [lst_models, results, 04_diagnostics_ablation, "20260619_082125_765984"]
+      runtime_run_dir: /content/lst_models_results/04_diagnostics_ablation/20260619_082125_765984
+    - stage_name: 05_thesis_synthesis
+      run_id: "20260619_090454_562658"
+      drive_folder_id: 1-M0Nh3Fzmg-6DzEc76ufoodvvJ1n50nk
+      drive_path_parts: [lst_models, results, 05_thesis_synthesis, "20260619_090454_562658"]
+      runtime_run_dir: /content/lst_models_results/05_thesis_synthesis/20260619_090454_562658
+    - stage_name: v2_1_guarded_walkforward_readout
+      run_id: "20260618_063559_889276"
+      drive_folder_id: 1XY2swazxrmfO_26Dky2BTqj8Hj69Z-ZD
+      drive_path_parts: [lst_models, results, v2_1_guarded_walkforward_readout, "20260618_063559_889276"]
+      runtime_run_dir: /content/lst_models_results/v2_1_guarded_walkforward_readout/20260618_063559_889276
+
+outputs:
+  output_dir: /content/lst_models_results/06_ian_final_progress_record
+  manifest: run_manifest.json
+  artifact_inventory: artifact_inventory.csv
+  reproducibility_inventory: 06_reproducibility_inventory.csv
+  ian_requirement_mapping: 06_ian_requirement_mapping.csv
+  progress_record: 06_progress_record.json
+
+# Honesty section (protocol 06 section 4). Worded to avoid every forbidden phrase
+# even in negation (the forbidden grep is a substring check).
+honesty_statement: >-
+  The V1 route historically contacted the post-2017 segment. If that segment is
+  ever reopened it would yield only guarded, historically-contacted evidence,
+  never a clean final evaluation. A clean final evaluation would require either
+  future-blind data collected after the V2 freeze, or pre-registered external
+  tickers; both are V2.1 options requiring their own pre-registered protocols.
+  This progress record must not be upgraded into a test-readout claim.
+
+route_closure_statement: >-
+  The route closes as a validation-only and guarded historically-contacted
+  progress record. No model is crowned. The predeclared TCN primary candidate met
+  the predeclared guarded stability criteria in a historically-contacted
+  walk-forward readout; the guarded gate bar is positive_period_count >= 2 of 7
+  and a positive pooled delta (a deliberately weak stability floor), so the
+  observed 5 of 7 is descriptive, not the threshold. Any clean final evaluation is
+  deferred to a pre-registered V2.1 protocol.
+
+# Ian/Lan requirement -> stage -> artifact -> status (protocol 06 section 5).
+# Verbatim source: docs/ian_lan_requirement_extracts.md. Labels are paraphrased to
+# stay within the forbidden-wording grep; status is honest (done / partial / note).
+ian_requirement_mapping:
+  rows:
+    - requirement: separate train / validation / test split; no test set used for early stopping
+      stage: 00_data_split_label_freeze + 03_frozen_validation_readout
+      artifact: docs/protocols/00_data_split_label_freeze_protocol.md
+      status: done
+    - requirement: within-day input windows, regular trading hours only (no overnight crossing)
+      stage: 00_data_split_label_freeze
+      artifact: src/lst_models/windows.py + tests/data
+      status: done
+    - requirement: add a naive / dummy baseline for comparison
+      stage: 03/04
+      artifact: tables/04_same_row_dummy_baselines.csv
+      status: done
+    - requirement: binary direction-classification target on 5-minute bars; no-trade band labels
+      stage: 00_data_split_label_freeze
+      artifact: docs/protocols/00_data_split_label_freeze_protocol.md
+      status: done
+    - requirement: report macro-F1, balanced accuracy, confusion matrix, and the delta vs dummy
+      stage: 03/04
+      artifact: tables/01-04, 08, 09
+      status: done
+    - requirement: use a real no-trade band; try several threshold levels
+      stage: 00_data_split_label_freeze
+      artifact: configs/stages/00_data_split_label_freeze.yaml
+      status: partial (band pre-registered at 3 bps; threshold sweep not run -- a recorded limitation)
+    - requirement: comparison table over Dummy, LightGBM, standard DLinear, TCN, MS-DLinear+TCN (same setting)
+      stage: v2_1_guarded_walkforward_readout
+      artifact: v2_1_comparison_table.csv
+      status: done (guarded historically-contacted readout)
+    - requirement: ablation over standard DLinear, multi-scale DLinear, MS-DLinear+TCN
+      stage: 04_diagnostics_ablation
+      artifact: tables/07_train_inner_ablation_summary.csv
+      status: done (train-inner control rows)
+    - requirement: run 2-3 additional walk-forward holdout periods for stability; report each period
+      stage: v2_1_guarded_walkforward_readout
+      artifact: v2_1_walkforward_readout.csv (7 periods)
+      status: done (guarded historically-contacted; not a clean evaluation)
+    - requirement: clean features; check selective prediction
+      stage: 01/04/05
+      artifact: 05_selective_autopsy.csv
+      status: done (diagnostic only; e-AURC ~0.33, low resolution)
+    - requirement: normalized features (log return, ranges, rolling vol, RSI, Bollinger %B, normalized MACD, time-of-day)
+      stage: 01_feature_window_search
+      artifact: src/lst_models/features.py
+      status: done
+    - requirement: start drafting the paper (Introduction, Related Work, Method) on the ACM template
+      stage: paper
+      artifact: paper/outline_and_claims.md + paper/sections
+      status: in_progress
+
+forbidden:
+  wording:
+    - final model
+    - final model selected
+    - official validation winner
+    - holdout winner
+    - test winner
+    - walk-forward winner
+    - proved best model
+    - best model
+    - generalization proven
+    - profitable
+    - tradable alpha
+    - holdout-ready
+    - selected by official validation
+    - chosen threshold
+    - clean test
+    - clean holdout
+    - out-of-sample proof
+    - statistically significant
+
+allowed_wording:
+  - validation-only evidence
+  - official validation readout
+  - candidate met predeclared validation-readout criteria
+  - candidate did not meet predeclared validation-readout criteria
+  - guarded historically-contacted walk-forward readout
+  - met the predeclared guarded stability criteria

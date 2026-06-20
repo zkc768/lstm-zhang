@@ -1,0 +1,53 @@
+route: lst_models
+# Ordered V2 stage registry: name, config, notebook, protocol, and the active
+# (bound) run id. Intended-shape contract (route guide section 2); it records the
+# route, it is NOT an assertion that every file/run already exists.
+# run ids are quoted: bare digit+underscore values are YAML integer literals.
+
+stages:
+  - name: 00_data_split_label_freeze
+    config: configs/stages/00_data_split_label_freeze.yaml
+    notebook: notebooks/00_data_split_label_freeze_colab.ipynb
+    protocol: docs/protocols/00_data_split_label_freeze_protocol.md
+    active_run_id: "20260610_051705_347450"
+  - name: 01_feature_window_search
+    config: configs/stages/01_feature_window_search.yaml
+    notebook: notebooks/01_feature_window_search_colab.ipynb
+    protocol: docs/protocols/01_feature_window_search_protocol.md
+    active_run_id: "20260610_075002"
+  - name: 02_model_hpo_train_inner
+    config: configs/stages/02_model_hpo_train_inner.yaml
+    notebook: notebooks/02_model_hpo_train_inner_colab.ipynb
+    protocol: docs/protocols/02_model_hpo_train_inner_protocol.md
+    active_run_id: "20260610_082130_797479"
+  - name: 03_frozen_validation_readout
+    config: configs/stages/03_frozen_validation_readout.yaml
+    notebook: notebooks/03_frozen_validation_readout_colab.ipynb
+    protocol: docs/protocols/03_frozen_validation_readout_protocol.md
+    active_run_id: "20260610_133305_716174"
+  - name: 04_diagnostics_ablation
+    config: configs/stages/04_diagnostics_ablation.yaml
+    notebook: notebooks/04_diagnostics_ablation_colab.ipynb
+    protocol: docs/protocols/04_diagnostics_ablation_protocol.md
+    active_run_id: "20260619_082125_765984"
+  - name: 05_thesis_synthesis
+    config: configs/stages/05_thesis_synthesis.yaml
+    notebook: notebooks/05_thesis_synthesis_colab.ipynb
+    protocol: docs/protocols/05_thesis_synthesis_protocol.md
+    active_run_id: "20260619_090454_562658"
+  - name: 06_ian_final_progress_record
+    config: configs/stages/06_ian_final_progress_record.yaml
+    notebook: notebooks/06_ian_final_progress_record_colab.ipynb
+    protocol: docs/protocols/06_ian_final_progress_record_protocol.md
+    active_run_id: null  # pending first Stage 06 run
+
+# Measure-only branch off Stage 04: guarded historically-contacted walk-forward
+# readout (feeds Stage 05 synthesis). NOT a clean test; no final model selected.
+branches:
+  - name: v2_1_guarded_walkforward_readout
+    config: configs/stages/v2_1_guarded_walkforward_readout.yaml
+    notebook: notebooks/v2_1_guarded_walkforward_readout_colab.ipynb
+    protocol: docs/protocols/v2_1_guarded_walkforward_readout_protocol.md
+    branches_after: 04_diagnostics_ablation
+    feeds: 05_thesis_synthesis
+    active_run_id: "20260618_063559_889276"
