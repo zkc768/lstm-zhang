@@ -293,7 +293,7 @@ chunk 完成自查 (叠加翻译指南 §8 清单):
   ```text
   paper/main.tex (标题: 协议即产品 → guarded 标题方向)
   paper/sections/04_models.tex (注释 "MLP; LSTM context" 双错 → 四家族正确名册)
-  paper/sections/06_results.tex / 07_diagnostics.tex (Tier-V-only / walkforward placeholder → 三域 + Tier-G)
+  paper/sections/06_results.tex / 07_diagnostics.tex (旧 Tier-V-only 注释 → 三域 + Tier-G)
   paper/sections/08_conclusion.tex (限制清单缺 macro-F1≠value / 微结构 / band-horizon → 强制清单)
   paper/sections/02_related.tex (硬编码 Q1-Q4 → 6 线索)
   ```
