@@ -174,3 +174,16 @@ A round whose findings are ALL false-positives or already-adjudicated is WASTED;
 not the manuscript. (Observed 2026-06-28: a full Codex review returned 8 findings, 4 false-positives
 (50%) from missing C2.3/C4.5 sanctioning; supplying it in the blind-review contract cut domain-mix
 false-positives to 0. Fix recorded in `docs/protocols/lst_models_blind_review_handoff.md` §4.)
+
+## 10. Promotion handoff to Workflow 2 (revision / QC) — ADR 0005
+This workflow (Workflow 1) writes/polishes v2 in the `paper_compare/v2_skill_draft/` sandbox. Once
+v2 is at STOP it is PROMOTED to live `paper/`, where **Workflow 2** — the per-round revision +
+final-QC family (`docs/protocols/lst_models_paper_revision_workflow.md` + blind-review-handoff + the
+17-row submission-QC matrix) — takes over. Promotion checklist:
+1. v2 at STOP (gate PASS + Codex GO + numbers ledger-bound + domains separate).
+2. `python paper_compare/promotion_reconcile.py` PASS — v2 satisfies the live
+   `protection_manifest.json` (today: 26/26 D-locks, all caption_locks, all never_delete invariants).
+3. Copy `v2_skill_draft/* -> paper/` as a `git diff` for user approval (ADR 0003); never auto-run.
+4. Post-promotion: the `paper/scripts/` L1-L5 stack + manifest + `round_diff.py` become
+   authoritative; the sandbox gates (`check_integrity.py`, `sync_check.py`) retire.
+5. Re-run the 17-row submission-QC matrix on the promoted paper.
