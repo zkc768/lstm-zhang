@@ -44,27 +44,25 @@
 % Authors intentionally omitted: anonymous submission build.
 
 \begin{abstract}
-In intraday five-minute stock-direction classification, a weak edge can survive
-strict evaluation yet hold only under conditions. We establish this with an
-evaluation protocol fixed before any model is scored. It freezes the label,
-no-trade band, chronological splits, roster, same-row dummy floor, and a counted
-validation-look budget. The controls matter because validation contact, leakage,
-and repeated comparison can inflate \macrofone{} on a target that sits just above
-a stratified-dummy floor. On the frozen validation split, a predeclared temporal
-convolutional network exceeds the same-row stratified dummy by 1.69\pp{} in
-\macrofone{} (two-seed mean, 1.63\pp{} at the worse seed; \numseeds{} seeds cannot
-quantify variance). On a separate guarded, non-independent walk-forward over
-post-2017 (expanding windows share rows), which is not a clean test, the same
-candidate stays positive at $+0.636\pp{}$ row-pooled and clears a deliberately
-weak bar. A descriptive CSCV/PBO of $0.514$ leaves overfitting unresolved. The
-candidate's edge is also conditional: it concentrates in the calmest bars and
-falls below the balanced random prior on the most active ones. This low-to-high
-pattern recurs across both windows, though we cannot yet separate it from a
-bid-ask-bounce artifact. We measure \macrofone{}, not economic value, on five
-large-cap US survivors with no known-signal positive control. The contribution is
-the evaluation discipline and a map of where a thin edge holds and where it
-inverts. Whether the protocol also shows such signs are absent on a genuine
-signal is the next test.
+We contribute a pre-registered evaluation protocol for intraday five-minute
+stock-direction classification, with calibration, regime, and robustness
+diagnostics that locate where a weak edge holds and where it inverts. The protocol
+fixes the test before any model is scored: it freezes the label, no-trade band,
+chronological splits, roster, same-row dummy floor, and a counted validation-look
+budget. These controls matter because validation contact, leakage, and repeated
+comparison can inflate \macrofone{} on a target just above a stratified-dummy floor.
+On the frozen validation split, a predeclared temporal convolutional network exceeds
+the same-row stratified dummy by 1.69\pp{} in \macrofone{} (two-seed mean,
+1.63\pp{} worse seed). The margin is positive in all five tickers, though
+\numseeds{} seeds cannot quantify variance. On a separate guarded, non-independent
+walk-forward over post-2017, not a clean test, the candidate stays positive at
+$+0.636\pp{}$ row-pooled, sign-stable under leave-one-out across periods and
+tickers. It clears a deliberately weak pre-registered bar, though a descriptive
+CSCV/PBO of $0.514$ leaves overfitting unresolved. The edge is also conditional: largest on
+the calmest bars and below the balanced random prior on the most active ones in both
+windows. We cannot yet separate this pattern from a bid-ask-bounce artifact. We measure
+\macrofone{}, not economic value, on five large-cap US survivors with no
+known-signal positive control, so the protocol's sensitivity to a genuine signal is untested.
 \end{abstract}
 
 % CCS concepts + keywords (mandatory for papers > 2 pages, Doc A §10).

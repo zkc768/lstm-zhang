@@ -31,8 +31,8 @@ Run under the protocol, that estimand yields a small and uneven edge. On the fro
 validation split the predeclared TCN primary's two-seed mean margin over the same-row
 stratified dummy is 1.69\pp{} in \macrofone{}, dropping to 1.63\pp{} at the worse seed.
 \numseeds{} seeds are too few to quantify variance. The pooled margin's descriptive
-block-bootstrap interval excludes zero, and the gain holds as a point estimate in all five tickers but
-spreads widely. Train-inner control comparisons across four control rows (two of them
+block-bootstrap interval excludes zero. As a point estimate the gain holds in all five
+tickers, though the per-ticker values spread widely. Train-inner control comparisons across four control rows (two of them
 last-step ablation controls) show a 0.66\pp{} spread, smaller than the 1.69\pp{}
 official-validation margin though not a full-family comparison. That spread sets the
 thin scale of the edge against a near-even floor.
@@ -50,7 +50,7 @@ Because neither readout turns a thin margin into a strong one, the protocol's mo
 informative outputs are two diagnostics, not the headline number: whether the
 confidence scores are usable, and where the edge concentrates. Calibration error is
 small while its resolution is near-zero (equal-mass ten-bin ECE \(\approx 0.010\)),
-so the confidence scores cannot define an operating rule. Resolved by activity, the edge
+so the confidence scores cannot define an operating rule. Partitioned by activity, the edge
 is largest on the calmest bars (low-activity tercile, +5.43\pp{} over dummy) and falls
 below the balanced random prior on the most active ones (high-activity tercile,
 \macrofone{} \(\approx 0.483\)). The same low-to-high pattern recurs in the guarded
@@ -58,11 +58,13 @@ below the balanced random prior on the most active ones (high-activity tercile,
 volume or liquidity. A bid-ask-bounce alignment we cannot rule out \cite{roll1984simple}
 keeps the pattern a diagnostic boundary rather than model-attributable predictability.
 
-The paper therefore contributes an evaluation protocol, a near-null worked case that
-exercises it end to end, and a map of where a thin edge holds and where it inverts. The
-case is deliberately narrow: five large-cap US survivors, \numseeds{} seeds, and
+The paper therefore makes three contributions: a pre-registered evaluation protocol, a
+battery of calibration, regime, and robustness diagnostics, and a near-null worked case
+that exercises them end to end. The diagnostics map where a thin edge holds and where it
+inverts.
+The case is deliberately narrow: five large-cap US survivors, \numseeds{} seeds, and
 \macrofone{} only, with no profit-and-loss, cost model, or known-signal positive
-control. What the protocol records here is the contribution: estimand sensitivity, a
-weak stability bar, multiplicity fragility, and a conditional sign that a headline-only
-readout would hide. Whether it also shows these signs are absent on a genuine
+control. What the protocol records is the contribution: estimand sensitivity, a weak
+stability bar, multiplicity fragility, and a conditional sign that a headline-only
+readout would hide. Whether the same protocol flags these signs as absent on a genuine
 signal is the positive-control next step.
