@@ -149,8 +149,10 @@ AI-sounding mean and flatten rhythm. Run DIFFERENTIATED passes and STOP ON QUALI
   returned NO_GO driven by 4 such false-positives. The Synthesizer adjudicates findings against the
   ledger; a reviewer NO_GO on ledger-sanctioned phrasing is NOT a defect.
 
-STOP when: gate passes + a fresh review finds nothing Critical/Important + naturalness audit
-clean + exemplar moves present. More passes after that make it worse.
+STOP when (per ADR 0002, objective): gate passes + every number bound to the ledger + three
+evidence domains separate + a fresh review finds nothing genuinely Critical/Important
+(false-positives on ledger-sanctioned C2.3/C4.5 phrasing do NOT count) + Codex finds no overclaim.
+"Exemplar moves" are an advisory drafting input, NOT a stop gate. More passes after that make it worse.
 
 Anti-homogenization safeguards (every pass): (1) never repeat an identical loop; (2) anchor to
 the human exemplars, not "cleaner prose"; (3) track burstiness as a DIAGNOSTIC in the
@@ -158,3 +160,17 @@ pass-over-pass log (ADR 0001) -- investigate unexplained drops, but never auto-r
 gate-mandated edit; (4) diff each version against the prior -- if changes are word-shuffling
 without clear gain, STOP; (5) use a different model (Codex) for the adversarial review; (6) keep
 human-ness signals already approved (specific phrasing, varied openings).
+
+## 9. Workflow efficiency self-assessment (is the loop converging, or churning?)
+The goal is CONVERGENCE, not more rounds. Measure each review round:
+1. **False-positive rate** = findings rejected on synthesizer adjudication / total findings. High =
+   the reviewer lacks context -> fix the HARNESS (supply ledger sanctioning), not the paper.
+2. **Genuine findings per round** -> should fall toward 0 (converging).
+3. **Rounds-to-clean** -> more than ~2-3 rounds with RECURRING items = re-litigating, not converging.
+4. **Cost** (tokens/time per round) vs genuine findings caught.
+5. **Gate redundancy** -> do not run two gate stacks that check the same thing (post-promotion, the
+   paper_compare gates and the paper/scripts L1-L5 stack overlap -- pick one authoritative path).
+A round whose findings are ALL false-positives or already-adjudicated is WASTED; fix the harness,
+not the manuscript. (Observed 2026-06-28: a full Codex review returned 8 findings, 4 false-positives
+(50%) from missing C2.3/C4.5 sanctioning; supplying it in the blind-review contract cut domain-mix
+false-positives to 0. Fix recorded in `docs/protocols/lst_models_blind_review_handoff.md` §4.)
