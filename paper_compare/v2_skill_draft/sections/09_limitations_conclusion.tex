@@ -5,7 +5,7 @@
 \section{Conclusion and Limitations}
 \label{sec:limitations}
 
-The contribution is an evaluation protocol with three working parts. A pre-score
+The contribution is an evaluation protocol. A pre-score
 freeze, same-row dummy floors, and a budget ledger keep the readout auditable
 whatever the outcome. Under that protocol the predeclared frozen TCN primary
 holds a small margin over its same-row baselines, consistent in pooled sign and
@@ -17,7 +17,8 @@ validation margin is a thin edge above a near-even floor. In the separate
 guarded readout, the 0.636\pp{} row-pooled delta over the same-row dummy is
 similarly slim, and its backtest-overfitting probability is a near-coin 0.514. The validation margin even flips sign across
 activity, from 5.43\pp{} on the calmest bars to 1.54\pp{} below the dummy on the
-most active, a conditional sign a headline-only readout would omit.
+most active, a conditional sign a headline-only readout would omit. The same
+inversion recurs in the guarded window.
 
 The case is deliberately narrow. The protocol runs on one near-null case with no
 known-signal positive control, so its sensitivity to a genuine signal is untested.
