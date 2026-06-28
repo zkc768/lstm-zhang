@@ -143,6 +143,11 @@ AI-sounding mean and flatten rhythm. Run DIFFERENTIATED passes and STOP ON QUALI
   Codex on the fixed draft to confirm GO. The milestone is NOT passed while the record stands at
   NO_GO; log each run's verdict.** (The first run returned NO_GO and was triaged + fixed but not
   re-confirmed — that re-run is the open milestone item.)
+  **Supply the ledger's domain-sanctioning in the prompt** (C2.3 canonical control-vs-validation
+  contrast; C4.5 cross-window conditional-pattern recurrence). Without it a generic reviewer
+  re-flags this PERMITTED phrasing as "domain mix" every run — a full re-review (2026-06-28)
+  returned NO_GO driven by 4 such false-positives. The Synthesizer adjudicates findings against the
+  ledger; a reviewer NO_GO on ledger-sanctioned phrasing is NOT a defect.
 
 STOP when: gate passes + a fresh review finds nothing Critical/Important + naturalness audit
 clean + exemplar moves present. More passes after that make it worse.

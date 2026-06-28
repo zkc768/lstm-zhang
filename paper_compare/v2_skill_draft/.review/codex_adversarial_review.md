@@ -103,3 +103,33 @@ author). Result, each verified against the live files:
 The NO_GO -> GO loop (PAPER_WORKFLOW §8) is satisfied: the milestone record now stands at GO.
 (A codex-internal `router Exit code: 1` was logged mid-run — an internal shell call, not a finding;
 the review completed exit 0 with the verdict above.)
+
+## FULL-SCOPE RE-REVIEW (2026-06-28) — VERDICT: NO_GO -> adjudicated
+A from-scratch full-draft review (all 9 sections + abstract + ledger) returned NO_GO with 8
+findings. Synthesizer adjudication vs the ledger (agent findings not trusted blindly; the
+Synthesizer makes the call — blind-review handoff §6):
+
+**CONFIRMED FALSE POSITIVES (ledger-sanctioned phrasing the reviewer re-flagged):**
+- F1 (main:60) + F5 (08:63) "pattern recurs across both windows" — C4.5 (ledger:238) SANCTIONS the
+  cross-window recurrence of the CONDITIONAL pattern; per-domain numbers kept separate. Not fusion.
+- F2 (01:35) + F3 (06:34) "0.66pp control spread, smaller than the 1.69pp validation margin" — the
+  C2.3 ledger-MANDATED canonical anti-scope-mixing phrasing (ledger:210-212), with the explicit
+  "control-row spread, not full-family, not apples-to-apples" disclaimer. Changing it violates the
+  fact source.
+
+**APPLIED (one genuine safe-direction fix):**
+- F6 (09:16) the conclusion fused the +1.69 validation and +0.636 guarded headline numbers in one
+  "thin edges" claim. SPLIT into two domain-separate sentences (aligns with DRAFT_NOTES' stated
+  separation intent; PBO 0.514 re-attributed to the guarded domain). Strictly more conservative.
+
+**DEFENSIBLE / LEFT (no change):**
+- F7 (07:54) "survives multiplicity" + F8 (07:64) "small but stable" — the §7 body repeatedly states
+  "descriptive discounts, not significance tests" and justifies the sign with LOO + descriptive
+  bootstrap; these honest-affirmative phrasings are defensible (softening would undo the deliberate
+  affirmative framing). F4 (06:114) caption co-mentions Panel A (validation) + Panel B (guarded)
+  both including zero — a 2-panel caption, panels labeled, deflationary.
+
+Reviewer confirmed: NO affirmative red-line vocab; NO load-bearing numeric mismatch vs ledger.
+**Learning:** a generic reviewer re-flags C2.3/C4.5 phrasing every run; future Codex prompts should
+supply that sanctioning so only genuinely new issues surface. A reviewer NO_GO on ledger-sanctioned
+phrasing is not a defect — the Synthesizer adjudicates.
