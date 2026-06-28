@@ -1,13 +1,13 @@
 # Fdb version 4
-["bibtex main"] 1782650179.85515 "main.aux" "main.bbl" "main" 1782650182.15344 0
+["bibtex main"] 1782650179.85515 "main.aux" "main.bbl" "main" 1782654609.53795 0
   "./references.bib" 1782650102.18191 19289 368ea35499805664e7b087e20418f1aa ""
   "C:/Users/CK/AppData/Local/Programs/MiKTeX/bibtex/bst/acmart/ACM-Reference-Format.bst" 1780829882 93560 7091f2b0543d2c8bfe2e82ce5d54a029 ""
-  "main.aux" 1782650181.27192 15908 3ced42f21bb8f5963b08b4ad416c7e31 "pdflatex"
+  "main.aux" 1782654608.64259 15908 3ced42f21bb8f5963b08b4ad416c7e31 "pdflatex"
   (generated)
   "main.bbl"
   "main.blg"
   (rewritten before read)
-["pdflatex"] 1782650180.18603 "main.tex" "main.pdf" "main" 1782650182.15432 0
+["pdflatex"] 1782654607.51503 "main.tex" "main.pdf" "main" 1782654609.53864 0
   "C:/Users/CK/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1782434184.36683 187664 65fa417f6850b604c49bfafe76826e39 ""
   "C:/Users/CK/AppData/Local/MiKTeX/miktex/data/le/pdftex/pdflatex.fmt" 1782016516.35434 13365638 a6f55df28b064647366c322a042edb17 ""
   "C:/Users/CK/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/inconsolata/i4-t1-4.enc" 1557958141 7693 0f2dce6d313c82989ec3a67fc24df2a0 ""
@@ -209,19 +209,19 @@
   "figures/fig_risk_coverage.pdf" 1782622657.1131 52751 b8842d33e5cdddb571be72acd0426143 ""
   "figures/fig_tercile_map.pdf" 1782622657.10763 35504 0e8a6b943664ffd97fb4b418fbdc0882 ""
   "figures/fig_validation_deltas.pdf" 1782622657.10863 46084 96958c0524a95923d19ae0f97cdd2a4e ""
-  "main.aux" 1782650181.27192 15908 3ced42f21bb8f5963b08b4ad416c7e31 "pdflatex"
+  "main.aux" 1782654608.64259 15908 3ced42f21bb8f5963b08b4ad416c7e31 "pdflatex"
   "main.bbl" 1782650180.09909 24994 f0645b5d5cc14ca0a33fbad894b58544 "bibtex main"
-  "main.out" 1782650181.28043 2600 631728f1ce0c5c5fd487d6214edf35e9 "pdflatex"
+  "main.out" 1782654608.6521 2600 631728f1ce0c5c5fd487d6214edf35e9 "pdflatex"
   "main.tex" 1782649236.58913 6229 7e6911d84b4de3d74c088c3c32fcd7cb ""
   "sections/01_intro.tex" 1782649239.07922 4888 bd82d44a16ae8dc0b6775505bbc0efd7 ""
   "sections/02_related.tex" 1782639002.65653 3612 a972c0f9244e08c20081683eb77c26f4 ""
   "sections/03_protocol.tex" 1782639083.86675 8034 94254cf31e4b524d6f5760c65c92dd1c ""
   "sections/04_models.tex" 1782649231.32153 2578 92b610c5822858ca707c8f08d7ff1ea7 ""
   "sections/05_setup.tex" 1782642046.379 3130 540b217cbda3cef92cf6aa0efe2bafed ""
-  "sections/06_results.tex" 1782640994.1668 6725 2eadc656114e8d0ecb453e2ef72fcde5 ""
+  "sections/06_results.tex" 1782653513.73487 6753 264225dffe54a12c82e08fbc84d0ac6d ""
   "sections/07_guarded_walkforward.tex" 1782649234.02762 5484 dce28355c885ce6a9eaab8cee7ed59a1 ""
   "sections/08_diagnostics.tex" 1782643541.23841 10049 0f526aa7d8092d4d8894d4e273835461 ""
-  "sections/09_limitations_conclusion.tex" 1782649241.54135 3793 e4c0056f1f254352775d523b7f30db48 ""
+  "sections/09_limitations_conclusion.tex" 1782654567.82897 3832 ecb68d14ee49145f0534f144bce10073 ""
   (generated)
   "main.aux"
   "main.log"
