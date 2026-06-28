@@ -105,7 +105,8 @@
   Vincent}.} \bibinfo{year}{2021}\natexlab{}.
 \newblock \showarticletitle{Accounting for Variance in Machine Learning
   Benchmarks}. In \bibinfo{booktitle}{\emph{Proceedings of Machine Learning and
-  Systems (MLSys)}}, Vol.~\bibinfo{volume}{3}. \bibinfo{pages}{747--769}.
+  Systems (MLSys)}}, Vol.~\bibinfo{volume}{3}. \bibinfo{publisher}{mlsys.org},
+  \bibinfo{pages}{747--769}.
 \newblock
 
 
@@ -128,7 +129,9 @@
   \bibinfo{person}{Rahul Savani}.} \bibinfo{year}{2021}\natexlab{}.
 \newblock \showarticletitle{Trading via Selective Classification}. In
   \bibinfo{booktitle}{\emph{Proceedings of the Second ACM International
-  Conference on AI in Finance (ICAIF)}}.
+  Conference on AI in Finance (ICAIF)}}. \bibinfo{publisher}{Association for
+  Computing Machinery}, \bibinfo{address}{New York, NY, USA},
+  \bibinfo{pages}{1--9}.
 \newblock
 \href{https://doi.org/10.1145/3490354.3494379}{doi:\nolinkurl{10.1145/3490354.3494379}}
 
@@ -196,7 +199,9 @@
   El-Yaniv}.} \bibinfo{year}{2017}\natexlab{}.
 \newblock \showarticletitle{Selective Classification for Deep Neural Networks}.
   In \bibinfo{booktitle}{\emph{Advances in Neural Information Processing
-  Systems (NIPS)}}, Vol.~\bibinfo{volume}{30}.
+  Systems (NIPS)}}, Vol.~\bibinfo{volume}{30}. \bibinfo{publisher}{Curran
+  Associates, Inc.}, \bibinfo{address}{Red Hook, NY, USA},
+  \bibinfo{pages}{4878--4887}.
 \newblock
 
 
@@ -207,7 +212,8 @@
 \newblock \showarticletitle{{SelectiveNet}: A Deep Neural Network with an
   Integrated Reject Option}. In \bibinfo{booktitle}{\emph{Proceedings of the
   36th International Conference on Machine Learning (ICML)}},
-  Vol.~\bibinfo{volume}{97}. \bibinfo{pages}{2151--2159}.
+  Vol.~\bibinfo{volume}{97}. \bibinfo{publisher}{PMLR},
+  \bibinfo{pages}{2151--2159}.
 \newblock
 
 
@@ -219,7 +225,8 @@
 \newblock \showarticletitle{Why Do Tree-Based Models Still Outperform Deep
   Learning on Typical Tabular Data?}. In \bibinfo{booktitle}{\emph{Advances in
   Neural Information Processing Systems (NeurIPS) Datasets and Benchmarks
-  Track}}, Vol.~\bibinfo{volume}{35}. \bibinfo{pages}{507--520}.
+  Track}}, Vol.~\bibinfo{volume}{35}. \bibinfo{publisher}{Curran Associates,
+  Inc.}, \bibinfo{address}{Red Hook, NY, USA}, \bibinfo{pages}{507--520}.
 \newblock
 
 
@@ -243,7 +250,7 @@
 \newblock \showarticletitle{On Calibration of Modern Neural Networks}. In
   \bibinfo{booktitle}{\emph{Proceedings of the 34th International Conference on
   Machine Learning (ICML)}}, Vol.~\bibinfo{volume}{70}.
-  \bibinfo{pages}{1321--1330}.
+  \bibinfo{publisher}{PMLR}, \bibinfo{pages}{1321--1330}.
 \newblock
 
 
@@ -343,7 +350,8 @@
   \bibinfo{year}{2017}\natexlab{}.
 \newblock \showarticletitle{{LightGBM}: A Highly Efficient Gradient Boosting
   Decision Tree}. In \bibinfo{booktitle}{\emph{Advances in Neural Information
-  Processing Systems 30 (NeurIPS)}}. \bibinfo{pages}{3146--3154}.
+  Processing Systems 30 (NeurIPS)}}. \bibinfo{publisher}{Curran Associates,
+  Inc.}, \bibinfo{address}{Red Hook, NY, USA}, \bibinfo{pages}{3146--3154}.
 \newblock
 
 
@@ -355,7 +363,8 @@
 \newblock \showarticletitle{Can {LLM}-based Financial Investing Strategies
   Outperform the Market in Long Run?}. In \bibinfo{booktitle}{\emph{Proceedings
   of the 32nd {ACM} {SIGKDD} Conference on Knowledge Discovery and Data Mining
-  V.1, {KDD} 2026}}. \bibinfo{publisher}{{ACM}}, \bibinfo{pages}{2711--2722}.
+  V.1, {KDD} 2026}}. \bibinfo{publisher}{{ACM}}, \bibinfo{address}{New York,
+  NY, USA}, \bibinfo{pages}{2711--2722}.
 \newblock
 \shownote{FINSABER; Datasets and Benchmarks Track; Jeju Island, Korea, Aug
   9--13, 2026; verified via DBLP and arXiv 2026-06-28}.
@@ -451,6 +460,8 @@
 \newblock \showarticletitle{Predicting Stock Price Returns Using Microblog
   Sentiment for Chinese Stock Market}. In \bibinfo{booktitle}{\emph{2017 3rd
   International Conference on Big Data Computing and Communications (BIGCOM)}}.
+  \bibinfo{publisher}{IEEE Computer Society}, \bibinfo{address}{Los Alamitos,
+  CA, USA}, \bibinfo{pages}{87--96}.
 \newblock
 \shownote{Venue corrected from ``IEEE ICCSE'' to IEEE BIGCOM 2017; verified
   2026-06-28 via Crossref DOI 10.1109/BIGCOM.2017.59 (exact-title match)}.
@@ -468,6 +479,8 @@
 \newblock \showarticletitle{Overcoming Common Flaws in the Evaluation of
   Selective Classification Systems}. In \bibinfo{booktitle}{\emph{Advances in
   Neural Information Processing Systems (NeurIPS)}}, Vol.~\bibinfo{volume}{37}.
+  \bibinfo{publisher}{Curran Associates, Inc.}, \bibinfo{address}{Red Hook, NY,
+  USA}, \bibinfo{pages}{2323--2347}.
 \newblock
 \href{https://doi.org/10.52202/079017-0076}{doi:\nolinkurl{10.52202/079017-0076}}
 
@@ -490,7 +503,8 @@
   \bibinfo{year}{2021}\natexlab{}.
 \newblock \showarticletitle{Autoformer: Decomposition Transformers with
   Auto-Correlation for Long-Term Series Forecasting}. In
-  \bibinfo{booktitle}{\emph{NeurIPS}}.
+  \bibinfo{booktitle}{\emph{NeurIPS}}. \bibinfo{publisher}{Curran Associates,
+  Inc.}, \bibinfo{address}{Red Hook, NY, USA}, \bibinfo{pages}{22419--22430}.
 \newblock
 
 
@@ -500,6 +514,8 @@
   Cohen}.} \bibinfo{year}{2018}\natexlab{}.
 \newblock \showarticletitle{Stock Movement Prediction from Tweets and
   Historical Prices}. In \bibinfo{booktitle}{\emph{ACL}}.
+  \bibinfo{publisher}{Association for Computational Linguistics},
+  \bibinfo{address}{Melbourne, Australia}, \bibinfo{pages}{1970--1979}.
 \newblock
 \shownote{-0.5\%/+0.55\% thresholds, delete neutral samples}.
 \newblock
@@ -512,7 +528,8 @@
 \newblock \showarticletitle{Learning and Evaluating Classifiers under Sample
   Selection Bias}. In \bibinfo{booktitle}{\emph{Proceedings of the 21st
   International Conference on Machine Learning (ICML)}}.
-  \bibinfo{publisher}{ACM}, \bibinfo{pages}{114--121}.
+  \bibinfo{publisher}{ACM}, \bibinfo{address}{New York, NY, USA},
+  \bibinfo{pages}{114--121}.
 \newblock
 
 
@@ -522,7 +539,9 @@
   \bibinfo{person}{Lei Zhang}, {and} \bibinfo{person}{Qiang Xu}.}
   \bibinfo{year}{2023}\natexlab{}.
 \newblock \showarticletitle{Are Transformers Effective for Time Series
-  Forecasting?}. In \bibinfo{booktitle}{\emph{AAAI}}.
+  Forecasting?}. In \bibinfo{booktitle}{\emph{AAAI}}. \bibinfo{publisher}{AAAI
+  Press}, \bibinfo{address}{Washington, DC, USA},
+  \bibinfo{pages}{11121--11128}.
 \newblock
 \showeprint[arxiv]{2205.13504}
 
@@ -564,7 +583,8 @@
   \bibinfo{year}{2022}\natexlab{}.
 \newblock \showarticletitle{FEDformer: Frequency Enhanced Decomposed
   Transformer for Long-term Series Forecasting}. In
-  \bibinfo{booktitle}{\emph{ICML}}.
+  \bibinfo{booktitle}{\emph{ICML}}. \bibinfo{publisher}{PMLR},
+  \bibinfo{pages}{27268--27286}.
 \newblock
 
 

@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (MiKTeX 26.5) (preloaded format=pdflatex 2026.6.20)  28 JUN 2026 13:11
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (MiKTeX 26.5) (preloaded format=pdflatex 2026.6.20)  28 JUN 2026 13:35
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1241,11 +1241,11 @@ Package rerunfilecheck Info: File `main.out' has not changed.
 (rerunfilecheck)             Checksum: 631728F1CE0C5C5FD487D6214EDF35E9;2600.
  ) 
 Here is how much of TeX's memory you used:
- 25841 strings out of 467509
- 489162 string characters out of 5410238
- 959137 words of memory out of 5000000
+ 25850 strings out of 467509
+ 489384 string characters out of 5410238
+ 961647 words of memory out of 5000000
  53849 multiletter control sequences out of 15000+600000
- 809489 words of font info for 480 fonts, out of 8000000 for 9000
+ 810504 words of font info for 486 fonts, out of 8000000 for 9000
  1302 hyphenation exceptions out of 8191
  89i,16n,131p,1003b,1307s stack positions out of 10000i,1000n,20000p,200000b,200000s
 <C:/Users/CK/AppData/Local/Programs/MiKTeX/fonts/type1/public/inconsolata/Inc
@@ -1261,9 +1261,9 @@ nLibertineTB.pfb><C:/Users/CK/AppData/Local/Programs/MiKTeX/fonts/type1/public/
 libertine/LinLibertineTI.pfb><C:/Users/CK/AppData/Local/Programs/MiKTeX/fonts/t
 ype1/public/newtx/txmiaX.pfb><C:/Users/CK/AppData/Local/Programs/MiKTeX/fonts/t
 ype1/public/newtx/txsys.pfb>
-Output written on main.pdf (8 pages, 731817 bytes).
+Output written on main.pdf (8 pages, 732692 bytes).
 PDF statistics:
- 479 PDF objects out of 1000 (max. 8388607)
+ 481 PDF objects out of 1000 (max. 8388607)
  94 named destinations out of 1000 (max. 500000)
  93357 words of extra memory for PDF output out of 106986 (max. 10000000)
 
