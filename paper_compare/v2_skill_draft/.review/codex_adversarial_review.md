@@ -133,3 +133,15 @@ Reviewer confirmed: NO affirmative red-line vocab; NO load-bearing numeric misma
 **Learning:** a generic reviewer re-flags C2.3/C4.5 phrasing every run; future Codex prompts should
 supply that sanctioning so only genuinely new issues surface. A reviewer NO_GO on ledger-sanctioned
 phrasing is not a defect — the Synthesizer adjudicates.
+
+## CONFIRMATION RE-REVIEW (2026-06-28, context-aware) — all clear except 1 known false positive
+With the C2.3/C4.5 sanctioning supplied, Codex confirmed CLEAN in every category: red-line vocab,
+evidence-domain fusion (the C2.3 contrast + C4.5 recurrence now explicitly pass), model-selection,
+descriptive hedges, and all other load-bearing numbers. The §9 split (F6) cleared. The 4 prior
+false-positives did NOT recur. The ONLY remaining finding is the recurring +0.726pp (LightGBM) vs
++0.70pp "ledger mismatch" — the SAME false positive the first review already REJECTED: the paper uses
+the BINDING ROW-POOLED estimand (+0.726pp = `mean_delta` 0.007263 in `05_row_pooled_multiplicity.csv`,
+verified), while the ledger PROSE (C4.3) displays only the EQUAL-WEIGHT companion +0.70pp. The paper
+is CORRECT. Permanent fix = the ledger-hygiene clarification (surface the LightGBM row-pooled +0.726pp
+next to the equal-weight +0.70pp in C4.3) — recommended, but it edits the authoritative ledger so it
+awaits user OK. Net: zero genuine defects; the paper is clean.
