@@ -48,6 +48,8 @@ docs/*
 !docs/lst_models_paper_translation_and_anti_ai_style_guide.md
 !docs/lst_models_paper_narrative_and_template_papers_guide.md
 !docs/lst_models_paper_format_and_figures_contract.md
+!docs/adr/
+!docs/adr/**
 
 # Local paper workspace (Doc A contract: local-only), EXCEPT the gate toolchain
 # under paper/scripts/, shared so the QC workflow is reproducible across
