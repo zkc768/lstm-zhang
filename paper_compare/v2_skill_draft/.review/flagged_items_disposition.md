@@ -5,14 +5,18 @@ so they are not re-litigated every round (the old 60-round failure). Principle (
 workflow anti-churn): **apply only objective, localized, zero-rhythm-risk fixes; leave subjective
 prose-flow/style items with rationale.**
 
-## APPLY (objective; batched after the Codex re-review, then re-gate + recompile)
-- **§3 — define "balanced random prior" once** (≈0.498–0.500 even-class). Pass B logic C2: the term
-  is used before its only local definition in §8. Objective gap.
-- **Standardize the ≈0.498–0.500 label** to one term across abstract/§3/§8. Pass B minor-label
-  variation ("even-class value", "random prior", "near-even floor"). Objective consistency.
-- **§2→§3 seam — one bridging clause** linking the related-work gap to the protocol. Pass B I4
-  "cold restart". The single highest-value transition; addresses the user's #1 concern
-  (inter-paragraph logic) with one sentence, not a paragraph rewrite.
+## APPLY — narrowed to ONE zero-risk fix after the Codex GO + reading actual usage
+- **Define "balanced random prior" at the §6 floor introduction** (`06_results.tex:26`): added the
+  parenthetical equating it to the even-class value (≈0.499–0.501). Anchors the term to a number and
+  addresses Pass B logic C2 (term used before its only local §8 definition) without touching variant
+  labels. DONE.
+
+## DOWNGRADED to LEAVE after seeing the actual usage (grep evidence)
+- **Broad ≈0.498–0.500 label standardization** — the variants refer to TWO distinct quantities: the
+  stratified-dummy *floor* (≈0.500) vs. the even-class / *balanced random prior* (≈0.498–0.500).
+  Forcing one label risks CONFLATING them = a factual error. The paper is at Codex GO; not worth it.
+- **§2→§3 bridge** — §2 ends on a strong "conditional limitation" sentence; a blind bridge edit to a
+  GO'd seam is churn with homogenization risk. Left.
 
 ## LEAVE (documented — re-editing is net-negative per the reviewers' own judgment)
 - **§6 methods digression / §7 internal / §8→§9 transitions** (Pass B I6/I7/I8): the question-chain

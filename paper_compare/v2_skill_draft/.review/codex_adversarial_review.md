@@ -87,3 +87,19 @@ LEFT (optimal = respect the fact source / avoid over-hedging):
 - **07:65** pooled CI — LEFT: already says "as a descriptive resampling interval rather than a
   significance test."
 Post-fix: gate PASS (01/04/07/09), compile 8 pages, 0 undefined refs, PDF refreshed.
+
+## RE-REVIEW (2026-06-28) — VERDICT: GO (milestone closed)
+After the fixes above, `codex exec -s read-only` re-reviewed the CURRENT draft against the 4 prior
+P0s + the full red-line/three-domain/Option-2 contract (a DIFFERENT model; independent of the Claude
+author). Result, each verified against the live files:
+- **P0-1 RESOLVED** — `07_guarded_walkforward.tex:69` now uses only a within-day label-shuffle
+  sentinel (`:70` limits it to within-day leakage); no time-reversed sentinel in the guarded domain.
+- **P0-2 RESOLVED** — `01_intro.tex:33-34` says "descriptive block-bootstrap interval".
+- **P0-3 RESOLVED** — `07_guarded_walkforward.tex:57` LightGBM "numerically largest" with negative
+  period LCB; `:58-60` only the predeclared TCN has a positive LCB and no family is selected.
+- **P0-4 RESOLVED** — `04_models.tex:11-13` the near-null roster cannot prove a surviving edge is
+  not manufactured by an uncontrolled confound.
+- **NEW P0/P1: none found. VERDICT: GO.**
+The NO_GO -> GO loop (PAPER_WORKFLOW §8) is satisfied: the milestone record now stands at GO.
+(A codex-internal `router Exit code: 1` was logged mid-run — an internal shell call, not a finding;
+the review completed exit 0 with the verdict above.)
