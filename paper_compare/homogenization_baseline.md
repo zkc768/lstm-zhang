@@ -23,7 +23,7 @@ warning. NB: absolute values are inflated by technical terms/numbers, so the heu
 | 06_results | 393.1 | 393.1 | 0 | unchanged |
 | 07_guarded_walkforward | 488.3 | 486.2 | −0.4% | §7 stable (already looped) |
 | 08_diagnostics | 360.6 | 362.6 | +0.6% | stable |
-| 09_limitations_conclusion | 660.4 | 607.1 | −8.1% | **INVESTIGATE — §9 not a Pass-A target, why did it move?** |
+| 09_limitations_conclusion | 660.4 | 607.1 | −8.1% | EXPLAINED (Pass C): Pass-B calibration-reconciliation content fix replaced a high-perplexity sentence; n=25 unchanged; still the most-bursty section — not homogenization |
 
 ## burstiness_sd
 

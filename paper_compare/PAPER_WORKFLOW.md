@@ -80,10 +80,13 @@ inverts. Confident about the METHOD; honest about the weak NUMBERS; never overcl
 2. **Generic action agents can overclaim** (e.g., prose-polisher "improving" a hedge into a
    claim, or stripping a data-required hedge). Mitigation: inject governance into every agent
    prompt + mandatory integrity gate after each edit. This is the biggest live risk.
-3. **Number↔ledger binding is still manual.** The style/red-line/length gate is now AUTOMATED
-   via `paper_compare/check_integrity.py` (built in pilot round 1, fixing the fragile manual
-   greps). What remains manual is confirming each number actually matches the ledger value —
-   the checker tests vocabulary/structure, not numeric correctness.
+3. **Number↔ledger binding — mitigated; per-pass automation deliberately declined (ADR 0004).**
+   `check_integrity.py` tests vocabulary/structure, not numeric correctness. Numeric binding is
+   instead verified 3 independent ways — the Pass-B main-loop audit vs ledger+artifact CSVs
+   (0 discrepancies), Codex cross-model confirmation, and the `DRAFT_NOTES.md` number→artifact map
+   — and `sync_check.py` (ADR 0003) flags ledger drift, the main trigger to re-audit. A per-pass
+   `numbers_check.py` was declined (LaTeX number extraction false-positives on years/macro-args/
+   constants); only an optional pre-submission tripwire is worthwhile.
 4. **Principle conflicts** beyond B6 may exist; the precedence list resolves them, but each new
    section should be scanned for a generic principle that fights a red line.
 5. **Orchestrator expected `.claude/CLAUDE.md`, project uses `AGENTS.md`.** Bridged: a minimal
@@ -136,6 +139,10 @@ AI-sounding mean and flatten rhythm. Run DIFFERENTIATED passes and STOP ON QUALI
   (`docs/protocols/lst_models_blind_review_handoff.md`) with Codex-Reviser, a DIFFERENT model --
   re-stress-tests CLAIMS / defensibility / overclaiming (esp. that Option-2 has not crossed into
   overclaiming). Run once on the assembled full draft, or on-demand if a round feels off.
+  **Re-review loop (branch-F fix): if Codex returns NO_GO, apply/triage the findings, then RE-RUN
+  Codex on the fixed draft to confirm GO. The milestone is NOT passed while the record stands at
+  NO_GO; log each run's verdict.** (The first run returned NO_GO and was triaged + fixed but not
+  re-confirmed — that re-run is the open milestone item.)
 
 STOP when: gate passes + a fresh review finds nothing Critical/Important + naturalness audit
 clean + exemplar moves present. More passes after that make it worse.
