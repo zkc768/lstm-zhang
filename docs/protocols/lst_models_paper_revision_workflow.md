@@ -119,6 +119,16 @@ is a checklist mode): (1) claims/evidence-domain/hedge/caption integrity;
 (2) stats/estimand/reproducibility-leakage; (3) ACM layout/`\Description`/figure.
 Acceptance requires zero blocking/major AFTER the deterministic PERMIT_REVIEW.
 
+**Review-weight selection (efficiency — match weight to stakes, do not over-process):**
+- ROUTINE rounds (prose/layout/reviewer-response, no claim change) -> ONE lightweight pass:
+  `codex exec -s read-only` whole-draft audit (supply the C2.3/C4.5 sanctioning per the blind-review
+  handoff §4) OR 2-3 in-session read-only reviewers. No cross-window packet.
+- HIGH-STAKES rounds (claim/wording/section edits near submission) -> the full cross-window
+  blind-packet harness (`lst_models_blind_review_handoff.md`: Codex-reviser -> `round_diff` gate ->
+  blind Claude reviewer -> synthesizer).
+Do NOT run the heavy harness for low-stakes rounds (wasted overhead); do NOT skip blindness for a
+claim change (rubber-stamp risk). A round whose findings are all minor/false-positive = converged: stop.
+
 ### 8.1 Three-Pass Final-QC Review
 
 Final-QC mode uses three review passes. Reviewers are read-only and produce
