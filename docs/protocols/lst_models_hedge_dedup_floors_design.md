@@ -6,6 +6,14 @@ Pending: user GO on execution granularity, THEN prereq edits → §8.4 + Step-4
 governance patch → repair Rounds 1–2 → final re-review.
 Nothing here modifies any manuscript, manifest, gate, or `state.json` file.
 
+**v2-promotion interaction (ADR 0005, added 2026-06-28 — grill Round 4):** the floor->prose mappings
+(§6), the dead-variant fixes (§9.3), and the prereq edits (§9.4) are pinned to the LIVE **v1** prose.
+The v2 rewrite (`paper_compare/v2_skill_draft/`, at Codex GO) will REPLACE that prose on promotion,
+so running Steps 4-6 on v1 first would be wasted and would leave the floors stale against v2.
+SEQUENCE: promote v2 first (ADR 0005), THEN re-run the Step-2.5 live floor-coverage audit against the
+promoted v2 and re-derive §6/§9.3/§9.4 before any hedge-dedup execution. The METHOD (floors,
+required_groups, the gate_L2 extension, the 7 selftest cases) is v2-agnostic and carries over.
+
 Composes with, never overrides: `AGENTS.md`, claims ledger, Doc A/B, anti-AI
 style guide, `lst_models_paper_revision_workflow.md`,
 `lst_models_external_codex_reviser_adapter.md`.

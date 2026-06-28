@@ -30,3 +30,8 @@ wired into neither doc.
 **Consequences:** the two workflows form one coherent pipeline (write in the sandbox -> reconcile ->
 promote -> revise/QC on live), with a repeatable, testable promotion gate instead of an implicit
 overwrite. The reconcile script makes "is v2 promotable?" a measured answer, not a hope.
+
+**Hedge-dedup ordering (grill Round 4):** the hedge-dedup floors design
+(`docs/protocols/lst_models_hedge_dedup_floors_design.md`) is a POST-promotion Workflow-2 activity.
+Its v1-specific floor->prose mappings must be re-derived (its Step-2.5 audit) against the promoted v2
+before execution. Do NOT run hedge-dedup on v1 ahead of promotion — the v2 rewrite would overwrite it.
