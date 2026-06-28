@@ -1,0 +1,129 @@
+% lst_models paper - ICAIF-style ACM submission (Doc A contract v1.2)
+% Submission build: sigconf + review + anonymous; 8 pages TOTAL incl. figures+refs.
+\documentclass[sigconf,review,anonymous]{acmart}
+
+% Package whitelist per Doc A §2 (booktabs, graphicx, siunitx, amsmath).
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{siunitx}
+\usepackage{amsmath}
+
+% Float/caption separation tightened (layout only; no content, numbers, or
+% packages changed) to hold the hard 8-page limit while every figure renders.
+% Wrapped in \AtBeginDocument so it overrides the acmart class defaults.
+\AtBeginDocument{%
+  \setlength{\textfloatsep}{4pt plus 2pt minus 2pt}%
+  \setlength{\floatsep}{4pt plus 2pt minus 2pt}%
+  \setlength{\intextsep}{4pt plus 2pt minus 2pt}%
+  \setlength{\abovecaptionskip}{2pt}%
+  \setlength{\belowcaptionskip}{0pt}%
+}
+
+% Custom macros: <=10, all here, all commented (Doc A §2).
+\newcommand{\macrofone}{macro-F1}          % consistent metric name
+\newcommand{\pp}{\,\textrm{pp}}             % percentage points (math+text safe)
+\newcommand{\numseeds}{2}                   % official validation seeds (ledger §1)
+
+% Submission build: suppress the drafting-only \shownote{} editorial/VERIFY notes
+% carried in main.bbl so they do not print in the final references. Defined before
+% \bibliography so the .bbl's \ifx...\undefined guard sees it and keeps this. Remove
+% this line to restore the notes during drafting.
+\def\shownote#1{}
+
+\begin{document}
+\raggedbottom
+
+% Title per Doc B v1.5 title direction: evaluation-discipline framing with the
+% fixed task term "intraday stock direction classification" (replaces the retired
+% AI-template skeleton "Guarded Chronological Evaluation of Weak Intraday
+% Directional Signals"). Still evaluation-discipline, not protocol-as-product. No
+% title footnotes for draft markers: acmart prints them under the title (blind
+% gate, Doc A section 7).
+\title{Small Edges, Strict Boundaries: A Chronological Evaluation of Intraday Stock Direction Classification}
+
+% Authors intentionally omitted: anonymous submission build.
+
+\begin{abstract}
+In intraday five-minute stock-direction classification, a weak edge can survive
+strict evaluation yet hold only under conditions. We establish this with an
+evaluation protocol fixed before any model is scored. It freezes the label,
+no-trade band, chronological splits, roster, same-row dummy floor, and a counted
+validation-look budget. The controls matter because validation contact, leakage,
+and repeated comparison can inflate \macrofone{} on a target that sits just above
+a stratified-dummy floor. On the frozen validation split, a predeclared temporal
+convolutional network exceeds the same-row stratified dummy by 1.69\pp{} in
+\macrofone{} (two-seed mean, 1.63\pp{} at the worse seed; \numseeds{} seeds cannot
+quantify variance). On a separate guarded, non-independent walk-forward over
+post-2017 (expanding windows share rows), which is not a clean test, the same
+candidate stays positive at $+0.636\pp{}$ row-pooled and clears a deliberately
+weak bar. A descriptive CSCV/PBO of $0.514$ leaves overfitting unresolved. The
+candidate's edge is also conditional: it concentrates in the calmest bars and
+falls below the balanced random prior on the most active ones. This low-to-high
+pattern recurs across both windows, though we cannot yet separate it from a
+bid-ask-bounce artifact. We measure \macrofone{}, not economic value, on five
+large-cap US survivors with no known-signal positive control. The contribution is
+the evaluation discipline and a map of where a thin edge holds and where it
+inverts. Whether the protocol also shows such signs are absent on a genuine
+signal is the next test.
+\end{abstract}
+
+% CCS concepts + keywords (mandatory for papers > 2 pages, Doc A §10).
+% VERIFY-BEFORE-SUBMIT: the \ccsdesc descriptions/significance below are final,
+% but regenerate the CCSXML and confirm the numeric concept_id values via the ACM
+% CCS tool (https://dl.acm.org/ccs); the ids are best-effort and do not affect the
+% rendered PDF (only ACM DL ingestion).
+\begin{CCSXML}
+<ccs2012>
+   <concept>
+       <concept_id>10010147.10010257</concept_id>
+       <concept_desc>Computing methodologies~Machine learning</concept_desc>
+       <concept_significance>500</concept_significance>
+   </concept>
+   <concept>
+       <concept_id>10002950.10003648</concept_id>
+       <concept_desc>Mathematics of computing~Probability and statistics</concept_desc>
+       <concept_significance>300</concept_significance>
+   </concept>
+   <concept>
+       <concept_id>10010405.10010444.10010087</concept_id>
+       <concept_desc>Applied computing~Economics</concept_desc>
+       <concept_significance>300</concept_significance>
+   </concept>
+</ccs2012>
+\end{CCSXML}
+\ccsdesc[500]{Computing methodologies~Machine learning}
+\ccsdesc[300]{Mathematics of computing~Probability and statistics}
+\ccsdesc[300]{Applied computing~Economics}
+\keywords{intraday direction classification, chronological validation,
+no-trade band, model calibration, selective classification, backtest overfitting}
+
+\maketitle
+
+\input{sections/01_intro}
+\input{sections/02_related}
+\input{sections/03_protocol}
+\input{sections/04_models}
+\input{sections/05_setup}
+\input{sections/06_results}
+\input{sections/07_guarded_walkforward}
+\input{sections/08_diagnostics}
+\input{sections/09_limitations_conclusion}
+
+% --- Endmatter ---------------------------------------------------------
+% GenAI usage statement (mandatory, ACM 2026; template Doc A §8).
+\section*{Generative AI Usage Statement}
+Generative AI tools were used to assist with literature search, drafting
+and translating prose from the authors' notes, editing for style, generating
+figure-plotting code, and reviewing claim consistency, citations, provenance,
+and final-form issues. All experimental design, code execution, results, and
+claims were produced and verified by the authors. All
+AI-assisted text was reviewed, fact-checked against the project's
+experiment artifacts, and revised by the authors, who take full
+responsibility for the content.
+
+% Acknowledgments: REMOVED in submission build (Doc A §7 blind gate).
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

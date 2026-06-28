@@ -1,0 +1,16 @@
+metric,value,ci_lower,ci_upper,unit,note
+seed_mean_aurc_score,0.4707153601913462,0.46359465641135733,0.47794063412565235,aurc,mean across seeds; lower is better
+expected_random_ranking_risk_and_aurc,0.48081938780914046,,,risk_or_aurc,expected random-ordering selective risk equals full-coverage risk
+seed_mean_oracle_aurc,0.14049630254722167,,,aurc,"empirical perfect-ranking oracle, not deployable"
+seed_mean_e_aurc,0.3302190576441245,0.3254767844425141,0.3350633321168154,aurc,AURC minus oracle AURC
+delta_aurc_score_minus_random,-0.010104027617794276,-0.013673701538551752,-0.0063148755874913275,aurc,negative means score improves over expected random ordering
+normalized_excess_aurc,0.9703104841976323,0.9596967555834479,0.9814995212486309,fraction,"oracle=0, random=1; lower is better"
+random_to_oracle_gap_closed,0.029689515802367724,0.01850047875136907,0.04030324441655211,fraction,fraction of random-to-oracle AURC gap recovered
+augrc_generalized_risk,0.23687237217934656,,,augrc,"computed from generalized-risk curve, not the displayed selective-risk axis"
+n_rows_per_seed,151064.0,,,rows,official validation rows per seed
+n_rows_at_min_display_coverage,7553.0,,,rows,rows per seed at coverage 0.05
+bootstrap_reps,1000.0,,,count,trading-day cluster block bootstrap
+permutation_reps,1000.0,,,count,random row-ordering null
+partial_selective_risk_diff_random_minus_prespecified_80_100,0.24823615287125622,,,percentage_points,mean random-minus-prespecified difference over coverage 0.80-1.00
+partial_selective_risk_diff_random_minus_prespecified_90_100,0.13585453371612322,,,percentage_points,mean random-minus-prespecified difference over coverage 0.90-1.00
+partial_selective_risk_diff_random_minus_prespecified_95_100,0.06837540670039388,,,percentage_points,mean random-minus-prespecified difference over coverage 0.95-1.00

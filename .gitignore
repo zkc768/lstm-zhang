@@ -49,9 +49,23 @@ docs/*
 !docs/lst_models_paper_narrative_and_template_papers_guide.md
 !docs/lst_models_paper_format_and_figures_contract.md
 
-# Local paper workspace (Doc A contract: local-only)
-paper/
+# Local paper workspace (Doc A contract: local-only), EXCEPT the gate toolchain
+# under paper/scripts/, shared so the QC workflow is reproducible across
+# clones/Colab/agents (submission_qc_matrix.md Persistence; P1-a user decision).
+# Drafts, sections, length_loop runs, and references stay local-only.
+paper/*
+!paper/scripts/
+paper/scripts/*
+!paper/scripts/*.py
 
 # Local Claude Code tooling state (machine-local; not shared). If a shared
 # config is ever added, un-ignore it explicitly, e.g. !.claude/settings.json
 .claude/
+
+# paper rollback baseline (added 2026-06-28, ADR 0003)
+tmp/
+tmp_err.txt
+tmp_old09.txt
+__pycache__/
+*.pyc
+paper_compare/exemplars/pdfs/

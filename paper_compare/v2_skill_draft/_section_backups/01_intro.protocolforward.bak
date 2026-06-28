@@ -1,0 +1,72 @@
+% Budget/contract: 0.9 page. Must answer: why intraday direction evaluation is
+% commonly overstated; the protocol gap; what we do; contributions C1/C2/C4/C3;
+% and the five anti-attack answers from Doc B section 1. Evidence binds to claims
+% ledger v1.13 and Stage 05 local-derived paper-facing artifacts.
+\section{Introduction}
+
+A 1.69\pp{} \macrofone{} margin on intraday stock-direction classification can
+mean a real edge, or it can mean a leak in the evaluation. The target sits just
+above a same-row stratified-dummy floor, so validation contact, temporal
+leakage, and repeated model comparison can each manufacture a margin of that
+size. Financial machine-learning studies fit flexible models to stock and
+limit-order-book prediction \cite{gu2020empirical,zhang2019deeplob}, and a
+parallel literature documents how adaptive validation, data-snooping, and
+backtest overfitting inflate the gains those models appear to deliver
+\cite{kapoor2023leakage,bailey2016probability,harvey2016cross}. The standard
+response is a cleaner backtest. We take a step earlier and ask a sharper
+question: before any trading simulation, what survives when a return-free,
+drop-neutral direction-classification estimand is scored under frozen labels,
+chronological day-block splits, a fixed roster, and a counted validation budget?
+
+We answer with an evaluation protocol, and that protocol is the contribution.
+The protocol does four things that a margin alone never reveals. It freezes the
+label, band, split, window, roster, same-row dummy floor, and decision rules
+before the first model score, so every reported number is prespecified rather
+than chosen after the fact. It forces each model onto a same-row stratified
+dummy, which pins the scale a margin must clear. It counts and tier-tags every
+contact with the validation split in a budget ledger, which bounds disclosed
+reuse. And it maps where a thin edge concentrates and where it breaks, through
+calibration, selective-prediction, and activity-regime diagnostics. We make no
+architecture claim and select no final model; the model families exist to drive
+the protocol, not to win.
+
+We run the protocol on one deliberately narrow case: five large-cap US
+survivors, \numseeds{} training seeds, and \macrofone{} alone, with no P\&L,
+cost model, Sharpe ratio, or known-signal positive control. On the frozen
+validation split, the predeclared TCN primary reaches \macrofone{} of
+$0.5170 \pm 0.0009$ and exceeds the same-row stratified dummy by 1.69\pp{} in the
+row-pooled seed mean. A separate train-inner control domain frames that
+number: four control rows, two of them last-step degenerate controls, span
+0.66\pp{} in \macrofone{}. That spread is not a full-family validation
+comparison, and the two figures live in different evidence domains; the
+train-inner spread only sets the scale of the thin validation-domain margin.
+
+The guarded walk-forward extends the same discipline past the validation
+boundary, and it is protocol evidence, not a second headline. The predeclared
+TCN primary clears the guarded stability bar, but the bar is deliberately weak:
+at least two of seven periods positive and a positive pooled delta, which an
+independent fair coin clears about 94\% of the time. The observed 5/7 positive
+periods are descriptive. The binding guarded row-pooled delta is $+0.636\pp{}$,
+with a $+0.550\pp{}$ equal-weight companion. A descriptive row-pooled
+multiplicity check returns a PBO of 0.514, near a coin flip, and only the
+predeclared primary's period lower bound clears zero. No family is selected.
+
+The diagnostics then say where even this thin edge lives. Calibration error is
+small ($\approx 0.010$ equal-mass ECE) yet pairs with near-zero Brier
+resolution, so the confidence scores cannot define a usable operating rule. The
+activity-tercile map is the sharper boundary. On validation the low-activity
+slice runs $+5.43\pp{}$ over the dummy while the high-activity slice runs
+$-1.54\pp{}$, and the same low-to-high sign pattern recurs in the guarded
+2017--2024 era (non-independent, not a clean test). Here activity means
+eligible-row count under the no-trade band, not volume, liquidity, or
+volatility. Per-tercile dummy floors and a 50-permutation within-day
+label-shuffle sentinel rule out class-imbalance and within-day-leakage
+explanations, but neither has power against a bid-ask-bounce alignment
+\cite{roll1984simple}. We therefore report the map as a diagnostic boundary, not
+as model-attributable predictability.
+
+The result is a guarded evaluation protocol exercised on a single near-null
+case. On that case the protocol records estimand sensitivity, a weak stability
+bar, multiplicity fragility, and a conditional sign that a headline-only readout
+would bury. Whether the same protocol also flags the absence of these signs on a
+genuine signal is the positive-control test we name as the next step.

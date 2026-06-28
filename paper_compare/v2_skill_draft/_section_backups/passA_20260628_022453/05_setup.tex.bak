@@ -1,0 +1,55 @@
+% Budget/contract: 0.45 page. Table 1 dataset stats; HPO protocol; n=2 official
+% validation seeds (state honestly); frozen-params selection rule; device one-liner.
+% Date ranges closed in claims ledger sec.1 (source: stage00 config + protocol 00).
+\section{Experimental Setup}
+\label{sec:setup}
+
+This section fixes the data and the train-inner search that the protocol section
+defers here; Table~\ref{tab:dataset} lists the frozen statistics. The study uses
+five large-cap US equities (CSCO, JPM, KO, MSFT, WMT) as 5-minute bars resampled
+from 1-minute data. The chronological split places 736{,}685 labeled target rows
+in the train interval (1998-01-02 through 2013-09-16, end exclusive) and 151{,}064
+in the official validation interval (2013-09-16 through 2017-01-25, end exclusive),
+with per-ticker validation counts spanning $\approx$29.9k--30.8k. Labels use a
+9-bar horizon and a 3.0\,bps no-trade band. The input is a 20-bar window over the
+\texttt{price\_volume\_time} feature set, the output of the train-inner
+feature-and-window search; \texttt{price\_action\_core} is the registered
+fallback feature set. This step shortlists only the feature set and window;
+family designation is the separate train-inner step below.
+
+\begin{table}[t]
+  \caption{Frozen dataset statistics. Counts are eligible binary target rows
+    after the no-trade band invalidates near-flat rows, over end-exclusive
+    chronological day blocks. The holdout from 2017-01-25 received zero
+    validation-phase contact (\texttt{holdout\_test\_contact}{=}false).}
+  \label{tab:dataset}
+  \begin{tabular}{ll}
+    \toprule
+    Property & Value \\
+    \midrule
+    Tickers & CSCO, JPM, KO, MSFT, WMT (5) \\
+    Frequency & 5-min bars (from 1-min) \\
+    Train interval & 1998-01-02 -- 2013-09-16 (excl.) \\
+    Validation interval & 2013-09-16 -- 2017-01-25 (excl.) \\
+    Train rows & 736{,}685 \\
+    Validation rows & 151{,}064 ($\approx$29.9k--30.8k/ticker) \\
+    Label horizon & 9 bars \\
+    No-trade band & 3.0\,bps \\
+    Window $w$ & 20 \\
+    Primary feature set & \texttt{price\_volume\_time} \\
+    Fallback feature set & \texttt{price\_action\_core} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The separate train-inner step fixes the predeclared primary-and-fallback
+designation and one profile per family. The frozen feature-window and train-inner
+configs, the handoff, and the readout records bind the grid, the search-space
+files, the inner folds, the selected profiles, the refit rows, the early-stopping
+source, and the resolved device. This bounded-profiles search is a
+screening-grade train-inner selection, not an unconstrained or validation-tuned
+hyperparameter search. The official validation readout only characterizes the
+frozen specification and is not a model-selection event; the route manifest sets
+\nolinkurl{no_final_model_selected=true}. We then report the official validation
+outcome in \macrofone{} over $n{=}\numseeds{}$ seeds (101 and 202), refit on the
+recorded CUDA device. Two seeds are too few to quantify seed-to-seed variance.

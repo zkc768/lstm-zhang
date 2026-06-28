@@ -1,0 +1,39 @@
+% Budget/contract: 0.6 page. Four paper-facing families only: TCN primary,
+% standard-DLinear, MS-DLinear+TCN, and LightGBM. MLP appears only as a
+% train-inner control row where needed; do not present LSTM as a route model.
+% Source: protocol 02 + configs/models/.
+\section{Models}
+
+The roster exists to drive the protocol, and only the TCN is primary. We score
+four families: a temporal convolutional network, a decomposition-linear model, a
+decomposition-convolutional hybrid, and gradient-boosted trees
+\cite{bai2018empirical,zeng2023dlinear,ke2017lightgbm,grinsztajn2022tree}. None
+is a known-signal positive control. The roster therefore exercises the protocol on
+a near-null case: it cannot prove that a surviving edge is not manufactured by an
+uncontrolled confound, nor that the protocol would catch a real signal.
+
+The predeclared primary is a temporal convolutional network
+\cite{bai2018empirical} in a \texttt{tcn\_tiny} configuration: two residual
+blocks of 16 channels each, kernel size \(2\), and learning rate \(10^{-3}\).
+Standard DLinear (Std-DLinear) splits each input window into trend and residual
+components and feeds each to its own linear head before summing them
+\cite{zeng2023dlinear}. The hybrid pairs a multi-scale DLinear branch
+(MS-DLinear) with a small residual TCN branch (together, MS-DLinear+TCN) and is
+a roster alternative, not a contributed model. Its MS-DLinear branch combines
+several decomposition kernels in the manner of series-decomposition forecasters
+\cite{wu2021autoformer,zhou2022fedformer}. The fourth family is LightGBM
+\cite{ke2017lightgbm}, a gradient-boosted tree run as a tabular baseline on
+windowed features \cite{grinsztajn2022tree}.
+
+Predeclaration covers the roster and the primary-versus-fallback rule, and the
+train-inner search completes before either readout opens. The search fits the TCN
+configuration above and holds LightGBM in reserve as the primary-slot fallback
+for mechanical or reconstruction failures. None occurred,
+so the fallback never fired. The frozen specification then enters both readouts
+unchanged, and neither readout selects a final model. On the guarded readout
+some roster alternatives post numerically higher deltas than the TCN
+primary, but only post hoc and not like-for-like; the TCN is the lone
+pre-committed frozen primary. No recurrent model enters the roster, and the
+last-step multilayer perceptron (\texttt{last\_step\_mlp}) appears only as a
+train-inner control, never as a scored family. The four families share the data,
+seeds, and frozen designation that the next section fixes.

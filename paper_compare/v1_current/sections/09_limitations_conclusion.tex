@@ -1,0 +1,59 @@
+% Budget/contract: 0.35 page. Required limitations: n=2 seeds, single market,
+% five tickers, fixed band=3.0 bps and horizon=9 without sensitivity scan,
+% macro-F1 is not economic value, residual Roll(1984) microstructure risk, and
+% guarded readout is non-independent, not a clean test.
+\section{Conclusion and Limitations}
+\label{sec:limitations}
+
+The contribution is three-part. First, a strict pre-registered evaluation
+procedure whose pre-score freeze, same-row dummy floors, and budget ledger keep
+the readout auditable regardless of outcome. Second, under that procedure, a
+small margin for the predeclared frozen TCN primary over its
+same-row baselines, consistent in pooled sign but uneven across tickers and regimes---an evaluation finding, not an architecture claim. Third,
+feature and regime diagnostics (activity-tercile, calibration,
+selective-prediction) that bound and interpret that margin. We name the
+magnitudes to be scrutinized, not as effectiveness. A 1.69\pp{} validation
+margin and a 0.636\pp{} guarded row-pooled delta over the same-row dummy are thin
+edges above a near-even floor. The backtest-overfitting probability is a
+near-coin 0.514. The validation margin even flips sign across activity: from
+5.43\pp{} on the calmest bars to 1.54\pp{} below the dummy on the most active---a
+conditional sign a headline-only readout would omit.
+
+That finding stays narrow. The procedure is exercised on one near-null case with
+no known-signal positive control, so its sensitivity to a genuine signal is
+untested. The official validation readout rests
+on \numseeds{} seeds, thin for
+seed-to-seed variance~\cite{bouthillier2021accounting,picard2021torch}. The
+Student-$t$ lower bound shipped with the decision record is provenance, not a
+decision criterion. The scope is narrow: a single market and five large-cap
+survivors of the 1998--2024 span. Any positive readout is therefore entangled with
+survivor selection and does not extend to a broader panel.
+
+The other limitations concern construct and claim scope. The no-trade band
+($3.0$ bps) and the label horizon (nine bars) are pre-registered and frozen, with
+no threshold or horizon sensitivity scan. \macrofone{} is a classification
+readout, not economic value. With no execution model or transaction-cost
+accounting, no margin here (validation, train-inner control, or guarded) is a
+trading claim. The guarded walk-forward is a non-independent confirmation, not a
+clean test, and no final model is selected.
+
+The guarded family margins are fragile: under a descriptive multiplicity
+discount on the binding row-pooled estimand, the discounted per-period lower
+bound falls below zero for all but the predeclared primary. This is not a
+like-for-like family ranking, since the non-primary rows are post-hoc maxima and
+the primary a frozen profile. The descriptive PBO
+readout is too coarse to rule overfitting in or out. The calm-bar concentration
+of Section~\ref{sec:diagnostics} carries one open risk. The closing price
+$\text{close}[t]$ enters both the most-recent-return feature and the forward-label
+denominator. A bid-ask bounce is an alternative this classification-only
+evaluation cannot quantify, and it would be largest relative to the small returns
+of the calmest bars~\cite{roll1984simple,lo1990nonsynchronous}. The guarded
+label-shuffle sentinel
+rules out within-day leakage and day-base-rate artifacts, but has no power against
+the bounce, a true row-level coupling a within-day permutation preserves. The
+discriminating control compares a half-spread proxy against the $3.0$ bps band,
+and needs raw five-minute bars the dump does not carry, so we defer it.
+
+Confirming that the same procedure also flags their absence on a genuine signal
+is the defined next step, a known-signal positive control. Until then the outcome
+is a weak, conditional readout, not a model or a trading system.

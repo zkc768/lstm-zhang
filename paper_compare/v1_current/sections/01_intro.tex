@@ -1,0 +1,69 @@
+% Budget/contract: 0.9 page. Must answer: why intraday direction evaluation is
+% commonly overstated; the protocol gap; what we do; contributions C1/C2/C4/C3;
+% and the five anti-attack answers from Doc B section 1. Evidence binds to claims
+% ledger v1.13 and Stage 05 local-derived paper-facing artifacts.
+\section{Introduction}
+
+A 1.69\pp{} \macrofone{} margin can be a signal, or it can be an artifact of
+how a weak intraday classification task was evaluated. The target sits near a
+same-row stratified dummy floor, so validation contact, temporal leakage, and
+repeated model comparison can change the apparent conclusion. Financial
+machine-learning studies have applied flexible models to stock and limit-order
+book prediction \cite{gu2020empirical,zhang2019deeplob}. A separate literature
+shows why adaptive validation, data-snooping, and backtest overfitting can
+inflate empirical gains
+\cite{kapoor2023leakage,bailey2016probability,harvey2016cross}. This paper
+asks a narrower question: before any trading backtest, what remains when a
+return-free, drop-neutral direction-classification estimand is scored with
+frozen labels, chronological day-block splits, a fixed roster, and a counted
+validation budget?
+
+The contribution is the evaluation discipline, not a new architecture, and it
+has three parts. First, a strict pre-registered protocol freezes the label and
+band, split, window, roster, same-row dummy floor, and validation-budget ledger
+before scoring. Second, under that protocol the predeclared TCN primary exceeds
+the same-row stratified dummy and the majority floor by a small margin that is
+sign-consistent when pooled but not uniform across tickers, periods, or regimes;
+we report it and select no model. Third, calibration, selective-prediction, and
+activity-tercile diagnostics locate where that margin concentrates and where it
+breaks down -- a map of the edge, not a trading result. The guarded,
+non-independent walk-forward applies the same discipline past the
+validation boundary; it is protocol evidence, not a separate headline
+contribution.
+
+The worked case is deliberately narrow. It covers five large-cap US survivors,
+\numseeds{} training seeds, and \macrofone{} only; it has no P\&L, cost model,
+Sharpe ratio, or known-signal positive control. On the frozen validation split,
+the predeclared TCN primary reaches \macrofone{} of 0.5170 \(\pm\) 0.0009 and
+exceeds the same-row stratified dummy by 1.69\pp{} in the seed mean
+(row-pooled). Separately, in the train-inner control domain, four control rows,
+two of them last-step degenerate controls, span only 0.66\pp{} in \macrofone{}.
+That spread is not a full-family validation comparison; it is context for the
+thin validation-domain margin.
+
+The guarded readout keeps the same restraint. The predeclared TCN primary meets
+the guarded stability bar, but the bar is intentionally weak: at least two
+positive periods out of seven and a positive pooled delta. The observed 5/7
+positive periods are descriptive. The binding guarded row-pooled delta is
++0.636\pp, with an equal-weight companion of +0.550\pp. A descriptive
+row-pooled multiplicity check gives a PBO readout of 0.514, and only the
+predeclared primary's period-LCB clears zero; no family is selected.
+
+The diagnostics narrow the claim further. Low calibration error
+(\(\approx 0.010\) equal-mass ECE) appears with near-zero Brier resolution, so
+confidence is not useful enough to define an operating rule. The activity-tercile
+map is also a boundary. In validation, the low-activity slice is +5.43\pp{} over
+dummy while the high-activity slice is -1.54\pp; the same low-to-high sign
+pattern recurs in the guarded 2017--2024 era (non-independent, not a clean
+test). Activity means eligible-row count under the no-trade
+band, not volume, liquidity, or volatility. The dummy floors and 50-permutation
+within-day label-shuffle sentinel reduce class-imbalance and within-day-leakage
+explanations, but they have no power against a bid-ask-bounce alignment
+\cite{roll1984simple}. We therefore report the map as a diagnostic boundary, not
+model-attributable predictability.
+
+The paper therefore claims a guarded evaluation procedure exercised on one
+near-null case. In this case, the procedure records estimand sensitivity, a weak
+guarded bar, multiplicity fragility, and a conditional sign that a headline-only
+readout would hide. Whether it also flags their absence on a genuine signal is
+the positive-control next step.

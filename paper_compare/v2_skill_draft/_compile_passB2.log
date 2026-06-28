@@ -1,0 +1,226 @@
+Rc files read (in order):
+  NONE
+Latexmk: This is Latexmk, John Collins, 9 March 2026. Version 4.88.
+Latexmk: applying rule 'pdflatex'...
+Rule 'pdflatex':  Reasons for rerun
+Changed files or newly in use/created:
+  sections/07_guarded_walkforward.tex
+Category 'changed_user':
+  sections/07_guarded_walkforward.tex
+
+------------
+Run number 1 of rule 'pdflatex'
+------------
+------------
+Running 'pdflatex  -interaction=nonstopmode -recorder  "main.tex"'
+------------
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (MiKTeX 26.5) (preloaded format=pdflatex.fmt)
+ restricted \write18 enabled.
+entering extended mode
+(main.tex
+LaTeX2e <2026-06-01>
+L3 programming layer <2026-05-26>
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/acmart\acmart.cls
+Document Class: acmart 2026/05/31 v2.18 Typesetting articles for the Associatio
+n for Computing Machinery
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/xkeyval\xkeyval.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/xkeyval\xkeyval.tex
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/xkeyval\xkvutils.tex
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/xkeyval\keyval.tex))))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/xstring\xstring.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/xstring\xstring.tex))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/iftex\iftex.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/amscls\amsart.cls
+Document Class: amsart 2020/05/29 v2.20.6
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsmath.sty
+For additional information on amsmath, use the `?' option.
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amstext.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsgen.sty))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsbsy.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsopn.sty))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsa.fd)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\amsfonts.sty))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/microtype\microtype.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/etoolbox\etoolbox.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/microtype\microtype-pdftex
+.def)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/microtype\microtype.cfg))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/booktabs\booktabs.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/refcount\refcount.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/ltxcmds\ltxcmds.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/infwarerr\infwarerr.sty)
+) (C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/totpages\totpages.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/everyshi\everyshi.sty))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/environ\environ.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/trimspaces\trimspaces.sty)
+) (C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/natbib\natbib.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\hyperref.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/kvsetkeys\kvsetkeys.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/kvdefinekeys\kvdefinekey
+s.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/pdfescape\pdfescape.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/pdftexcmds\pdftexcmds.st
+y)) (C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/hycolor\hycolor.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\nameref.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/gettitlestring\gettitles
+tring.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/kvoptions\kvoptions.sty)))
+ (C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/stringenc\stringenc.sty
+) (C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\pd1enc.def)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/intcalc\intcalc.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\puenc.def)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/url\url.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/bitset\bitset.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/bigintcalc\bigintcalc.st
+y))) (C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\hpdftex.def
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/rerunfilecheck\rerunfilech
+eck.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/uniquecounter\uniquecoun
+ter.sty)))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/hyperxmp\hyperxmp.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/ifmtarg\ifmtarg.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/base\ifthen.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/oberdiek\ifdraft.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/iftex\ifluatex.sty))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/graphics\graphicx.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/graphics\graphics.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/graphics\trig.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/graphics-cfg\graphics.cfg)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/graphics-def\pdftex.def)))
+ (C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/xcolor\xcolor.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/graphics-cfg\color.cfg)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/graphics\mathcolor.ltx))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/geometry\geometry.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/iftex\ifvtex.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/geometry\geometry.cfg))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/ncctools\manyfoot.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/ncctools\nccfoots.sty))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/pdftex\glyphtounicode.te
+x) (C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/cmap\cmap.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/base\fontenc.sty<<t1.cmap>
+>) (C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/libertine\libertine.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/iftex\ifxetex.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/base\textcomp.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/base\fontenc.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/fontaxes\fontaxes.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/figureversions\figureversi
+ons.sty))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/libertine\LinLibertine_I.t
+ex)) (C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/inconsolata\zi4.sty
+`inconsolata-zi4' v1.12, 2019/05/17 Text macros for Inconsolata (msharpe))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/newtx\newtxmath.sty
+`newtxmath' v1.754, 2024/09/22 Math macros based originally on txfonts (msharpe
+) (C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/oberdiek\centernot.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/binhex\binhex.tex)
+amsthm NOT loaded
+) (C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/psnfss\pifont.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/psnfss\upzd.fd)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/psnfss\upsy.fd))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/caption\caption.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/caption\caption3.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/caption\caption-ams-smf.st
+o))) (C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/float\float.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/comment\comment.sty
+Excluding comment 'comment') Excluding comment 'CCSXML'
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/fancyhdr\fancyhdr.sty)
+Special comment 'acks'
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/libertine\t1linuxlibertine
+t-tlf.fd))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/siunitx\siunitx.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/translations\translations.
+sty) (C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/tools\array.sty))
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/preprint\balance.sty)
+Excluding comment 'screenonly' Include comment 'printonly'
+Excluding comment 'anonsuppress' Excluding comment 'acks'
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/l3backend\l3backend-pdftex
+.def) (main.aux)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/newtx\omlnxlmi.fd)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/newtx\untxexa.fd)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/newtx\lmsntxsy.fd)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/newtx\lmxntxexx.fd)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/libertine\ot1linuxlibertin
+et-tlf.fd)<<ot1.cmap>><<oml.cmap>>
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsa.fd)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsb.fd)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/newtx\untxmia.fd)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/newtx\untxsym.fd)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/newtx\untxsyc.fd)
+(main.out) (main.out)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/context/base/mkii\supp-pdf.mkii
+[Loading MPS to PDF converter (version 2006.09.02).]
+)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/epstopdf-pkg\epstopdf-base
+.sty
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/00miktex\epstopdf-sys.cfg)
+)
+*geometry* driver: auto-detecting
+*geometry* detected driver: pdftex
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/upquote\upquote.sty)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/translations/dicts\transla
+tions-basic-dictionary-english.trsl) Excluding 'CCSXML' comment.
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/libertine\t1linuxbiolinumt
+-tlf.fd)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/libertine\ts1linuxlibertin
+et-tlf.fd)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/microtype\mt-msa.cfg)
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/microtype\mt-msb.cfg)
+(sections/01_intro.tex [1.1{C:/Users/CK/AppData/Local/MiKTeX/fonts/map/pdftex/p
+dftex.map}{C:/Users/CK/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/libertine/
+lbtn_76gpa5.enc}{C:/Users/CK/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/libe
+rtine/lbtn_25tcsq.enc}{C:/Users/CK/AppData/Local/Programs/MiKTeX/fonts/enc/dvip
+s/libertine/lbtn_nh77jq.enc}{C:/Users/CK/AppData/Local/Programs/MiKTeX/fonts/en
+c/dvips/libertine/lbtn_oexx6f.enc}{C:/Users/CK/AppData/Local/Programs/MiKTeX/fo
+nts/enc/dvips/libertine/lbtn_naooyc.enc}{C:/Users/CK/AppData/Local/Programs/MiK
+TeX/fonts/enc/dvips/libertine/lbtn_7grukw.enc}]) (sections/02_related.tex)
+(sections/03_protocol.tex [2.2]
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/latex/inconsolata\t1zi4.fd)
+Overfull \hbox (31.78494pt too wide) in paragraph at lines 89--100
+\T1/LinuxLibertineT-TLF/m/n/9 (-20) tact with the of-fi-cial val-i-da-tion spli
+t, and each con-tact car-ries \T1/zi4/m/n/9 for_selection
+) (sections/04_models.tex) (sections/05_setup.tex [3.3{C:/Users/CK/AppData/Loca
+l/Programs/MiKTeX/fonts/enc/dvips/inconsolata/i4-t1-4.enc} <./figures/fig_proto
+col_timeline.pdf>]) (sections/06_results.tex
+Overfull \hbox (2.2083pt too wide) in paragraph at lines 43--47
+\T1/LinuxLibertineT-TLF/m/n/9 (-20) clared pri-mary is the TCN con-fig-u-ra-tio
+n on the \T1/zi4/m/n/9 price_volume_time
+) (sections/07_guarded_walkforward.tex [4.4]
+Overfull \hbox (4.25612pt too wide) in paragraph at lines 55--63
+ []\T1/LinuxLibertineT-TLF/m/it/9 (-20) Pre-registration, not peak per-for-manc
+e, sur-vives mul-ti-plic-ity.[] \T1/LinuxLibertineT-TLF/m/n/9 (-20) Across
+) (sections/08_diagnostics.tex [5.5 <./figures/fig_validation_deltas.pdf>])
+(sections/09_limitations_conclusion.tex [6.6]) (main.bbl [7.7 <./figures/fig_ri
+sk_coverage.pdf> <./figures/fig_tercile_map.pdf>])
+
+Package balance Warning: You have called \balance in second column
+(balance)                Columns might not be balanced.
+
+(C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/stringenc\se-pdfdoc.def)
+ (C:\Users\CK\AppData\Local\Programs\MiKTeX\tex/generic/stringenc\se-utf8.def)
+[8.8] (main.aux) )
+(see the transcript file for additional information)<C:/Users/CK/AppData/Local/
+Programs/MiKTeX/fonts/type1/public/inconsolata/Inconsolata-zi4b.pfb><C:/Users/C
+K/AppData/Local/Programs/MiKTeX/fonts/type1/public/inconsolata/Inconsolata-zi4r
+.pfb><C:/Users/CK/AppData/Local/Programs/MiKTeX/fonts/type1/public/newtx/Libert
+ineMathMI.pfb><C:/Users/CK/AppData/Local/Programs/MiKTeX/fonts/type1/public/new
+tx/LibertineMathRM.pfb><C:/Users/CK/AppData/Local/Programs/MiKTeX/fonts/type1/p
+ublic/libertine/LinBiolinumT.pfb><C:/Users/CK/AppData/Local/Programs/MiKTeX/fon
+ts/type1/public/libertine/LinBiolinumTB.pfb><C:/Users/CK/AppData/Local/Programs
+/MiKTeX/fonts/type1/public/libertine/LinLibertineT.pfb><C:/Users/CK/AppData/Loc
+al/Programs/MiKTeX/fonts/type1/public/libertine/LinLibertineTB.pfb><C:/Users/CK
+/AppData/Local/Programs/MiKTeX/fonts/type1/public/libertine/LinLibertineTI.pfb>
+<C:/Users/CK/AppData/Local/Programs/MiKTeX/fonts/type1/public/newtx/txmiaX.pfb>
+<C:/Users/CK/AppData/Local/Programs/MiKTeX/fonts/type1/public/newtx/txsys.pfb>
+Output written on main.pdf (8 pages, 729712 bytes).
+Transcript written on main.log.
+Latexmk: Getting log file 'main.log'
+Latexmk: Examining 'main.fls'
+Latexmk: Examining 'main.log'
+Latexmk: Found input bbl file 'main.bbl'
+Latexmk: Found input bbl file 'main.bbl'
+Latexmk: Log file says output to 'main.pdf'
+Latexmk: Using bibtex to make bibliography file(s).
+  ===Source file 'main.bbl' for 'pdflatex'
+Latexmk: Found bibliography file(s):
+  ./references.bib
+Latexmk: All targets (main.pdf) are up-to-date
+

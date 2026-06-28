@@ -1,0 +1,81 @@
+% Budget/contract: 0.7 page. Tier-G wording only. Use Stage 05 local-derived
+% paper-facing evidence first: 05_thesis_synthesis_report, 05_validation_budget_ledger,
+% 05_estimand_contrast, 05_multiplicity_discount, and 05_row_pooled_* addenda.
+% Upstream raw v2_1_decision_record.json remains Drive-only provenance. Must state
+% guarded (non-independent); not a clean test; no final model selected;
+% threshold bar = >=2/7 positive periods plus positive pooled delta; 5/7 is descriptive.
+\section{Guarded Walk-Forward Readout}\label{sec:guarded}
+
+\paragraph{What the guarded readout is.}
+To show what the procedure reports past the validation boundary, we run a
+guarded walk-forward readout over seven consecutive
+12-month periods on the post-2017 segment. Per the seal of
+Section~\ref{sec:protocol}, that segment saw no validation-phase contact.
+Because the readout confirms the already-frozen primary over expanding-window
+periods that share rows and a fixed survivor universe, it is a guarded,
+non-independent confirmation, not a future-blind test, and makes no clean-test,
+out-of-sample-proof, or final-model claim. The other roster rows are comparison
+evidence, never ranked or selected.
+
+\paragraph{The bar is a weak floor, not the observed count.}
+The predeclared TCN primary met the predeclared guarded stability criteria.
+The criteria are an intentionally weak floor: at least two of seven periods
+positive in \macrofone{} over the same-row stratified dummy, and a positive
+pooled delta. Under an independent fair-coin null, the two-of-seven clause alone
+passes about 94\% of the time, so the bar only prevents post hoc relaxation.
+The observed five-of-seven positive periods
+(Figure~\ref{fig:validation_deltas}, Panel B) are descriptive context, not
+certification and not the bar. Because the edge is near-null, we read the guarded
+readout as one worked instance of the procedure, not evidence of a durable edge.
+The procedure still reports what a headline-only readout would omit: a weak
+floor, a near-even multiplicity-discount readout, and a conditional sign.
+
+Behind that pass, the period-level deltas are uneven. The readout comprises 56
+guarded scoring events (seven periods, four roster rows, \numseeds{} seeds); the
+decision is judged on the primary's rows alone. The predeclared primary's
+2020--21 and 2022--23 period means fall in the COVID and bear-market windows, and
+both are negative. The 2022--23 period also reverses sign across the two seeds, a
+dispersion \numseeds{} seeds are too few to quantify. The per-period readout is
+therefore not even seed-stable there. The addenda only re-aggregate frozen per-period
+prediction dumps; the fits are the predeclared V2.1 walk-forward refits that
+produced those dumps.
+
+\paragraph{The headline delta is estimand-sensitive.}
+The headline delta moves with the aggregation choice, so we report both units.
+The binding quantity is the row-pooled delta over the protocol row-union,
+\(+0.636\pp\) in \macrofone{} over the stratified dummy; the
+equal-weight-per-period companion is \(+0.550\pp\). Because the bar tests only the
+sign of a positive pooled delta, it is insensitive to this aggregation choice,
+and the headline magnitude is small under either unit.
+
+Repeated comparison across the roster could also inflate this small edge, so we
+add a multiplicity discount. On the binding row-pooled estimand, we apply an
+odd-block CSCV/PBO adaptation (\(n_{\text{trials}}{=}4\),
+\(n_{\text{blocks}}{=}7\)), not the canonical symmetric form. It yields a
+descriptive PBO readout of \(0.514\). That value is near a coin flip, too coarse to
+rule overfitting in or out \cite{bailey2014pseudo,bailey2016probability}. Only the
+predeclared TCN-primary period-LCB is above zero, at \(+0.047\pp\); the
+worst-family LCB (Std-DLinear) sits at \(-0.464\pp\) \cite{harvey2016cross}. These are
+descriptive discounts, not significance tests. On the row-pooled mean the primary
+(\(+0.636\pp\)) is third of four: LightGBM is largest (\(+0.726\pp\)), the hybrid
+MS-DLinear+TCN second (\(+0.672\pp\), with the most positive periods at \(6/7\)),
+and Std-DLinear fourth (\(+0.513\pp\), \(4/7\)). Yet all three non-primary families
+keep a period-LCB below zero. The three non-primary rows are post-hoc within-family
+profile maxima while the primary is the pre-committed frozen profile. Neither the
+mean ranking nor the period-LCB ranking is therefore a like-for-like family comparison.
+The primary's lone positive LCB is consistent with its single pre-committed profile, not
+a strongest-family claim, and no final model is selected.
+
+Expanding-window training shares rows across periods, and the universe is a fixed
+five-ticker survivor set. The leave-one-out check is therefore largely mechanical
+here. We report it only as a descriptive sensitivity, not an independence or
+significance claim: the row-pooled delta falls no lower than \(+0.538\pp\) by
+period and \(+0.514\pp\) by ticker. The validation-budget ledger keeps the contact asymmetry
+explicit, at \numseeds{} official-validation scoring events against 56 guarded
+events, all with \texttt{for\_selection=false}. The predeclared primary thus
+keeps the sign of its pooled edge under these drop-one perturbations, but only
+inside a guarded readout. The diagnostics section then
+treats the activity-tercile pattern as a diagnostic boundary. The same-row
+edge is largest in the calmest bars and drops below the balanced random prior in
+the most active ones. An open microstructure confound, however, prevents attributing
+that pattern to the model.

@@ -1,0 +1,52 @@
+% Budget/contract: 0.35 page. Six threads: financial prediction baselines;
+% leakage and chronological validation; model-family positioning; selective
+% classification and calibration; multiplicity/backtest overfitting; microstructure
+% caveats. Keep leakage, backtest-overfitting, and microstructure threads.
+\section{Related Work}
+
+Asset-pricing and equity-prediction studies apply machine-learning models to
+financial panels \cite{gu2020empirical,fischer2018deep}. Intraday
+limit-order-book work applies related classifiers to high-frequency streams
+\cite{zhang2019deeplob}. We reuse this work for a narrower estimand:
+drop-neutral, 5-minute direction classification with a same-row stratified dummy
+floor. A \macrofone{} margin here is classification evidence, not investment
+performance.
+
+A primary methodological risk is validation contact. Leakage in
+machine-learning studies and decision-time backtest leakage show that adaptive
+validation can inflate apparent performance
+\cite{kapoor2023leakage,zhang2026whenalpha}; reusable-holdout and
+preregistration work supplies validity-preserving guards
+\cite{dwork2015reusable,hofman2023preregistration}. Chronological evaluation is
+the temporal guard \cite{hyndman2021forecasting}. Finance addresses
+data-snooping with backtest-overfitting probability, reality-check tests, and
+multiple-testing corrections
+\cite{lopezdeprado2018advances,bailey2014pseudo,bailey2016probability,harvey2016cross,white2000reality,sullivan1999datasnooping}.
+We combine these standard guards for this return-free \macrofone{} estimand:
+fixed label and band, chronological day blocks with day-local windows, a
+same-row stratified dummy, and a validation-budget ledger. We exercise it on a
+single near-null case, not a known-signal control. Return-based benchmarks and
+investing-strategy studies score later economic stages
+\cite{zhang2026whenalpha,li2026finsaber}; our readout audits the upstream
+classification gate.
+
+The model families are intentionally ordinary. TCNs, decomposition linear models,
+and gradient-boosted trees are established sequence or tabular baselines
+\cite{bai2018empirical,zeng2023dlinear,ke2017lightgbm,grinsztajn2022tree}. We use
+them to exercise the protocol; we make no architecture claim and no
+final-model selection.
+
+Selective classification and calibration enter here only as an adverse diagnostic
+on whether confidence scores rank cases usefully
+\cite{geifman2017selective,guo2017calibration,traub2024overcoming,chalkidis2021trading}.
+Brier-score decomposition separates calibration error from resolution
+\cite{brier1950verification,murphy1973vector}. A second boundary is
+microstructural. Prior intraday-return studies document cross-sectional
+periodicity, time-varying short-horizon predictability, and seasonality
+\cite{heston2010intraday,henkel2011timevarying,bogousslavsky2016infrequent}.
+That literature is a foil for our condition map: its predictability is tied to
+timing, higher-activity states, or seasonal rebalancing, not the calm slice where
+our edge concentrates. Bid-ask bounce can create row-level structure preserved by
+within-day permutation
+\cite{roll1984simple,lo1990nonsynchronous}. Our controls cannot yet rule it out,
+so we frame the activity-tercile result as a conditional limitation.

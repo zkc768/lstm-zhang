@@ -1,0 +1,562 @@
+%%% -*-BibTeX-*-
+%%% Do NOT edit. File created by BibTeX with style
+%%% ACM-Reference-Format-Journals [18-Jan-2012].
+
+\begin{thebibliography}{40}
+
+%%% ====================================================================
+%%% NOTE TO THE USER: you can override these defaults by providing
+%%% customized versions of any of these macros before the \bibliography
+%%% command.  Each of them MUST provide its own final punctuation,
+%%% except for \shownote{} and \showURL{}.  The latter two
+%%% do not use final punctuation, in order to avoid confusing it with
+%%% the Web address.
+%%%
+%%% To suppress output of a particular field, define its macro to expand
+%%% to an empty string, or better, \unskip, like this:
+%%%
+%%% \newcommand{\showURL}[1]{\unskip}   % LaTeX syntax
+%%%
+%%% \def \showURL #1{\unskip}           % plain TeX syntax
+%%%
+%%% ====================================================================
+
+\ifx \showCODEN    \undefined \def \showCODEN     #1{\unskip}     \fi
+\ifx \showISBNx    \undefined \def \showISBNx     #1{\unskip}     \fi
+\ifx \showISBNxiii \undefined \def \showISBNxiii  #1{\unskip}     \fi
+\ifx \showISSN     \undefined \def \showISSN      #1{\unskip}     \fi
+\ifx \showLCCN     \undefined \def \showLCCN      #1{\unskip}     \fi
+\ifx \shownote     \undefined \def \shownote      #1{#1}          \fi
+\ifx \showarticletitle \undefined \def \showarticletitle #1{#1}   \fi
+\ifx \showURL      \undefined \def \showURL       {\relax}        \fi
+% The following commands are used for tagged output and should be
+% invisible to TeX
+\providecommand\bibfield[2]{#2}
+\providecommand\bibinfo[2]{#2}
+\providecommand\natexlab[1]{#1}
+\providecommand\showeprint[2][]{arXiv:#2}
+
+\bibitem[Bai et~al\mbox{.}(2018)]%
+        {bai2018empirical}
+\bibfield{author}{\bibinfo{person}{Shaojie Bai}, \bibinfo{person}{J~Zico
+  Kolter}, {and} \bibinfo{person}{Vladlen Koltun}.}
+  \bibinfo{year}{2018}\natexlab{}.
+\newblock \bibinfo{title}{An Empirical Evaluation of Generic Convolutional and
+  Recurrent Networks for Sequence Modeling}.
+\newblock
+\showeprint[arxiv]{1803.01271}
+
+
+\bibitem[Bailey et~al\mbox{.}(2014)]%
+        {bailey2014pseudo}
+\bibfield{author}{\bibinfo{person}{David~H. Bailey},
+  \bibinfo{person}{Jonathan~M. Borwein}, \bibinfo{person}{Marcos L{\'o}pez~de
+  Prado}, {and} \bibinfo{person}{Qiji~Jim Zhu}.}
+  \bibinfo{year}{2014}\natexlab{}.
+\newblock \showarticletitle{Pseudo-Mathematics and Financial Charlatanism: The
+  Effects of Backtest Overfitting on Out-of-Sample Performance}.
+\newblock \bibinfo{journal}{\emph{Notices of the American Mathematical
+  Society}} \bibinfo{volume}{61}, \bibinfo{number}{5} (\bibinfo{year}{2014}),
+  \bibinfo{pages}{458--471}.
+\newblock
+\href{https://doi.org/10.1090/noti1105}{doi:\nolinkurl{10.1090/noti1105}}
+
+
+\bibitem[Bailey et~al\mbox{.}(2016)]%
+        {bailey2016probability}
+\bibfield{author}{\bibinfo{person}{David~H. Bailey},
+  \bibinfo{person}{Jonathan~M. Borwein}, \bibinfo{person}{Marcos L{\'o}pez~de
+  Prado}, {and} \bibinfo{person}{Qiji~Jim Zhu}.}
+  \bibinfo{year}{2016}\natexlab{}.
+\newblock \showarticletitle{The Probability of Backtest Overfitting}.
+\newblock \bibinfo{journal}{\emph{Journal of Computational Finance}}
+  \bibinfo{volume}{20}, \bibinfo{number}{4} (\bibinfo{year}{2016}),
+  \bibinfo{pages}{39--69}.
+\newblock
+\shownote{Issue 20(4) carries a 2017 cover date; article assigned to the 2016
+  volume}.
+\newblock
+\href{https://doi.org/10.21314/JCF.2016.322}{doi:\nolinkurl{10.21314/JCF.2016.322}}
+
+
+\bibitem[Bogousslavsky(2016)]%
+        {bogousslavsky2016infrequent}
+\bibfield{author}{\bibinfo{person}{Vincent Bogousslavsky}.}
+  \bibinfo{year}{2016}\natexlab{}.
+\newblock \showarticletitle{Infrequent Rebalancing, Return Autocorrelation, and
+  Seasonality}.
+\newblock \bibinfo{journal}{\emph{The Journal of Finance}}
+  \bibinfo{volume}{71}, \bibinfo{number}{6} (\bibinfo{year}{2016}),
+  \bibinfo{pages}{2967--3006}.
+\newblock
+\href{https://doi.org/10.1111/jofi.12436}{doi:\nolinkurl{10.1111/jofi.12436}}
+
+
+\bibitem[Bouthillier et~al\mbox{.}(2021)]%
+        {bouthillier2021accounting}
+\bibfield{author}{\bibinfo{person}{Xavier Bouthillier}, \bibinfo{person}{Pierre
+  Delaunay}, \bibinfo{person}{Mirko Bronzi}, \bibinfo{person}{Assya Trofimov},
+  \bibinfo{person}{Brennan Nichyporuk}, \bibinfo{person}{Justin Szeto},
+  \bibinfo{person}{Nazanin Mohammadi~Sepahvand}, \bibinfo{person}{Edward Raff},
+  \bibinfo{person}{Kanika Madan}, \bibinfo{person}{Vikram Voleti},
+  \bibinfo{person}{Samira Ebrahimi~Kahou}, \bibinfo{person}{Vincent Michalski},
+  \bibinfo{person}{Tal Arbel}, \bibinfo{person}{Chris Pal},
+  \bibinfo{person}{Ga{\"e}l Varoquaux}, {and} \bibinfo{person}{Pascal
+  Vincent}.} \bibinfo{year}{2021}\natexlab{}.
+\newblock \showarticletitle{Accounting for Variance in Machine Learning
+  Benchmarks}. In \bibinfo{booktitle}{\emph{Proceedings of Machine Learning and
+  Systems (MLSys)}}, Vol.~\bibinfo{volume}{3}. \bibinfo{pages}{747--769}.
+\newblock
+
+
+\bibitem[Brier(1950)]%
+        {brier1950verification}
+\bibfield{author}{\bibinfo{person}{Glenn~W. Brier}.}
+  \bibinfo{year}{1950}\natexlab{}.
+\newblock \showarticletitle{Verification of Forecasts Expressed in Terms of
+  Probability}.
+\newblock \bibinfo{journal}{\emph{Monthly Weather Review}}
+  \bibinfo{volume}{78}, \bibinfo{number}{1} (\bibinfo{year}{1950}),
+  \bibinfo{pages}{1--3}.
+\newblock
+\href{https://doi.org/10.1175/1520-0493(1950)078<0001:VOFEIT>2.0.CO;2}{doi:\nolinkurl{10.1175/1520-0493(1950)078<0001:VOFEIT>2.0.CO;2}}
+
+
+\bibitem[Chalkidis and Savani(2021)]%
+        {chalkidis2021trading}
+\bibfield{author}{\bibinfo{person}{Nestoras Chalkidis} {and}
+  \bibinfo{person}{Rahul Savani}.} \bibinfo{year}{2021}\natexlab{}.
+\newblock \showarticletitle{Trading via Selective Classification}. In
+  \bibinfo{booktitle}{\emph{Proceedings of the Second ACM International
+  Conference on AI in Finance (ICAIF)}}.
+\newblock
+\href{https://doi.org/10.1145/3490354.3494379}{doi:\nolinkurl{10.1145/3490354.3494379}}
+
+
+\bibitem[Dwork et~al\mbox{.}(2015)]%
+        {dwork2015reusable}
+\bibfield{author}{\bibinfo{person}{Cynthia Dwork}, \bibinfo{person}{Vitaly
+  Feldman}, \bibinfo{person}{Moritz Hardt}, \bibinfo{person}{Toniann Pitassi},
+  \bibinfo{person}{Omer Reingold}, {and} \bibinfo{person}{Aaron Roth}.}
+  \bibinfo{year}{2015}\natexlab{}.
+\newblock \showarticletitle{The Reusable Holdout: Preserving Validity in
+  Adaptive Data Analysis}.
+\newblock \bibinfo{journal}{\emph{Science}} \bibinfo{volume}{349},
+  \bibinfo{number}{6248} (\bibinfo{year}{2015}), \bibinfo{pages}{636--638}.
+\newblock
+\href{https://doi.org/10.1126/science.aaa9375}{doi:\nolinkurl{10.1126/science.aaa9375}}
+
+
+\bibitem[El-Yaniv and Wiener(2010)]%
+        {elyaniv2010foundations}
+\bibfield{author}{\bibinfo{person}{Ran El-Yaniv} {and} \bibinfo{person}{Yair
+  Wiener}.} \bibinfo{year}{2010}\natexlab{}.
+\newblock \showarticletitle{On the Foundations of Noise-free Selective
+  Classification}.
+\newblock \bibinfo{journal}{\emph{Journal of Machine Learning Research}}
+  \bibinfo{volume}{11} (\bibinfo{year}{2010}), \bibinfo{pages}{1605--1641}.
+\newblock
+
+
+\bibitem[Ferrer~Fern{\'a}ndez et~al\mbox{.}(2023)]%
+        {ferrer2023forecast}
+\bibfield{author}{\bibinfo{person}{Mar{\'i}a Ferrer~Fern{\'a}ndez},
+  \bibinfo{person}{{\'O}lan~T. Henry}, \bibinfo{person}{Sam Pybis}, {and}
+  \bibinfo{person}{Michalis~P. Stamatogiannis}.}
+  \bibinfo{year}{2023}\natexlab{}.
+\newblock \showarticletitle{Can We Forecast Better in Periods of Low
+  Uncertainty? {The} Role of Technical Indicators}.
+\newblock \bibinfo{journal}{\emph{Journal of Empirical Finance}}
+  \bibinfo{volume}{71} (\bibinfo{year}{2023}), \bibinfo{pages}{1--12}.
+\newblock
+\shownote{Technical predictors forecast better in low-financial-uncertainty
+  regimes; the regime split is financial uncertainty (monthly S\&P 500 excess
+  returns), not an eligible-row activity proxy. VERIFY: author name forms
+  (compound surname / accents) against publisher page}.
+\newblock
+\href{https://doi.org/10.1016/j.jempfin.2022.12.014}{doi:\nolinkurl{10.1016/j.jempfin.2022.12.014}}
+
+
+\bibitem[Fischer and Krauss(2018)]%
+        {fischer2018deep}
+\bibfield{author}{\bibinfo{person}{Thomas Fischer} {and}
+  \bibinfo{person}{Christopher Krauss}.} \bibinfo{year}{2018}\natexlab{}.
+\newblock \showarticletitle{Deep learning with long short-term memory networks
+  for financial market predictions}.
+\newblock \bibinfo{journal}{\emph{European Journal of Operational Research}}
+  \bibinfo{volume}{270}, \bibinfo{number}{2} (\bibinfo{year}{2018}),
+  \bibinfo{pages}{654--669}.
+\newblock
+
+
+\bibitem[Geifman and El-Yaniv(2017)]%
+        {geifman2017selective}
+\bibfield{author}{\bibinfo{person}{Yonatan Geifman} {and} \bibinfo{person}{Ran
+  El-Yaniv}.} \bibinfo{year}{2017}\natexlab{}.
+\newblock \showarticletitle{Selective Classification for Deep Neural Networks}.
+  In \bibinfo{booktitle}{\emph{Advances in Neural Information Processing
+  Systems (NIPS)}}, Vol.~\bibinfo{volume}{30}.
+\newblock
+
+
+\bibitem[Geifman and El-Yaniv(2019)]%
+        {geifman2019selectivenet}
+\bibfield{author}{\bibinfo{person}{Yonatan Geifman} {and} \bibinfo{person}{Ran
+  El-Yaniv}.} \bibinfo{year}{2019}\natexlab{}.
+\newblock \showarticletitle{{SelectiveNet}: A Deep Neural Network with an
+  Integrated Reject Option}. In \bibinfo{booktitle}{\emph{Proceedings of the
+  36th International Conference on Machine Learning (ICML)}},
+  Vol.~\bibinfo{volume}{97}. \bibinfo{pages}{2151--2159}.
+\newblock
+
+
+\bibitem[Grinsztajn et~al\mbox{.}(2022)]%
+        {grinsztajn2022tree}
+\bibfield{author}{\bibinfo{person}{L{\'e}o Grinsztajn},
+  \bibinfo{person}{Edouard Oyallon}, {and} \bibinfo{person}{Ga{\"e}l
+  Varoquaux}.} \bibinfo{year}{2022}\natexlab{}.
+\newblock \showarticletitle{Why Do Tree-Based Models Still Outperform Deep
+  Learning on Typical Tabular Data?}. In \bibinfo{booktitle}{\emph{Advances in
+  Neural Information Processing Systems (NeurIPS) Datasets and Benchmarks
+  Track}}, Vol.~\bibinfo{volume}{35}. \bibinfo{pages}{507--520}.
+\newblock
+
+
+\bibitem[Gu et~al\mbox{.}(2020)]%
+        {gu2020empirical}
+\bibfield{author}{\bibinfo{person}{Shihao Gu}, \bibinfo{person}{Bryan Kelly},
+  {and} \bibinfo{person}{Dacheng Xiu}.} \bibinfo{year}{2020}\natexlab{}.
+\newblock \showarticletitle{Empirical Asset Pricing via Machine Learning}.
+\newblock \bibinfo{journal}{\emph{The Review of Financial Studies}}
+  \bibinfo{volume}{33}, \bibinfo{number}{5} (\bibinfo{year}{2020}),
+  \bibinfo{pages}{2223--2273}.
+\newblock
+\href{https://doi.org/10.1093/rfs/hhaa009}{doi:\nolinkurl{10.1093/rfs/hhaa009}}
+
+
+\bibitem[Guo et~al\mbox{.}(2017)]%
+        {guo2017calibration}
+\bibfield{author}{\bibinfo{person}{Chuan Guo}, \bibinfo{person}{Geoff Pleiss},
+  \bibinfo{person}{Yu Sun}, {and} \bibinfo{person}{Kilian~Q. Weinberger}.}
+  \bibinfo{year}{2017}\natexlab{}.
+\newblock \showarticletitle{On Calibration of Modern Neural Networks}. In
+  \bibinfo{booktitle}{\emph{Proceedings of the 34th International Conference on
+  Machine Learning (ICML)}}, Vol.~\bibinfo{volume}{70}.
+  \bibinfo{pages}{1321--1330}.
+\newblock
+
+
+\bibitem[Harvey et~al\mbox{.}(2016)]%
+        {harvey2016cross}
+\bibfield{author}{\bibinfo{person}{Campbell~R. Harvey}, \bibinfo{person}{Yan
+  Liu}, {and} \bibinfo{person}{Heqing Zhu}.} \bibinfo{year}{2016}\natexlab{}.
+\newblock \showarticletitle{{\ldots} and the Cross-Section of Expected
+  Returns}.
+\newblock \bibinfo{journal}{\emph{The Review of Financial Studies}}
+  \bibinfo{volume}{29}, \bibinfo{number}{1} (\bibinfo{year}{2016}),
+  \bibinfo{pages}{5--68}.
+\newblock
+\href{https://doi.org/10.1093/rfs/hhv059}{doi:\nolinkurl{10.1093/rfs/hhv059}}
+
+
+\bibitem[Henkel et~al\mbox{.}(2011)]%
+        {henkel2011timevarying}
+\bibfield{author}{\bibinfo{person}{Sam~James Henkel},
+  \bibinfo{person}{J.~Spencer Martin}, {and} \bibinfo{person}{Federico
+  Nardari}.} \bibinfo{year}{2011}\natexlab{}.
+\newblock \showarticletitle{Time-Varying Short-Horizon Predictability}.
+\newblock \bibinfo{journal}{\emph{Journal of Financial Economics}}
+  \bibinfo{volume}{99}, \bibinfo{number}{3} (\bibinfo{year}{2011}),
+  \bibinfo{pages}{560--580}.
+\newblock
+\shownote{Short-horizon return predictability is countercyclical (near-zero in
+  expansions)}.
+\newblock
+\href{https://doi.org/10.1016/j.jfineco.2010.09.008}{doi:\nolinkurl{10.1016/j.jfineco.2010.09.008}}
+
+
+\bibitem[Heston et~al\mbox{.}(2010)]%
+        {heston2010intraday}
+\bibfield{author}{\bibinfo{person}{Steven~L. Heston},
+  \bibinfo{person}{Robert~A. Korajczyk}, {and} \bibinfo{person}{Ronnie Sadka}.}
+  \bibinfo{year}{2010}\natexlab{}.
+\newblock \showarticletitle{Intraday Patterns in the Cross-Section of Stock
+  Returns}.
+\newblock \bibinfo{journal}{\emph{The Journal of Finance}}
+  \bibinfo{volume}{65}, \bibinfo{number}{4} (\bibinfo{year}{2010}),
+  \bibinfo{pages}{1369--1407}.
+\newblock
+\href{https://doi.org/10.1111/j.1540-6261.2010.01573.x}{doi:\nolinkurl{10.1111/j.1540-6261.2010.01573.x}}
+
+
+\bibitem[Hofman et~al\mbox{.}(2023)]%
+        {hofman2023preregistration}
+\bibfield{author}{\bibinfo{person}{Jake~M. Hofman}, \bibinfo{person}{Angelos
+  Chatzimparmpas}, \bibinfo{person}{Amit Sharma}, \bibinfo{person}{Duncan~J.
+  Watts}, {and} \bibinfo{person}{Jessica Hullman}.}
+  \bibinfo{year}{2023}\natexlab{}.
+\newblock \bibinfo{title}{Pre-registration for Predictive Modeling}.
+\newblock
+\shownote{VERIFY: peer-reviewed venue --- no published version found, arXiv
+  preprint as of search}.
+\newblock
+\showeprint[arxiv]{2311.18807}~[cs.LG]
+
+
+\bibitem[Hyndman and Athanasopoulos(2021)]%
+        {hyndman2021forecasting}
+\bibfield{author}{\bibinfo{person}{Rob~J. Hyndman} {and}
+  \bibinfo{person}{George Athanasopoulos}.} \bibinfo{year}{2021}\natexlab{}.
+\newblock \bibinfo{booktitle}{\emph{Forecasting: Principles and Practice}
+  (\bibinfo{edition}{3rd} ed.)}.
+\newblock \bibinfo{publisher}{OTexts}, \bibinfo{address}{Melbourne, Australia}.
+\newblock
+\shownote{Time-series cross-validation chapter:
+  https://otexts.com/fpp3/tscv.html}.
+\newblock
+\urldef\tempurl%
+\url{https://otexts.com/fpp3/}
+\showURL{%
+\tempurl}
+
+
+\bibitem[Kapoor and Narayanan(2023)]%
+        {kapoor2023leakage}
+\bibfield{author}{\bibinfo{person}{Sayash Kapoor} {and} \bibinfo{person}{Arvind
+  Narayanan}.} \bibinfo{year}{2023}\natexlab{}.
+\newblock \showarticletitle{Leakage and the Reproducibility Crisis in
+  Machine-Learning-Based Science}.
+\newblock \bibinfo{journal}{\emph{Patterns}} \bibinfo{volume}{4},
+  \bibinfo{number}{9} (\bibinfo{year}{2023}), \bibinfo{pages}{100804}.
+\newblock
+\href{https://doi.org/10.1016/j.patter.2023.100804}{doi:\nolinkurl{10.1016/j.patter.2023.100804}}
+
+
+\bibitem[Ke et~al\mbox{.}(2017)]%
+        {ke2017lightgbm}
+\bibfield{author}{\bibinfo{person}{Guolin Ke}, \bibinfo{person}{Qi Meng},
+  \bibinfo{person}{Thomas Finley}, \bibinfo{person}{Taifeng Wang},
+  \bibinfo{person}{Wei Chen}, \bibinfo{person}{Weidong Ma},
+  \bibinfo{person}{Qiwei Ye}, {and} \bibinfo{person}{Tie-Yan Liu}.}
+  \bibinfo{year}{2017}\natexlab{}.
+\newblock \showarticletitle{{LightGBM}: A Highly Efficient Gradient Boosting
+  Decision Tree}. In \bibinfo{booktitle}{\emph{Advances in Neural Information
+  Processing Systems 30 (NeurIPS)}}. \bibinfo{pages}{3146--3154}.
+\newblock
+
+
+\bibitem[Li et~al\mbox{.}(2026)]%
+        {li2026finsaber}
+\bibfield{author}{\bibinfo{person}{Weixian~Waylon Li},
+  \bibinfo{person}{Hyeonjun Kim}, \bibinfo{person}{Mihai Cucuringu}, {and}
+  \bibinfo{person}{Tiejun Ma}.} \bibinfo{year}{2026}\natexlab{}.
+\newblock \bibinfo{title}{Can {LLM}-based Financial Investing Strategies
+  Outperform the Market in Long Run?}
+\newblock
+\shownote{FINSABER; submitted 2025-05-11; arXiv v5 revised 2026-02-12; KDD 2026
+  Datasets and Benchmarks Track; VERIFY final KDD/ACM proceedings metadata
+  before submission}.
+\newblock
+\showeprint[arxiv]{2505.07078}~[q-fin.TR]
+\href{https://doi.org/10.48550/arXiv.2505.07078}{doi:\nolinkurl{10.48550/arXiv.2505.07078}}
+
+
+\bibitem[Lo and MacKinlay(1990)]%
+        {lo1990nonsynchronous}
+\bibfield{author}{\bibinfo{person}{Andrew~W. Lo} {and}
+  \bibinfo{person}{A.~Craig MacKinlay}.} \bibinfo{year}{1990}\natexlab{}.
+\newblock \showarticletitle{An Econometric Analysis of Nonsynchronous Trading}.
+\newblock \bibinfo{journal}{\emph{Journal of Econometrics}}
+  \bibinfo{volume}{45}, \bibinfo{number}{1-2} (\bibinfo{year}{1990}),
+  \bibinfo{pages}{181--211}.
+\newblock
+\shownote{Nonsynchronous trading mechanically induces serial correlation;
+  generally not tradable}.
+\newblock
+\href{https://doi.org/10.1016/0304-4076(90)90098-E}{doi:\nolinkurl{10.1016/0304-4076(90)90098-E}}
+
+
+\bibitem[L{\'o}pez~de Prado(2018)]%
+        {lopezdeprado2018advances}
+\bibfield{author}{\bibinfo{person}{Marcos L{\'o}pez~de Prado}.}
+  \bibinfo{year}{2018}\natexlab{}.
+\newblock \bibinfo{booktitle}{\emph{Advances in Financial Machine Learning}}.
+\newblock \bibinfo{publisher}{John Wiley \& Sons}, \bibinfo{address}{Hoboken,
+  NJ}.
+\newblock
+\showISBNx{978-1-119-48208-6}
+
+
+\bibitem[Murphy(1973)]%
+        {murphy1973vector}
+\bibfield{author}{\bibinfo{person}{Allan~H. Murphy}.}
+  \bibinfo{year}{1973}\natexlab{}.
+\newblock \showarticletitle{A New Vector Partition of the Probability Score}.
+\newblock \bibinfo{journal}{\emph{Journal of Applied Meteorology}}
+  \bibinfo{volume}{12}, \bibinfo{number}{4} (\bibinfo{year}{1973}),
+  \bibinfo{pages}{595--600}.
+\newblock
+\href{https://doi.org/10.1175/1520-0450(1973)012<0595:ANVPOT>2.0.CO;2}{doi:\nolinkurl{10.1175/1520-0450(1973)012<0595:ANVPOT>2.0.CO;2}}
+
+
+\bibitem[Picard(2021)]%
+        {picard2021torch}
+\bibfield{author}{\bibinfo{person}{David Picard}.}
+  \bibinfo{year}{2021}\natexlab{}.
+\newblock \bibinfo{title}{Torch.manual\_seed(3407) Is All You Need: On the
+  Influence of Random Seeds in Deep Learning Architectures for Computer
+  Vision}.
+\newblock
+\showeprint[arxiv]{2109.08203}~[cs.CV]
+
+
+\bibitem[Roll(1984)]%
+        {roll1984simple}
+\bibfield{author}{\bibinfo{person}{Richard Roll}.}
+  \bibinfo{year}{1984}\natexlab{}.
+\newblock \showarticletitle{A Simple Implicit Measure of the Effective Bid-Ask
+  Spread in an Efficient Market}.
+\newblock \bibinfo{journal}{\emph{The Journal of Finance}}
+  \bibinfo{volume}{39}, \bibinfo{number}{4} (\bibinfo{year}{1984}),
+  \bibinfo{pages}{1127--1139}.
+\newblock
+\shownote{Bid-ask bounce induces spurious negative serial covariance; larger
+  for thinly traded stocks}.
+\newblock
+\href{https://doi.org/10.1111/j.1540-6261.1984.tb03897.x}{doi:\nolinkurl{10.1111/j.1540-6261.1984.tb03897.x}}
+
+
+\bibitem[Sullivan et~al\mbox{.}(1999)]%
+        {sullivan1999datasnooping}
+\bibfield{author}{\bibinfo{person}{Ryan Sullivan}, \bibinfo{person}{Allan
+  Timmermann}, {and} \bibinfo{person}{Halbert White}.}
+  \bibinfo{year}{1999}\natexlab{}.
+\newblock \showarticletitle{Data-Snooping, Technical Trading Rule Performance,
+  and the Bootstrap}.
+\newblock \bibinfo{journal}{\emph{The Journal of Finance}}
+  \bibinfo{volume}{54}, \bibinfo{number}{5} (\bibinfo{year}{1999}),
+  \bibinfo{pages}{1647--1691}.
+\newblock
+\href{https://doi.org/10.1111/0022-1082.00163}{doi:\nolinkurl{10.1111/0022-1082.00163}}
+
+
+\bibitem[Sun et~al\mbox{.}(2017)]%
+        {sun2017predicting}
+\bibfield{author}{\bibinfo{person}{Tong Sun}, \bibinfo{person}{Jia Wang},
+  \bibinfo{person}{Pengzhu Zhang}, \bibinfo{person}{Yu Cao},
+  \bibinfo{person}{Benyuan Liu}, {and} \bibinfo{person}{Degang Wang}.}
+  \bibinfo{year}{2017}\natexlab{}.
+\newblock \showarticletitle{Predicting Stock Price Returns Using Microblog
+  Sentiment for Chinese Stock Market}. In \bibinfo{booktitle}{\emph{IEEE
+  ICCSE}}.
+\newblock
+
+
+\bibitem[Traub et~al\mbox{.}(2024)]%
+        {traub2024overcoming}
+\bibfield{author}{\bibinfo{person}{Jeremias Traub}, \bibinfo{person}{Till~J.
+  Bungert}, \bibinfo{person}{Carsten~T. L{\"u}th}, \bibinfo{person}{Michael
+  Baumgartner}, \bibinfo{person}{Klaus~H. Maier-Hein}, \bibinfo{person}{Lena
+  Maier-Hein}, {and} \bibinfo{person}{Paul~F. J{\"a}ger}.}
+  \bibinfo{year}{2024}\natexlab{}.
+\newblock \showarticletitle{Overcoming Common Flaws in the Evaluation of
+  Selective Classification Systems}. In \bibinfo{booktitle}{\emph{Advances in
+  Neural Information Processing Systems (NeurIPS)}}, Vol.~\bibinfo{volume}{37}.
+\newblock
+
+
+\bibitem[White(2000)]%
+        {white2000reality}
+\bibfield{author}{\bibinfo{person}{Halbert White}.}
+  \bibinfo{year}{2000}\natexlab{}.
+\newblock \showarticletitle{A Reality Check for Data Snooping}.
+\newblock \bibinfo{journal}{\emph{Econometrica}} \bibinfo{volume}{68},
+  \bibinfo{number}{5} (\bibinfo{year}{2000}), \bibinfo{pages}{1097--1126}.
+\newblock
+\href{https://doi.org/10.1111/1468-0262.00152}{doi:\nolinkurl{10.1111/1468-0262.00152}}
+
+
+\bibitem[Wu et~al\mbox{.}(2021)]%
+        {wu2021autoformer}
+\bibfield{author}{\bibinfo{person}{Haixu Wu}, \bibinfo{person}{Jiehui Xu},
+  \bibinfo{person}{Jianmin Wang}, {and} \bibinfo{person}{Mingsheng Long}.}
+  \bibinfo{year}{2021}\natexlab{}.
+\newblock \showarticletitle{Autoformer: Decomposition Transformers with
+  Auto-Correlation for Long-Term Series Forecasting}. In
+  \bibinfo{booktitle}{\emph{NeurIPS}}.
+\newblock
+
+
+\bibitem[Xu and Cohen(2018)]%
+        {xu2018stock}
+\bibfield{author}{\bibinfo{person}{Yumo Xu} {and} \bibinfo{person}{Shay~B
+  Cohen}.} \bibinfo{year}{2018}\natexlab{}.
+\newblock \showarticletitle{Stock Movement Prediction from Tweets and
+  Historical Prices}. In \bibinfo{booktitle}{\emph{ACL}}.
+\newblock
+\shownote{-0.5\%/+0.55\% thresholds, delete neutral samples}.
+\newblock
+
+
+\bibitem[Zadrozny(2004)]%
+        {zadrozny2004learning}
+\bibfield{author}{\bibinfo{person}{Bianca Zadrozny}.}
+  \bibinfo{year}{2004}\natexlab{}.
+\newblock \showarticletitle{Learning and Evaluating Classifiers under Sample
+  Selection Bias}. In \bibinfo{booktitle}{\emph{Proceedings of the 21st
+  International Conference on Machine Learning (ICML)}}.
+  \bibinfo{publisher}{ACM}, \bibinfo{pages}{114--121}.
+\newblock
+
+
+\bibitem[Zeng et~al\mbox{.}(2023)]%
+        {zeng2023dlinear}
+\bibfield{author}{\bibinfo{person}{Ailing Zeng}, \bibinfo{person}{Muxi Chen},
+  \bibinfo{person}{Lei Zhang}, {and} \bibinfo{person}{Qiang Xu}.}
+  \bibinfo{year}{2023}\natexlab{}.
+\newblock \showarticletitle{Are Transformers Effective for Time Series
+  Forecasting?}. In \bibinfo{booktitle}{\emph{AAAI}}.
+\newblock
+
+
+\bibitem[Zhang et~al\mbox{.}(2026)]%
+        {zhang2026whenalpha}
+\bibfield{author}{\bibinfo{person}{Fan Zhang}, \bibinfo{person}{Zhen Li},
+  \bibinfo{person}{Sijia Peng}, {and} \bibinfo{person}{Yu Chen}.}
+  \bibinfo{year}{2026}\natexlab{}.
+\newblock \bibinfo{title}{When Alpha Disappears: A One-Switch Benchmark for
+  Decision-Time Leakage in Financial Backtests}.
+\newblock
+\shownote{Submitted 2026-05-12; diagnostic benchmark, not a tradable-alpha
+  claim; VERIFY arXiv-issued DOI registration before submission}.
+\newblock
+\showeprint[arxiv]{2605.23959}~[q-fin.RM]
+\href{https://doi.org/10.48550/arXiv.2605.23959}{doi:\nolinkurl{10.48550/arXiv.2605.23959}}
+
+
+\bibitem[Zhang et~al\mbox{.}(2019)]%
+        {zhang2019deeplob}
+\bibfield{author}{\bibinfo{person}{Zihao Zhang}, \bibinfo{person}{Stefan
+  Zohren}, {and} \bibinfo{person}{Stephen Roberts}.}
+  \bibinfo{year}{2019}\natexlab{}.
+\newblock \showarticletitle{{DeepLOB}: Deep Convolutional Neural Networks for
+  Limit Order Books}.
+\newblock \bibinfo{journal}{\emph{IEEE Transactions on Signal Processing}}
+  \bibinfo{volume}{67}, \bibinfo{number}{11} (\bibinfo{year}{2019}),
+  \bibinfo{pages}{3001--3012}.
+\newblock
+
+
+\bibitem[Zhou et~al\mbox{.}(2022)]%
+        {zhou2022fedformer}
+\bibfield{author}{\bibinfo{person}{Tian Zhou}, \bibinfo{person}{Ziqing Ma},
+  \bibinfo{person}{Qingsong Wen}, \bibinfo{person}{Xue Wang},
+  \bibinfo{person}{Liang Sun}, {and} \bibinfo{person}{Rong Jin}.}
+  \bibinfo{year}{2022}\natexlab{}.
+\newblock \showarticletitle{FEDformer: Frequency Enhanced Decomposed
+  Transformer for Long-term Series Forecasting}. In
+  \bibinfo{booktitle}{\emph{ICML}}.
+\newblock
+
+
+\end{thebibliography}
