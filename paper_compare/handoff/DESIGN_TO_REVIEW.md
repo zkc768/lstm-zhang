@@ -1,83 +1,89 @@
-# DESIGN_TO_REVIEW — workflow fix for the "over-hedging" problem
+# DESIGN_TO_REVIEW — workflow fix (MVP v2, for Mode A round 2)
 
-**For the Judge (Cowork), Mode A.** This is the Executor's proposed fix for a problem the
-user + a web model diagnosed in the paper. **It has NOT been committed to any governance file.**
-Your job: red-team this design *before* it is implemented. Write findings to `VERDICT.md`.
+**For the Judge (Cowork), Mode A.** This is a revision of the round-1 design after your
+verdict (`VERDICT.md`). Read only this file + `CONSTRAINT_CARD.md` in this folder. Write
+findings to `VERDICT.md` (append a round-2 section).
 
-You may read, in this folder only: this file + `CONSTRAINT_CARD.md`. Do **not** pull in the
-repo's design docs / agent transcripts — fresh eyes are the point.
-
----
-
-## The diagnosis (symptom)
-
-The paper reads defensive: nearly every positive statement is immediately followed by a
-self-negation. It reads like apologizing, not like a paper with a thesis. A multi-step
-revision workflow keeps **re-diluting** any attempt to fix this: step 1 removes a hedge per
-the diagnosis; a later "check logic / match journal style" step adds one back because a
-positive sentence "looks under-qualified." Three steps later the fix is half-gone.
-
-## Root cause (Executor's claim — please challenge it)
-
-The project's governance is **asymmetric — all ceiling, no floor on hedging:**
-
-- 8 grep gates + red lines catch *overclaiming* (`best/outperforms/profitable/...`) → a
-  ceiling that pushes prose **away** from positive.
-- The hedge-floors system (`gate_L2`, `floor = min(min_count, orig_hits)`) **protects**
-  hedges from deletion → a floor that locks hedges **in**.
-- Red lines also mandate "the conditional edge is a limitation, not a selling point."
-
-So **every force pushes toward more hedging; nothing caps it.** The defensive tone is the
-system's stable equilibrium, not an agent accident. Adding a hedge is always the "safe"
-direction, so any reviewer step drifts that way.
-
-## Proposed fix
-
-1. **A Constraint Card** (see `CONSTRAINT_CARD.md`) that adds the *missing* direction: a
-   **ceiling on discretionary hedges** + positional rules (contribution-first, abstract
-   ≤220w, Intro excludes §3 mechanics) + a **record-don't-execute** rule. It is injected
-   into **every** agent prompt (rides the existing precedence-stack injection), so it cannot
-   be diluted by a later step.
-2. **The classification is mechanizable, not subjective:** a hedge is *data-required* iff it
-   matches a **floored D-lock variant** in that scope (per the existing
-   `protection_manifest.json`); everything else is *discretionary*. So the card targets only
-   non-floored hedges — it can never (by construction) strip a caveat the manifest requires.
-3. **Optionally mechanize it** as a Pass-C "discretionary-hedge ceiling" warn in
-   `check_integrity.py` (same machinery as `gate_L2`), so the constraint is enforced by a
-   script, not by memory — the proven way to stop dilution.
-4. **Safety net (why this is not a claim-upgrade):** the ceiling only removes/repositions
-   non-floored hedges; the existing `gate_L2` floors + **L5 monotonicity** (a survivor
-   reworded conditional→assertive = ≥MAJOR) + Codex review guarantee no data-required caveat
-   is lost and no survivor is strengthened. Ceiling and floor are orthogonal and compose.
-
-## Architecture (two roles, one thin interface)
-
-- **Executor = Claude Code** (local toolchain: gates, compile, git, `codex exec`, subagents).
-- **Judge = Cowork** (you): fresh-eyes design review now (Mode A), acceptance review later
-  (Mode B). Reads only `handoff/`. The Constraint Card is the shared contract.
+**This file is Mode-A-only.** It is removed from `handoff/` before any Mode B run, so the
+Mode-B rubric is the card alone, not this rationale.
 
 ---
 
-## Red-team questions (please answer each in VERDICT.md)
+## Problem (stated factually)
 
-1. **Classification soundness.** Is "floored D-lock variant = data-required, else
-   discretionary" actually watertight? Find a hedge that is *genuinely required for honesty*
-   but is **not** a floored D-lock variant — i.e. a caveat the card would wrongly treat as
-   discretionary and let an agent strip. If such cases exist, the card needs a fallback.
-2. **Claim-upgrade leak.** Construct a failure path where applying the ceiling makes the
-   residual sentence read *more assertive than the ledger permits*, yet slips past L5 +
-   Codex. Does the safety net actually hold?
-3. **Independence leak.** Does the Constraint Card itself (a shared artifact written by the
-   Executor) smuggle Executor framing into your judgment — eroding the independence the
-   two-role split is meant to give? If so, what should be removed from the card?
-4. **Red-line / spine collision.** Do the positional rules (contribution-first; hedge zones)
-   collide anywhere with the red lines or the Option-2 honest-numbers spine — e.g. could
-   "contribution leads" pressure the abstract toward an implicit overclaim?
-5. **Over-engineering.** Is there a simpler fix that gets ~80% of the benefit without a new
-   card + a new gate? (e.g. a single positional rule + reusing an existing gate.)
-6. **Anything the Executor missed** that a cold reader of the paper would flag.
+In the current paper, many positive statements are immediately followed by a self-negation
+clause. A multi-step revision loop tends to re-introduce such clauses: one step removes one;
+a later logic/style step judges a positive sentence under-qualified and adds one back. The net
+effect over several steps is that a deliberate reduction is partly reversed. The target is to
+stop that reversal without weakening any caveat the evidence requires.
 
-## Out of scope (do not propose changing these)
+## What changed from round 1 (your findings accepted in full)
 
+Round 1 found the design's removal mandate unsound. All five required changes are adopted; the
+design is narrowed so the unsound part is no longer in scope:
+
+- **Dropped the classification-and-remove mandate.** The card no longer licenses removing or
+  repositioning existing hedges (Q1: `¬floored ⇒ strippable` is invalid; Q2: deleting a
+  bounding neighbor upgrades a token-identical positive past L5 + lexical gates). Removal is
+  out of scope this round.
+- **Kept only the anti-addition half** (`record-don't-execute`, R1), which deletes nothing and
+  so does not carry the Q1/Q2 failure modes. This is the lever that targets the actual
+  mechanism (a later step re-adding a hedge).
+- **(a)** `¬floored ⇒ default-keep` (R3), never strip. **(b)** deletion adjacent to a
+  ledger-bound positive is a justification event even with no survivor rewording; one floored
+  caveat does not license removing an orthogonal bound (R4). Both are dormant until/unless
+  removal is ever enabled.
+- **(c)** the inject block now carries the per-scope floored set + the bound-co-location
+  carve-out, and is shorter (fewer competing "highest-priority" lines).
+- **(d)** the card is now operative-rules-only and neutral; all rationale (including this
+  section) sits in this Mode-A-only file, out of the Mode-B channel.
+- **(e)** this is the MVP you recommended: R1 + a diagnostic count on the existing `gate_L2`
+  report + one positional rule. The heavier card/gate machinery is deferred until the metric
+  shows it is needed.
+
+## The MVP (mirrors the card; rationale here)
+
+1. **R1 anti-addition** — the main lever. Stops the re-dilution loop at its mechanism without
+   removing anything. Suppressed items are logged, batch-reviewed against the ledger by the
+   Executor, and surfaced as a count/summary into `WHAT_CHANGED.md` (closing the round-1 Q6
+   blind spot where suppressed caveats were invisible to the Judge).
+2. **R2 positional** — one structural rule, with the round-1 Q4 carve-out (bound co-located,
+   margin not the opening clause) folded into the inject block agents actually see.
+3. **R5 diagnostic** — a before/after count (floored caveats per scope; total hedges; delta;
+   suppressed-count) so "fixed" is distinguishable from "overshot." Diagnostic, not a gate.
+
+The existing one-time edits (warmer abstract / contribution-first / conclusion reorder) already
+reduced the standing excess; the MVP's role is to keep that from regressing, and to measure
+whether any genuine excess remains. If R5 shows it does, removal is escalated — then, and only
+then, under R3/R4.
+
+## Stated assumptions / residual risks (please pressure-test)
+
+- **Manifest is an allowlist, not a completeness oracle.** R3's default-keep is what
+  compensates; if default-keep is itself unsafe somewhere, flag it.
+- **R1 has a dual failure mode** (the honest mirror of round-1 Q1): if this round legitimately
+  introduces a *new* claim that genuinely needs a *new* bound outside the two zones, R1 would
+  suppress that bound. The intended safeguard: R1 **logs** (never silently drops), the count is
+  surfaced to you, and the Executor adds any genuinely-required bound deliberately (with ledger
+  context) rather than letting a generic agent add it mid-pass. **Is log-plus-batch-review a
+  sufficient safeguard, or does a new-claim-needs-new-bound case need an explicit allowed path?**
+
+## Red-team questions for round 2 (answer each in VERDICT.md)
+
+1. **Does the MVP still solve the stated problem?** With removal out of scope, is preventing
+   re-addition + the one-time positional pass enough, or is there a realistic case where
+   standing excess remains that the MVP cannot touch?
+2. **R1 dual failure mode** (above): is log + surfaced-count + Executor batch-review a
+   sufficient safeguard against suppressing a legitimately-needed new bound?
+3. **Signal sufficiency:** does surfacing a *count/summary* of suppressed items give you enough
+   to verify none was load-bearing, or do you need the full suppressed text in `handoff/`?
+4. **Abstract carve-out:** does "bound co-located + margin not the opening clause" actually
+   prevent the round-1 Q4 center-of-gravity shift, or can impression still strengthen within
+   200–220 words?
+5. **Dormant guards:** is stating R3/R4 now (dormant) clearer, or does carrying dormant rules
+   add confusion that argues for removing them until removal is actually enabled?
+6. **Anything a cold reader of the paper would still flag** under this MVP.
+
+## Out of scope
 No new experiments / numbers / model selection. No softening of n=2 / scope / no-clean-test /
-domain-separation caveats. The fix is presentation-only.
+domain-separation caveats. Presentation only.

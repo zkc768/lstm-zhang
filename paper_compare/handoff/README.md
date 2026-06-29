@@ -21,14 +21,21 @@ prevents conflict (the two roles never write the same file).
 
 | 文件 | 写 | 读 | 作用 |
 |---|---|---|---|
-| `CONSTRAINT_CARD.md` | Executor | Judge | 合同：每一步都不可逾越的 presentation 边界 |
-| `DESIGN_TO_REVIEW.md` | Executor | Judge | 待审的 workflow-fix 设计（**Mode A 用**） |
+| `CONSTRAINT_CARD.md` | Executor | Judge | 合同（**只留可执行规则、中立措辞**）：每一步不可逾越的 presentation 边界 |
+| `DESIGN_TO_REVIEW.md` | Executor | Judge | 待审的 workflow-fix 设计 + 论证（**仅 Mode A**；进 Mode B 前从本文件夹移走，避免污染 rubric） |
 | `REVIEW_THIS.pdf` | Executor | Judge | 编译好的论文成品（**Mode B 用**，每轮 pass 后放入） |
-| `WHAT_CHANGED.md` | Executor | Judge | 这一轮改了啥 + diff 摘要（**Mode B 用**） |
+| `WHAT_CHANGED.md` | Executor | Judge | 这一轮改了啥 + diff 摘要 + **被压下未加的 caveat 计数/摘要**（**Mode B 用**） |
 | `VERDICT.md` | Judge | Executor | 审查结论：pass / 哪几处在 file:line 偏离 |
 
 > `REVIEW_THIS.pdf` 和 `WHAT_CHANGED.md` 现在还没有——它们在第一轮 acceptance pass
 > 之后才由 Executor 放进来。现在文件夹里只有 CARD + DESIGN（Mode A）。
+>
+> **合同与论证分家（Mode A round-1 裁决 (d)）**：`CONSTRAINT_CARD.md` 只留可执行规则、
+> 措辞中立；所有论证 / 诊断 / 历史都在 `DESIGN_TO_REVIEW.md`，且**进 Mode B 之前会把
+> `DESIGN_TO_REVIEW.md` 从本文件夹移走**——Mode B 的 rubric 只有卡片，不带立场。
+>
+> **当前状态**：设计已收敛为 MVP v2（防新增 + 诊断计数 + 一条定位规则；激进删除本轮不做）。
+> Mode A round 1 = 有条件通过，required changes 已全部应用；待 Mode A round 2 复核。
 
 ## 两种模式 (Judge 干两件不同的事)
 

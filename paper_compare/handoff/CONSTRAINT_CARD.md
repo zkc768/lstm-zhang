@@ -1,107 +1,88 @@
-# R2 Constraint Card — DRAFT (pending Cowork Mode-A review)
+# R2 Constraint Card — operative contract (MVP v2)
 
-**目的**：把"论文该有主张、不要过度自我否定"这个判断，从一次性 work item 升级成
-**每一步都携带、不可被后续步骤稀释**的标准约束（网页版说的"外框"）。这张卡解决的是
-**presentation**（hedge 的位置与重复、contribution 的位置），**绝不**碰任何数字或主张强度。
+**This file is rules only.** No rationale, no problem-narrative, no project history — those
+live in `DESIGN_TO_REVIEW.md` (a Mode-A-only file, removed from this folder before any Mode B
+run) so they cannot color the Mode-B rubric. Revised after Mode A round 1 (see VERDICT.md).
 
-> **Status:** DRAFT. NOT yet wired into governance. Reviewed in Mode A first; only after
-> a clean verdict does it get promoted into the precedence stack + (optionally) a Pass-C gate.
+**Precedence:** below red lines, above the 30 generic principles + humanizer. **Never**
+overrides `AGENTS.md` / claims ledger / red lines / hedge floors (`gate_L2`) / L5 monotonicity.
+**Floor wins every conflict** — a floored caveat stays exactly where the manifest pins it.
 
-## Precedence (插在哪一层)
-
-This card sits **just below the red lines, above the 30 generic principles + humanizer**
-(`PAPER_WORKFLOW.md §2`). It therefore **outranks** the generic reviewer principles that
-cause hedge-drift, but **never** overrides:
-
-1. `AGENTS.md` (safety / no fabrication)
-2. claims ledger + red lines + three-evidence-domain separation
-3. **hedge floors (`gate_L2`) + L5 hedge-monotonicity**
-
-> **Conflict rule:** if this card and a hedge floor ever disagree, **the floor wins.** A
-> data-required caveat stays exactly where the manifest pins it. This card can never be a
-> reason to remove, relocate, or soften a floored caveat.
+**Scope this round:** prevent re-dilution + keep the contribution-forward structure standing.
+**Active removal/repositioning of EXISTING hedges is OUT OF SCOPE this round** (it is where the
+round-1 review found the failure modes). It is enabled only if R5's metric shows dilution
+persists after R1+R2, and only under the R3/R4 guards.
 
 ---
 
-## 1. Two kinds of hedge — and the line is already drawn by the manifest
+## R1 — No net-new hedge outside the two zones (the main lever; removes nothing)
 
-The classification is **not a new subjective judgment.** It reuses
-`paper/scripts/...protection_manifest.json`:
+- No step may **add** a hedge / caveat / self-negation **outside** the two designated zones:
+  the **abstract closing block** and **§9 (limitations)**.
+- A step that judges one is "needed" elsewhere does **not** add it. It **logs** it
+  (`file:line` + proposed text + reason) and continues. The Executor reviews the log in batch
+  against the ledger; a **count + summary** of logged items is surfaced into `WHAT_CHANGED.md`
+  so the Judge can see what was suppressed.
+- This rule **deletes nothing** — it only blocks net-new additions. (That is why the round-1
+  removal failure modes do not apply to it.)
 
-- **Data-required caveat** = a phrase that matches a **floored D-lock variant** in that
-  scope (e.g. `D18` n=2 → `main.tex/§06/§09`; `D23` macro-F1≠economic-value; `D24`
-  no-positive-control; domain labels; `D6` frozen-band/no-sensitivity).
-  → **Keep. Do not move. Do not drop below its floor.** Protected by `gate_L2` + L5.
-- **Discretionary hedge** = hedge-like phrasing that is **NOT** a floored D-lock variant in
-  that scope. Defensive throat-clearing. Examples: a repeated "though this cannot prove X"
-  *after* the bound is already stated; "it is worth noting that" / "we emphasize that"; a
-  4th/5th self-negation piled into the abstract; restating "makes no architecture claim"
-  more times than the floor requires; generic self-flagellation not tied to a number.
-  → **This is the only thing this card governs.**
+## R2 — Positional (one rule + the abstract carve-out)
 
-> Operational test for any hedge: *"Is it a floored D-lock variant in this scope?"*
-> Yes → data-required, untouchable. No → discretionary, subject to §2–§3 below.
+- Abstract **opens on the protocol / diagnostic contribution**, active voice.
+- The **empirical margin is not the opening clause.** Wherever any conditional / empirical-edge
+  claim appears, its **scope bound is co-located** — same or immediately adjacent sentence
+  (frozen validation split / not out-of-sample / n=2) — **never deferred** to the closing block.
+- Abstract **200–220 words**. Intro names the protocol idea in ~2 sentences; **no §3 mechanics**
+  (validation-budget / PBO / bootstrap) in the Intro or abstract.
 
-## 2. Discretionary-hedge ceiling
+## R3 — Default-keep for unregistered caveats *(guard; dormant until removal is enabled)*
 
-- Discretionary hedges **may** appear, but must **not** be scattered after every positive
-  clause. A positive statement that already carries its floored caveat does **not** get a
-  second discretionary self-negation appended.
-- Concentrate discretionary hedges in the **designated zones**: the **abstract closing
-  block** and **§9 (limitations)**. Each data-required caveat still appears at its floored
-  location regardless of these zones.
-- Net effect target: **same number of data-required caveats; fewer discretionary
-  restatements; reads as "I did this, it has value, here are the bounds" — not "I did this,
-  but it might be nothing."**
+- A hedge that is **not** a floored D-lock variant is **not** therefore removable.
+  `¬floored ⇒ default-KEEP, needs explicit adversarial judgment to touch`. **Never**
+  `¬floored ⇒ strip`. The manifest is an allowlist of known-protected caveats, **not** a
+  completeness guarantee that everything else is discretionary.
 
-## 3. Positional rules
+## R4 — Deletion is a justification event *(guard; dormant until removal is enabled)*
 
-- **Contribution leads.** Abstract opens on the contributions (protocol / sign-consistent
-  TCN margin over same-row dummy on frozen validation / diagnostics) in confident active
-  voice — not on a negation. Intro states the three contributions in the contribution ¶,
-  not buried after pages of caveats. (Already achieved in WI-1/WI-2 — this card makes it
-  **standing**, so the next pass cannot regress it.)
-- **Abstract length:** hold the existing **200–220 word** budget.
-- **Intro excludes §3 mechanics.** Introduction names the protocol's idea (frozen splits,
-  same-row dummy, validation-budget ledger, three separated domains) in ~2 sentences;
-  the *mechanics* live in §3. No validation-budget/PBO/bootstrap detail in the Intro.
+- Deleting or relocating any hedge **adjacent to** (same or neighboring sentence) a
+  ledger-bound positive is a **≥MINOR event requiring written justification, even if no
+  surviving token changes** — this guards against claim-upgrade-by-deletion-of-context, which
+  L5 (per-survivor rewording) does not see.
+- The presence of **one** floored caveat does **not** license removing a **different,
+  orthogonal** bound (n=2 ≠ in-sample-only ≠ macro-F1≠economic-value).
 
-## 4. record-don't-execute (这是防"被稀释"的关键)
+## R5 — Diagnostics (report, do not auto-act)
 
-If, during logic-check / polish / style-conformance / consistency, any step **"wants"** to:
-- add a caveat or self-negation **outside** the designated zones, or
-- add §3 protocol mechanics into the Intro/abstract, or
-- soften a positive framing that is already ledger-bound and red-line-safe,
-
-then **DO NOT do it. Log it** (file:line + what it wanted to add) in the pass notes and move
-on. (Same discipline as ADR 0001 burstiness: *diagnostic, not auto-apply.*) The Executor
-reviews logged items in batch; none are applied silently.
-
-## 5. What this card is NOT (safety)
-
-- **NOT** a claim-upgrade. It changes hedge *position/repetition*, never claim *strength*.
-  No number changes. No `best/outperforms/significant/profitable/well-calibrated/clean-test/
-  final-model`. The Option-2 spine (confident method, honest weak numbers) is unchanged.
-- **NOT** permission to delete or relocate a floored (data-required) caveat. Floor wins.
-- **NOT** "make it positive by weakening the bounds." Every caveat the ledger requires stays.
-- The safety net is the existing stack: `gate_L2` floors keep data-required caveats; **L5
-  monotonicity** flags any surviving hedge reworded conditional→assertive (≥MAJOR); Codex
-  adversarial review checks no overclaim crept in. This card only operates inside that net.
+- Per de-hedge-relevant pass, count and report (piggyback the existing `gate_L2` report):
+  floored caveats per scope; total hedge-like phrases; delta vs the prior pass; count of
+  suppressed-and-logged would-be additions (R1).
+- **Diagnostic only** (ADR 0001 style): it flags "fixed vs pendulum-overshot," it never
+  auto-edits. A document-level honesty read ("did de-hedging move the paper from honestly-weak
+  to misleadingly-confident?") is the Judge's Mode-B job + Codex, not this counter.
 
 ---
 
-### Inject-into-every-agent-prompt block (copy verbatim into each reviewer/polisher prompt)
+## What this card is NOT
+
+Not a claim-strength change. Not a number change. Not permission to drop or relocate a floored
+caveat (floor wins). Not "make it positive by weakening the bounds." Every caveat the ledger
+requires stays.
+
+## Inject block (verbatim into each agent prompt this round)
+
+> Must be injected **together with the per-scope FLOORED SET** — without it an agent cannot
+> apply "floor wins" / R3.
 
 ```
-HIGHEST-PRIORITY PRESENTATION CONSTRAINTS (this round, no step may violate):
-1. Contribution leads (abstract opening + Intro contribution paragraph); never open on a negation.
-2. Discretionary hedges (= hedges NOT pinned by a floored D-lock in this scope) only in the
-   abstract closing block and §9. Never append a 2nd self-negation to a positive clause that
-   already carries its floored caveat.
-3. Abstract ≤220 words. Intro names the protocol idea in ~2 sentences; no §3 mechanics
-   (validation-budget/PBO/bootstrap) in Intro or abstract.
-4. record-don't-execute: if you find a spot that "needs" a caveat/§3-detail outside the
-   allowed zones, DO NOT add it — log file:line + the wanted text, and continue.
-5. NEVER override AGENTS.md / ledger / red lines / hedge floors. A data-required (floored)
-   caveat stays exactly where it is — the floor wins every conflict. No claim-strength change.
+PRESENTATION CONSTRAINTS (this round; subordinate to AGENTS.md / ledger / red lines / floors):
+1. Do NOT add any hedge/caveat/self-negation outside §9 and the abstract closing block. If one
+   seems needed elsewhere, LOG it (file:line + text + why) and continue — do NOT add it.
+2. Abstract opens on the protocol/diagnostic contribution (active voice); the empirical margin
+   is NOT the opening clause. Any conditional/edge claim carries its scope bound (frozen
+   validation split / not out-of-sample / n=2) in the SAME or adjacent sentence — never deferred.
+3. Abstract <=220 words. No §3 mechanics (validation-budget/PBO/bootstrap) in Intro or abstract.
+4. Do NOT remove or move ANY caveat this round (removal is out of scope). A phrase NOT in the
+   FLOORED SET below is still default-KEEP — never treat "unregistered" as "safe to delete."
+5. No claim-strength change, no number change. Floor wins every conflict.
+FLOORED SET for this scope: <inject the manifest's floored D-lock variants for this section>
 ```
