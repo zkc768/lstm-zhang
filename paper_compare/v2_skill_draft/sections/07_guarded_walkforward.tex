@@ -70,7 +70,7 @@ label-shuffle sentinel collapses the delta toward a negative null, so
 the edge is not a within-day-leakage artifact. These checks are descriptive and stay
 under the multiplicity discount above. What survives strict evaluation here is therefore
 a predeclared sign, not a strong number: the direction holds weakly on its own segment,
-and the predeclared candidate clears multiplicity where the highest scorer does not. A
+and only the predeclared candidate keeps a positive period lower bound. A
 stable pooled sign can still hide a direction that flips across conditions, and
 Section~\ref{sec:diagnostics} resolves the same-row edge by activity to find that
 boundary.
