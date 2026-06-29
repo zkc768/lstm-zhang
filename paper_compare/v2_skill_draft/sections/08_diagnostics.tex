@@ -23,7 +23,8 @@ does not mean the confidence scores rank cases usefully
 On the same split the accuracy-based risk--coverage curve
 (Figure~\ref{fig:risk_coverage}) carries no cost model and marks no operating
 point. Its area (AURC) is about $0.470$ against an oracle near $0.140$, an excess
-area ($e$-AURC) of about $0.330$ in the seed mean. These are within-seed,
+area ($e$-AURC) of about $0.330$ in the seed mean. The companion AUGRC is $0.237$
+\cite{geifman2017selective,geifman2019selectivenet,elyaniv2010foundations,traub2024overcoming}. These are within-seed,
 day-level summaries rather than seed-level estimates over \numseeds{} seeds, and
 the gain reads thin. Against the random-ranking reference the predeclared score
 lowers AURC only marginally ($\Delta$AURC $=-0.010$; 95\% trading-day
@@ -31,8 +32,7 @@ cluster-bootstrap CI $[-0.014,-0.006]$). That is about $3\%$ of the gap between
 random ranking and a perfect-ranking oracle (gap-closed 95\% CI $[1.9\%,4.0\%]$).
 The gain shrinks further at high coverage. The mean random-minus-score
 selective-risk difference over the $80$--$100\%$, $90$--$100\%$, and $95$--$100\%$
-bands is only $0.25$, $0.14$, and $0.07$ percentage points. The companion AUGRC is $0.237$
-\cite{geifman2017selective,geifman2019selectivenet,elyaniv2010foundations,traub2024overcoming}.
+bands is only $0.25$, $0.14$, and $0.07$ percentage points.
 Because low-confidence rows tend to fall in the high-activity tercile, abstention
 removes the very rows where the below-random high-activity limitation is most
 visible. Abstention therefore compounds that limitation rather than fixing it
@@ -96,14 +96,14 @@ active bars.
 \end{table}
 
 \paragraph{Base-rate and within-day artifacts are excluded; a microstructure one is not.}
-A stable but small pattern invites the question of whether it is spurious, and
-three artifact families bear on it: two are ruled out and one is not. The
+A stable but small pattern could be spurious. Three artifact families bear on it:
+two are ruled out and one is not. The
 near-constant per-tercile dummy floor ($\approx 0.500$) excludes a class-imbalance
 artifact, while the up-rate shows only a small monotone gradient ($0.523$, $0.515$,
 $0.502$ from low to high, about $2.1\pp$). A fifty-permutation within-day label-shuffle sentinel
 excludes within-day leakage. The observed delta exceeds the per-tercile shuffle
-maximum in every tercile, including the high tercile, where it exceeds a more
-negative shuffle null while staying below random. Even the below-random value is
+maximum in every tercile. In the high tercile it exceeds a more negative shuffle
+null, yet still sits below random. Even the below-random value is
 therefore not a permutation artifact. The remaining alternative is microstructure. The
 calm-bar concentration cannot presently be separated from a bid-ask-bounce
 alignment, which is a true row-level feature--label coupling that a within-day

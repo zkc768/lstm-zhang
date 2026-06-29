@@ -12,7 +12,7 @@
 Past the validation boundary, we run a guarded walk-forward readout over seven
 consecutive 12-month periods on the post-2017 segment. The readout confirms the
 already-frozen primary over expanding-window periods that share rows and a fixed
-survivor universe, with no final model selected, so it is a non-independent
+survivor universe. No final model is selected, so it is a non-independent
 confirmation rather than a future-blind test. The post-2017 segment was also scored
 more than once within the project. An earlier walk-forward run preceded the bound re-run
 reported here, so the holdout is spent and its second reading is a reuse, not a fresh
@@ -39,16 +39,16 @@ period also reverses sign across the two seeds. With only \numseeds{} seeds we c
 quantify that dispersion, so the per-period readout is not even seed-stable there.
 
 \paragraph{The headline delta is estimand-sensitive.}
-The headline delta moves with the aggregation choice, so we report both units. The
-binding quantity is the row-pooled delta over the protocol row-union, $+0.636\pp{}$ in
-\macrofone{} over the stratified dummy; the equal-weight-per-period companion is
-$+0.550\pp{}$. Because the bar tests only the sign of a positive pooled delta, it is
-insensitive to this choice. The headline magnitude stays small under either unit.
+The headline delta moves with the aggregation choice, so we report two units rather
+than naming either as the number. The binding quantity is the row-pooled delta over
+the protocol row-union: $+0.636\pp{}$ in \macrofone{} over the stratified dummy. Its
+equal-weight-per-period companion is $+0.550\pp{}$, small under either unit. Because
+the bar tests only the sign of a positive pooled delta, it is insensitive to this choice.
 
 Repeated comparison across the roster could also inflate this small edge, so the
-protocol applies a multiplicity discount on the binding row-pooled estimand. We use an
+protocol applies a multiplicity discount on the binding row-pooled estimand. The discount is an
 odd-block CSCV/PBO adaptation ($n_{\text{trials}}{=}4$, $n_{\text{blocks}}{=}7$), not
-the canonical symmetric form; these are descriptive discounts, not significance tests
+the canonical symmetric form. These are descriptive discounts, not significance tests
 \cite{bailey2014pseudo,bailey2016probability,harvey2016cross}.
 
 \paragraph{Pre-registration, not peak performance, survives multiplicity.}
@@ -56,8 +56,8 @@ Across the four-family by seven-period guarded roster the CSCV probability of ba
 overfitting is $0.514$, near a coin flip. The numerically largest family mean belongs to
 LightGBM at $+0.726\pp{}$, yet its period lower bound is negative ($-0.030\pp{}$). Only
 the predeclared TCN primary has a period lower bound above zero ($+0.047\pp{}$). Under
-the multiplicity discount the predeclared candidate, not the highest scorer, is the one
-that survives, and no family is selected. Consistent with that, the validation-budget
+the multiplicity discount the predeclared candidate survives, not the highest scorer,
+and still no family is selected. Consistent with that, the validation-budget
 ledger keeps the contact asymmetry explicit: \numseeds{} official-validation scoring
 events against 56 guarded events, all with \texttt{for\_selection=false}.
 
