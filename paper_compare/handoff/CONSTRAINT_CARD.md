@@ -8,10 +8,14 @@ run) so they cannot color the Mode-B rubric. Revised after Mode A round 1 (see V
 overrides `AGENTS.md` / claims ledger / red lines / hedge floors (`gate_L2`) / L5 monotonicity.
 **Floor wins every conflict** — a floored caveat stays exactly where the manifest pins it.
 
-**Scope this round:** prevent re-dilution + keep the contribution-forward structure standing.
-**Active removal/repositioning of EXISTING hedges is OUT OF SCOPE this round** (it is where the
-round-1 review found the failure modes). It is enabled only if R5's metric shows dilution
-persists after R1+R2, and only under the R3/R4 guards.
+**Scope this round (updated 2026-06-29 — user approved B1 + F):** R1 (anti-addition) + R2
+(positional) + **removal / repositioning of existing hedges, now IN SCOPE.** Because the user
+approved B1 (cross-section thinning) and F (repositioning) on 2026-06-29, **R3/R4 are LIVE** (no
+longer dormant). Every removal or reposition of an existing hedge MUST be logged with a dedup
+record (id, scope, floors, before/after hits, canonical_kept, monotonicity_preserved, R4
+adjacency check) — the r050 discipline — and clear `gate_L2` (dedup_ok, no floor_breach) + L5.
+Records go in `handoff/DEDUP_LOG.md` so the Judge sees the floor accounting (it cannot read the
+manifest).
 
 ---
 
@@ -35,14 +39,14 @@ persists after R1+R2, and only under the R3/R4 guards.
 - Abstract **200–220 words**. Intro names the protocol idea in ~2 sentences; **no §3 mechanics**
   (validation-budget / PBO / bootstrap) in the Intro or abstract.
 
-## R3 — Default-keep for unregistered caveats *(guard; dormant until removal is enabled)*
+## R3 — Default-keep for unregistered caveats *(LIVE — removal is in scope)*
 
 - A hedge that is **not** a floored D-lock variant is **not** therefore removable.
   `¬floored ⇒ default-KEEP, needs explicit adversarial judgment to touch`. **Never**
   `¬floored ⇒ strip`. The manifest is an allowlist of known-protected caveats, **not** a
   completeness guarantee that everything else is discretionary.
 
-## R4 — Deletion is a justification event *(guard; dormant until removal is enabled)*
+## R4 — Deletion is a justification event *(LIVE — removal is in scope)*
 
 - Deleting or relocating any hedge **adjacent to** (same or neighboring sentence) a
   ledger-bound positive is a **≥MINOR event requiring written justification, even if no
