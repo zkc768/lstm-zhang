@@ -88,3 +88,43 @@ inverts->reverses; 07:65 lead-with-evidence; 09:21 reworded). Required deflation
 - nowhere near AI-uniform. Net direction is UP (section 1 strongly so): R2 de-homogenized rather than
 homogenized. The single sd drop (section 9) is explained by a gate/foregrounding-mandated edit and
 section 9 remains the most-bursty section. Per ADR 0001: logged as expected, nothing reverted.
+
+## R2 / WI-7 §2-§8 readability pass (2026-06-28)
+
+Presentation-only readability refinement of §3/§7/§8 (advisor: dense later sections more concise/
+readable). Compared to the **post-Pass-A** column for these sections (their immediately-preceding
+whole-paper snapshot; WI-7 did not touch them in Phase 1). NO number/claim changed. Triage left
+§2/§4 untouched (compact) and §5/§6 as-is (no clear-win defect).
+
+### mean_perplexity (GPT-2, post WI-7 Pass-C)
+
+| Section | post-Pass-A | WI-7 | delta | note |
+|---|---|---|---|---|
+| 03_protocol | 450.4 | 593.3 | +32% | INCREASE (good) - de-stacking + sentence splits de-homogenized §3 |
+| 07_guarded_walkforward | 486.2 | 391.9 | -19% | EXPLAINED - readability/gate splits (38-word definition + dense estimand/multiplicity dumps) |
+| 08_diagnostics | 362.6 | 384.2 | +6% | stable/up - AUGRC regroup + 2 splits + filler removal |
+
+### burstiness_sd (GPT-2, post WI-7 Pass-C)
+
+| Section | post-Pass-A | WI-7 | delta | note |
+|---|---|---|---|---|
+| 03_protocol | 341.6 | 940.7 | +176% | large INCREASE (good) - §3 now among the most-bursty sections |
+| 07_guarded_walkforward | 708.4 | 239.3 | -66% | EXPLAINED (ADR 0001): the pass split §7's long dense sentences (the gate-mandated 38-word what-it-is definition + the estimand/multiplicity number-dumps the advisor flagged). Lower variance is the INTENDED readability gain, NOT homogenization; sd 239 is still far from AI-uniform. NOT reverted (readability + HARD-gate edits win per ADR 0001). |
+| 08_diagnostics | 342.3 | 342.6 | ~0 | flat - AUGRC move + splits net-neutral |
+
+**Pass B (post-WI-7):** consistency-checker + logic-reviewer whole-paper -> ZERO cross-section
+inconsistency, ZERO logic break, ZERO domain fusion, ZERO dropped caveat. AUGRC relocation clean (no
+orphaned ref/cite; Fig 3 / Table 3 unaffected). Two P2 notes (§7 0.514 PBO/LOO numeric coincidence;
+§8 header<->body 2-out/1-not tally) are PRE-EXISTING, not WI-7 regressions.
+
+**Humanizer meta-audit (WI-7 Pass C):** the splits read more human / less dense; no choppy uniform-short
+rhythm introduced (one mild AUGRC staccato re-lengthens immediately); the §8 filler removal ("invites
+the question of whether" -> "could be spurious") is a clear gain. Two governance-safe tells fixed:
+§7 doubled "X, not Y" antithesis (recast first clause positive: "...adaptation that departs from the
+canonical symmetric form"); §3 "-ing" participial trailer (restored finite verb: "...separate and
+reports each number only within its own domain"). The residual recurring "X, not Y / X rather than Y"
+mold across the paper is REQUIRED deflationary hedging vocabulary (each instance load-bearing) - left intact.
+
+**Read:** §3 strongly UP (de-homogenized), §8 flat, §7 DOWN but fully explained by the advisor-mandated
+readability splits (the whole point of WI-7) plus one >35-word gate split; every section stays far from
+AI-uniform (perplexity 384-593, sd 239-941). Per ADR 0001: §7's drop logged as expected, nothing reverted.
