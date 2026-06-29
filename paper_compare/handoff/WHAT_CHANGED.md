@@ -1,59 +1,75 @@
-# WHAT_CHANGED — Mode B run #1 (§F tone pass, batch 1: abstract + §1)
+# WHAT_CHANGED — Mode B run #2 (batch 2: §7 reorder + §07 D16 rebind + B1 thinning)
 
 **Real change batch (NOT the baseline).** `REVIEW_THIS.pdf` was recompiled 2026-06-29 from the
-edited source and overwritten in this folder (8 pages).
+edited source and overwritten in this folder (**8 pages**, 732639 B).
 
-⚠️ **Do NOT judge by file size.** This batch is mostly *reordering* (same words, new order) plus
-minor rewording, so the byte size barely moves (732742 B vs baseline 732702 B, +40 B). The change
-is in the TEXT, not the length. Verify by reading the two endings below — not by size.
-
-**Scope note (you flagged this, 2026-06-29 — correct):** this batch is *not* purely reordering. It
-also includes **two logged removal/reposition edits** — D9 bid-ask fold, and D24·anti_leak 2→1
-dedup (a floor-touching edit). Removal is now formally IN SCOPE (user approved B1+F; card updated,
-R3/R4 LIVE). Both edits are recorded with their **verbatim gate_L2 floor accounting** in
-**`DEDUP_LOG.md`** — read it alongside this file; the D24 one is exactly the Q2 risk to verify.
+⚠️ **Do NOT judge by file size.** This batch is one sentence-pair *reorder* (§7), one
+meaning-preserving 2-word *reword* (§07), and **one removed restatement** (§05). The byte size
+barely moves. The change is in the TEXT, not the length. Verify by reading the spots below — not
+by size. The full floor accounting for every touched caveat is in **`DEDUP_LOG.md`** (read it
+alongside this file — especially the "Gate-behavior note for B1 records" at the top of the
+Batch 2 section, which explains why `dedup_ok` is empty for a non-floored removal).
 
 ## Verify these exact text changes in the PDF
 
-**1. Abstract (page 1) — now ENDS ON THE CONTRIBUTION, not a caveat.**
-- OLD ending: "…so the protocol's sensitivity to a genuine signal is **untested**."
-- NEW ending: "…with no known-signal positive control. This is a worked case for the protocol,
-  not yet a test on a signal known to be real. **The transferable contribution is the protocol
-  and its diagnostics.**"
-- Also: the standalone "We cannot yet separate this pattern…" was folded into the conditional
-  sentence (one fewer free-standing negation).
+**1. §7 Guarded Walk-Forward (page ~5–6) — last paragraph now ENDS ON THE SURVIVING SIGN, not "flips."**
+(This reorder was committed earlier; it is presented here for the batch-2 cold-read.)
+- OLD ending: "…the direction holds weakly on its own segment… A stable pooled sign can still
+  hide a direction that **flips** across conditions, and Section 8 resolves the same-row edge by
+  activity to find that boundary."
+- NEW ending: "…A stable pooled sign can still hide a direction that flips across conditions, and
+  Section 8 resolves the same-row edge by activity to find that boundary. **What survives strict
+  evaluation here is a predeclared sign, not a strong number: the direction holds weakly on its
+  own segment, and only the predeclared candidate keeps a positive period lower bound.**"
+- Pure last-two-sentence swap (no deletion, no rewording, no number change). The flip-pointer now
+  *leads into* §8 instead of being the last word.
 
-**2. §1 Introduction (page 1–2) — last paragraph now ENDS ON THE CONTRIBUTION.**
-- OLD ending: "…is the positive-control **next step**."
-- NEW ending: "…a conditional sign that a headline-only readout would hide. **The diagnostics
-  map where this edge persists and where it reverses.**"
-- Pure sentence-reorder (no deletion / no rewording / no number change). The opening ("…can
-  survive scrutiny, or it can be an artifact") was kept on purpose — it states the paper's
-  central question, not throat-clearing.
+**2. §7 — D16 disclaimer reworded (floor re-bind, meaning identical).**
+- OLD: "The observed five-of-seven positive periods … are descriptive context, **neither
+  certification nor the bar**."
+- NEW: "… are descriptive context, **not certification and not the bar**."
+- Why: an earlier R2 reword to "neither…nor" silently broke the manifest tracker for this
+  disclaimer (it tracks "not … and not the bar" / "not the bar"), leaving the floor *unbound*.
+  The caveat was present and honest the whole time; this restores the tracked form. The 5/7 count
+  still explicitly reads as **not a certification and not the bar**. (DEDUP_LOG record **R-3**.)
 
-## NOT changed (precise, so you don't look for what isn't there)
-- **§9 conclusion: UNCHANGED.** Its closing already ends on the contribution clause ("the
-  transferable contribution is the evaluation protocol and the diagnostics…"); the word
-  "breaks" sits *inside* that contribution clause. §9 was never a closing-on-negation target.
-  If you still read it as half-deflated, flag it and the Executor will revisit.
-- **§7 (closes on "flips"): NOT done yet** — next batch.
-- No B1 cross-section thinning yet.
+**3. §5 Experimental Setup (page ~4) — ONE redundant two-seed restatement removed.**
+- REMOVED sentence: "Two seeds are too few to quantify seed-to-seed variance."
+- KEPT (same paragraph): "…report the official validation outcome in macro-F1 **over n=2 seeds
+  (101 and 202)**…" — so §5 still discloses the seed count; only the *limitation restatement* is gone.
+- The two-seed limitation still appears, co-located with the actual positive margins, in **§6**
+  ("Two seeds yield a descriptive spread rather than a variance estimate") and **§9** ("…rests on
+  two seeds, too few for seed-to-seed variance"), and in the abstract. (DEDUP_LOG record **R-4** —
+  includes the R4 adjacency check; this is the Q2 "upgrade-by-deletion" risk to verify.)
 
-## Gate evidence (Executor side; you still read only the PDF)
-- Abstract: L1/L3/L4/L5 pass. Only floor touch = D24·anti_leak·main.tex 2→1 (`dedup_ok`,
-  floor=1 still met — "no known-signal positive control" retained). All numbers intact; every
-  sentence ≤35 words.
-- §1: L1/L3/L4/L5 pass; zero floor change (reorder only).
+## NOT changed (so you don't look for what isn't there)
+- **B1 applied yield is ONE removal (§5 D18), not the proposal's ~20+.** This is deliberate and
+  governance-driven: the count-based estimate was overlap-inflated (one sentence matches many
+  variants), and after excluding batch-1 files (abstract + §1, still under your review), the §9
+  limitations zone (caveats belong there), figure/table captions + `\Description` (ACM-mandatory),
+  factual ticker/interval definitions, and phrases that scope a specific number, the only
+  genuinely-safe non-floored restatement left was the §5 two-seed sentence. Everything else was
+  default-KEPT (R3) — see the "Considered-but-KEPT" list in `DEDUP_LOG.md`.
+- **Abstract + §1: UNCHANGED in batch 2** (they are your batch-1 review scope; not re-touched).
+- **§9 conclusion: UNCHANGED.**
+- No number, no claim-strength, no domain-fusion change anywhere.
+
+## Gate evidence (Executor side; you still read only the PDF + these .md files)
+- §5: L1/L2/L3/L4/L5 all pass. No floored scope touched (D18 floors = abstract/§6/§9; §5 is not a
+  floor). `missing_required=[]`, `floor_unbound=[]`, `forbidden_introduced=[]`.
+- §7: L1/L2/L3/L4/L5 all pass. D16·5of7_desc·§07 floor now **bound** (orig 0 → 2). No other change.
+- Whole paper recompiles to **8 pages**; `check_integrity.py` PASS on both changed sections.
 
 ## Focused cold-read asks (your round-2 verification criteria)
-For the **abstract and §1 only**:
-1. Do they now close on a contribution rather than a caveat? (target metric: units closing on
-   negation 5 → 3.)
-2. Did the reorder/rewording **drop or soften any floored caveat**? (Abstract: n=2 /
-   not-a-clean-test / not-economic-value / no-positive-control.) The gate says floors hold;
-   confirm by reading.
-3. Did moving a bound create an **implicit claim-upgrade** (round-1 Q2)? Especially: does ending
-   the abstract on "the transferable contribution is the protocol and its diagnostics" make the
-   empirical edge read as stronger / more validated than the body supports?
+For **§7 and §5** (and a glance at the document-level honesty):
+1. Does §7 now close on the surviving predeclared sign rather than "flips"? (metric: units closing
+   on negation 5 → 2, per the committed §F pass.)
+2. Did the §5 removal or the §7 D16 reword **drop or soften any floored caveat**? The gate says
+   floors hold (two-seed still in §6/§9/abstract; the 5/7 disclaimer still denies certification and
+   the bar); confirm by reading.
+3. Did removing the §5 two-seed sentence create an **implicit claim-upgrade** (round-1 Q2)?
+   Specifically: with that sentence gone, does §5's "over n=2 seeds" read as *sufficient* rather
+   than *thin*? (Executor judgement: no — §5 states no positive margin there, and the limitation
+   stays attached to the margins in §6/§9. Please verify independently — DEDUP_LOG R-4.)
 
-Write findings to `VERDICT.md` under "## Mode B — batch 1 (abstract + §1)".
+Write findings to `VERDICT.md` under "## Mode B — batch 2 (§7 + §5 B1)".
