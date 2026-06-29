@@ -1,7 +1,16 @@
-# WHAT_CHANGED — Mode B run #2 (batch 2: §7 reorder + §07 D16 rebind + B1 thinning)
+# WHAT_CHANGED — Mode B run #2 (batch 2 + batch 3: §7/§07/§05 + abstract close fix)
 
 **Real change batch (NOT the baseline).** `REVIEW_THIS.pdf` was recompiled 2026-06-29 from the
-edited source and overwritten in this folder (**8 pages**, 732639 B).
+edited source and overwritten in this folder (**8 pages**).
+
+> **Batch 3 addendum (post-batch-1 review):** the batch-1 cold-read (abstract + §1) came back
+> **LOCK-safe** from two independent reviewers. The skeptical one raised one non-blocking flag —
+> the abstract's closing word "transferable" slightly outruns the evidence. **Fixed:** the abstract
+> now closes on *"The **methodological** contribution is the protocol and its diagnostics."*
+> (was "transferable"). This does exactly what the reviewer asked — no re-review of the abstract is
+> needed. Separately, the deferred **(b) §01/abstract B1 thinning found 0 safe removals** (every
+> non-floored candidate is overlap-inflation or R4-protected scope-binding to the 1.69pp/+0.636pp
+> headline numbers). See `DEDUP_LOG.md` → "Batch 3" (records R-5 + the (b) finding).
 
 ⚠️ **Do NOT judge by file size.** This batch is one sentence-pair *reorder* (§7), one
 meaning-preserving 2-word *reword* (§07), and **one removed restatement** (§05). The byte size
@@ -50,7 +59,8 @@ Batch 2 section, which explains why `dedup_ok` is empty for a non-floored remova
   factual ticker/interval definitions, and phrases that scope a specific number, the only
   genuinely-safe non-floored restatement left was the §5 two-seed sentence. Everything else was
   default-KEPT (R3) — see the "Considered-but-KEPT" list in `DEDUP_LOG.md`.
-- **Abstract + §1: UNCHANGED in batch 2** (they are your batch-1 review scope; not re-touched).
+- **Abstract:** one-word close fix only (transferable → methodological, batch 3 addendum above);
+  §1 unchanged. Both were ruled LOCK-safe in the batch-1 cold-read.
 - **§9 conclusion: UNCHANGED.**
 - No number, no claim-strength, no domain-fusion change anywhere.
 

@@ -139,3 +139,51 @@ non-floored, non-zone, non-batch-1 restatement set reduced to the §05 D18 sente
 load-bearing, caption/`\Description`, factual, already-thinned by r050, or deferred (batch-1).
 `flag-don't-spin` + R3 default-keep were applied throughout; no `floor_breach` and no failed L5
 anywhere.
+
+---
+
+## Batch 3 (abstract close fix + (b) §01/abstract B1 pass) — 2026-06-29
+
+Context: the batch-1 cold-read (abstract + §1) was run as two fresh independent reviewers on
+verbatim text (PDF extraction was garbling the document, so clean `.tex` text was supplied and
+PDF reading was barred). Both ruled abstract + §1 **LOCK-safe** on all three criteria
+(close-on-contribution / no caveat softened / no claim-upgrade). The skeptical reviewer raised one
+non-blocking flag; this batch addresses it and runs the deferred §01/abstract thinning.
+
+### R-5  Abstract close — F-track tone fix (not a dedup), user-chosen
+- **Action:** abstract last sentence `The transferable contribution is the protocol and its
+  diagnostics.` → `The methodological contribution is the protocol and its diagnostics.`
+- **Why:** the skeptical batch-1 reviewer flagged "transferable" as the single most attackable word
+  in the most prominent (closing) position — the body says the case is "not yet a test on a signal
+  known to be real" and §1 calls transfer "the positive-control next step," so transferability is
+  exactly what is not yet demonstrated. (The independent reviewer judged "transferable" an
+  acceptable methods-paper move; both ruled the abstract LOCK-safe.) User chose "methodological" —
+  honest (it IS a methodological contribution), keeps weight, drops the unproven transfer claim,
+  still closes on the contribution (no caveat re-introduced).
+- **gate (main.tex, cand==applied disk):** overall `pass=True`; L1/L2/L3/L4/L5 pass;
+  `forbidden_introduced=[]`; no floor touched (net-zero word swap; abstract stays 200–220w).
+- **R4 / L5:** not adjacent to a removed positive; no floored caveat touched; `monotonicity_preserved: true`.
+- Note: `check_integrity.py paper/main.tex` HARD-FAILs only on the `\documentclass` preamble block
+  and the `<ccs2012>` CCSXML block (non-prose the crude stripper can't remove) — a pre-existing
+  false positive, not the abstract prose and not this edit. The prescribed checks (length_gates
+  main.tex; compile 8pp; both reviewers' ≤35w confirmation) pass.
+
+### (b) §01 + abstract B1 thinning — APPLIED YIELD: 0 removals (all R4-protected)
+Ran the deferred largest-count-headroom pass now that batch-1 review is closed. Span-located every
+non-floored candidate; all default-KEPT:
+- **D17 (frozen-validation-split)** — §01 hook (line ~9) + §01 findings (line ~30) + abstract — every
+  instance **scopes the 1.69pp headline** to the frozen split. Removing the scope from a 1.69pp
+  statement is the R2/R4 carve-out violation; removing a whole 1.69pp statement is a content edit, not
+  hedge dedup. KEEP.
+- **D18 §01 limitation** ("2 seeds are too few to quantify variance", line ~33) — sits **immediately
+  after** the 1.69pp / 1.63pp-worse-seed positive. Unlike §05 (which had no adjacent positive, so the
+  removal was safe), here removal would leave "…1.63pp worse seed. The pooled margin's bootstrap
+  interval excludes zero" reading **stronger** — the exact claim-upgrade-by-deletion R4 forbids. KEEP.
+- **D2 §01/abstract** (non-independent, co-located with +0.636pp), **D3/D11 §01** (no-final-model /
+  no-architecture-claim — red-line framing), **D25 §01/abstract** (one-location narrow-scope caveat
+  the reviewers just approved), **D12** (excluded cluster ④) — all single-location or load-bearing. KEEP.
+- **Finding:** the §01/abstract "count-headroom" is entirely overlap-inflation (one sentence → many
+  variant-hits) plus R4-protected scope-binding to the headline numbers. There is **no safe B1
+  removal** here — consistent with batch 2 and design-doc §9.3-F. Total applied B1 yield across
+  batches 2+3 remains **1 removal (§05 D18)**; the drumbeat is reduced by reorder/tone (F-track),
+  not deletion, because the caveats are doing real local work everywhere they appear.
