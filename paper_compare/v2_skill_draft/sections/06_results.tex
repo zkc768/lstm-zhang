@@ -62,15 +62,14 @@ resampling handles within-day autocorrelation but not between-day regime
 clustering or cross-ticker common-factor dependence. The per-group target-row
 counts (roughly 30k in Panel A validation tickers and up to 55k in Panel B
 guarded periods) are therefore not independent samples, and the bands reflect
-scored-row sampling only. The first row in each panel is row-pooled, not averaged: per seed,
+scored-row sampling only. In Panel~B, six of seven guarded intervals include zero. The first row in each panel is row-pooled, not averaged: per seed,
 pool target rows within the domain, recompute candidate and stratified-dummy
 \macrofone{}, take the delta, then average the two seed deltas.
 
 \begin{table}[t]
   \centering
-  \caption{Frozen validation split, predeclared TCN primary: seed means over
-  $n=\numseeds{}$ seeds (mean $\pm$ std where shown). Deltas are \pp{}
-  \macrofone{} changes against named same-row baseline.}
+  \caption{Frozen validation split: predeclared TCN primary, seed means over
+  $n=\numseeds{}$ seeds (mean $\pm$ std where shown).}
   \label{tab:validation}
   \begin{tabular}{lr}
     \toprule
@@ -109,9 +108,8 @@ pool target rows within the domain, recompute candidate and stratified-dummy
     and the right column gives each row's estimate and 95 percent block-bootstrap
     interval; these intervals are descriptive, not inferential claims.}
   \caption{Descriptive \macrofone{} deltas for the predeclared TCN primary
-  against same-row stratified dummy; positive values favor the model. Panel A
-  is prespecified validation by ticker; Panel B is the guarded
-  12-month walk-forward. Six of seven guarded intervals include zero. Panel B is not a clean test,
-  independent holdout, or model-selection ranking.}
+  against the same-row stratified dummy; positive favors the model. Panel A is
+  prespecified validation by ticker; Panel B is the guarded walk-forward, not a
+  clean test or model-selection ranking.}
   \label{fig:validation_deltas}
 \end{figure}
