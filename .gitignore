@@ -71,3 +71,13 @@ tmp_old09.txt
 __pycache__/
 *.pyc
 paper_compare/exemplars/pdfs/
+
+# LaTeX build byproducts in the paper_compare sandbox -- regenerated on every
+# compile, untracked 2026-07-01 (keeps the ADR 0003 v2 sandbox clean). The
+# _section_backups/*.bak rollback snapshots are intentional and stay tracked.
+paper_compare/**/*.aux
+paper_compare/**/*.blg
+paper_compare/**/*.fls
+paper_compare/**/*.fdb_latexmk
+paper_compare/**/*.out
+paper_compare/**/*.log

@@ -24,6 +24,11 @@ recreate the large historical project surface.
 
 ## 2. Required Reading Before Code
 
+**Orient first:** skim `MAP.md` (repo root) -- the navigation index -- to locate the
+current-truth file for the task and stay out of stale or generated noise (`tmp/`, `artifacts/`,
+`.claude/skills/`, dated handoffs). It is a pointer index only and never overrides this
+contract.
+
 For any task that creates or modifies `lst_models` code, notebooks, configs,
 protocol docs, tests, or artifacts, read these files before producing code:
 
