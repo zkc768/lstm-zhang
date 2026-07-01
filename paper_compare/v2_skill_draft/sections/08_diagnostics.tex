@@ -28,7 +28,7 @@ area ($e$-AURC) of about $0.330$ in the seed mean. The companion AUGRC is $0.237
 day-level summaries rather than seed-level estimates over \numseeds{} seeds, and
 the gain reads thin. Against the random-ranking reference the predeclared score
 lowers AURC only marginally ($\Delta$AURC $=-0.010$; 95\% trading-day
-cluster-bootstrap CI $[-0.014,-0.006]$). That is about $3\%$ of the gap between
+cluster-bootstrap CI $[-0.014,-0.006]$; these intervals are descriptive, not significance tests). That is about $3\%$ of the gap between
 random ranking and a perfect-ranking oracle (gap-closed 95\% CI $[1.9\%,4.0\%]$).
 The gain shrinks further at high coverage. The mean random-minus-score
 selective-risk difference over the $80$--$100\%$, $90$--$100\%$, and $95$--$100\%$
@@ -68,18 +68,18 @@ circle and diamond seed markers. Its grey sleeves are per-trading-day block
 minimum-detectable effects from official validation or measure-only
 re-aggregation of frozen guarded dumps, not standard errors or seed-level
 uncertainty. This is the only axis we could re-measure on the guarded segment, and
-it is a non-independent re-aggregation, not an independent replication. The
+it is a non-independent re-aggregation, not an independent replication and not a clean test. The
 magnitude is small, but the low-to-high pattern is same-signed in both windows.
 The signal is thus absent where the classifier faces its hardest slice, the most
 active bars.
 
 \begin{table}[t]
   \centering
-  \caption{Activity-tercile condition map. Validation uses \numseeds{} seeds
-  and guarded is non-independent. The high tercile falls below the
-  balanced random prior in both domains; block-bootstrap checks are descriptive.
-  Seed-mean rows (low/medium/high): 44{,}144/51{,}572/55{,}348 validation and
-  95{,}310/111{,}178/119{,}479 guarded.}
+  \caption{Activity-tercile condition map: validation and guarded \macrofone{}
+  deltas; the high tercile falls below the balanced random prior.}
+  \Description{Descriptive block-bootstrap checks; the guarded readout is
+  non-independent. Seed-mean eligible-row counts (low/medium/high):
+  44{,}144/51{,}572/55{,}348 validation and 95{,}310/111{,}178/119{,}479 guarded.}
   \label{tab:tercile}
   \begin{tabular}{lrr}
     \toprule
@@ -130,12 +130,10 @@ resolution. We carry the deferred microstructure control as a limitation
     the expected random-ranking risk minus the predeclared score risk in
     percentage points, staying near zero across most coverages. Light bands show descriptive
     trading-day cluster-bootstrap and random-ranking permutation intervals. The chart shows
-    accuracy only, with no cost model and no chosen operating point.}
-  \caption{Accuracy-based selective-risk--coverage diagnostic; lower is better.
-  The curve barely separates from random ranking, indicating weak confidence
-  ordering rather than a usable abstention rule. There is no chosen operating
-  point; with \numseeds{} training seeds, the plot establishes no statistical
-  significance, calibration, or deployable abstention policy.}
+    accuracy only, with no cost model and no chosen operating point. It establishes no statistical significance.}
+  \caption{Accuracy-based selective risk--coverage; the predeclared score barely
+  separates from random ranking, indicating weak confidence ordering, not a
+  usable abstention rule.}
   \label{fig:risk_coverage}
 \end{figure}
 
@@ -150,12 +148,8 @@ resolution. We carry the deferred microstructure control as a limitation
     floor, and a faint grey band below zero marks negative differences. Faded
     grey rectangles around bar endpoints show the day-block minimum detectable
     effect. The bars decline from the low- to high-activity tercile, and the
-    high-activity bars are below zero in both domains.}
-  \caption{Activity-tercile condition map. Paired diverging bars compare validation
-  and guarded \macrofone{} deltas over the same-row stratified dummy; positive
-  values favor the model. Activity is an eligible-row-count proxy under the
-  no-trade band, not volume, liquidity, or volatility. The high-activity
-  inversion is a limitation; guarded results are non-independent, not a
-  clean test, and grey sleeves are not confidence intervals.}
+    high-activity bars are below zero in both domains. Activity is an eligible-row-count proxy, not volume; the grey sleeves are minimum-detectable-effect bands, not confidence intervals.}
+  \caption{Activity-tercile condition map: validation versus guarded \macrofone{}
+  deltas over the same-row dummy; the high-activity inversion is a limitation.}
   \label{fig:tercile_map}
 \end{figure}
