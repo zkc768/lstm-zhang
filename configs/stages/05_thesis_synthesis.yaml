@@ -136,6 +136,18 @@ budget_ledger:
     #   events_field: new_scoring_events
     #   for_selection: false
     #   notes: "same measure-only re-aggregation on the frozen V2.1 dumps; non-independent guarded context, never pooled with validation"
+    # PENDING WIRING (2026-07-01, seed addendum prereg section 8 — run completed:
+    # 20260702_053300_397231, official_validation_scoring_events=6, budget row in
+    # results/v2_seed_addendum_readout/<run_id>/v2sa_budget_ledger_row.csv).
+    # - stage_name: v2_seed_addendum_readout
+    #   run_id_key: v2_seed_addendum
+    #   evidence_domain: official_validation
+    #   data_segment: validation_2013_2017
+    #   contact_type: official_validation_seed_addendum
+    #   events_source_key: v2_seed_addendum
+    #   events_field: official_validation_scoring_events
+    #   for_selection: false
+    #   notes: "disclosed post-hoc seed addendum on the frozen primary; scored once per addendum seed; reported separately and never merged into the predeclared n=2 readout (Dwork 2015 reusable-holdout budget)"
 
 # S5.2 claim boundary register. Each statement uses ONLY register-allowed wording
 # and is rejected if it contains any forbidden string. evidence_domain must be one

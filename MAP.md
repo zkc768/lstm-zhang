@@ -78,6 +78,7 @@ Each stage also has a config in `configs/stages/` (AGENTS §3 contract). V2.1 co
 - **Master workflow**: [paper_compare/PAPER_WORKFLOW.md](paper_compare/PAPER_WORKFLOW.md) — start here to draft/revise
 - **Style playbook**: [paper_compare/exemplars/playbook/README.md](paper_compare/exemplars/playbook/README.md) — pull only 1–2 relevant files; imitate structure/logic, never copy text
 - QC gates: `paper/scripts/*.py`, `paper_compare/check_integrity.py`, `paper_compare/validate_citations.py`
+- **Rebuttal prep**: [paper/rebuttal_prep.md](paper/rebuttal_prep.md) — reviewer-rebuttal preparation (prepared answers + evidence paths)
 
 ## 5. Where NOT to look — search hygiene
 

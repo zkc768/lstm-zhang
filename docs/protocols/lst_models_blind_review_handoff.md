@@ -248,6 +248,52 @@ Acceptance requires zero unresolved P0 and zero text-fixable P1 AFTER the
 deterministic PERMIT_REVIEW — but the **Synthesizer (you)** makes that call, not
 the reviewer.
 
+### 6.1 venue-reviewer — acceptance-value lens (full-draft rounds)
+
+The personas above audit COMPLIANCE: hedges, evidence domains, numbers, deletions,
+allowlist drift. None of them asks whether the paper is worth accepting. The
+**venue-reviewer** owns that question: it reads the FULL current draft (never a
+diff — acceptance value is not visible in a diff) as an ICAIF / finance-ML
+program-committee member deciding accept vs reject. Same fence as §2: it MAY read
+the authority list; it MUST NOT read `runs/<round_id>/` reviser artifacts. It
+judges exactly five lenses:
+
+1. **Contribution clarity** — "why accept this?": can a busy PC member restate
+   the contribution in two sentences from §1 alone?
+2. **Novelty positioning** — what the paper adds beyond assembling known guards
+   (pre-score freeze / same-row dummy floor / budget ledger / CSCV discount),
+   and whether §1–§2 state it.
+3. **Evidence sufficiency for the claims AS FRAMED** — does the evidence carry
+   the paper's own scoped claims? Whether a claim overreaches its evidence is
+   the other personas' job, not this persona's.
+4. **Venue fit** — why this venue; what a finance-ML audience takes away.
+5. **"So what for finance practice"** — what a practitioner or empirical
+   researcher does differently after reading.
+
+OUT of scope (other personas own these; venue-reviewer findings there are
+duplicates, not value): red-line vocabulary compliance, number-to-ledger
+binding, evidence-domain fusion checks, the deletion-first checklist.
+
+**No-claim-inflation rule (hard; the Synthesizer enforces it):** the persona may
+find the contribution under-argued; it may NOT cure that by strengthening a
+claim. Any recommendation that would violate a red line — "claim significance",
+"select a model", "drop the guarded / non-independent label", "sell the calm-bar
+edge" — is AUTO-REJECTED at adjudication: the Synthesizer records it as rejected
+(red-line conflict) and never routes it to REPAIR. Permitted cures: reframe
+ledger-bound facts, reposition against literature, or file an
+`experiment_required` finding (more seeds, positive control, cost model) that
+waits for explicit user authorization.
+
+Pipeline — identical to the other personas: findings only, in the §6 finding
+block with the §6 severity vocabulary (P0 | P1 | P2 | experiment_required);
+`claim_id` / `manifest_ids` may be `n/a`, but section_anchor + line_evidence +
+severity + recommended_route stay mandatory. Findings go to the Synthesizer, who
+alone decides ACCEPT / REPAIR / ROLLBACK / STOP. The Template-B (§4)
+ledger-sanctioning rule applies unchanged: re-flagging the sanctioned C2.3 /
+C4.5 phrasing is a false positive, not a defect. The venue-reviewer never
+decides submission readiness, and a missing-evidence complaint maps to
+`experiment_required`, never to a text-repair P1.
+
 ## 7. Orchestrator Cross-Checks And Loop Close
 
 Before dispatch and before apply, run the adapter's live-state sweep
@@ -272,6 +318,10 @@ blind). ROLLBACK/STOP → record and stop.
 4. Run the §7 cross-checks; run `round_diff.py` for the diff + L1–L5 verdict.
 5. Assemble Template B (strip rationale); open a new window with Template C.
 6. Collect findings; act as Synthesizer; apply or relay-for-repair; record.
+7. Full-draft review rounds (workflow §8.1 / §8.3): also spawn the §6.1
+   **venue-reviewer** (acceptance-value lens) over the compiled draft — findings
+   into the same Synthesizer adjudication; red-line-violating recommendations
+   are auto-rejected (no-claim-inflation rule).
 
 ## 9. Worked Instance — r033 (ORCHESTRATOR-SIDE; W3 must NOT read this)
 
