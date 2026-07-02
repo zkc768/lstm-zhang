@@ -58,6 +58,10 @@ NEW_STAGE_MODULE_MAX_LINES = 700
 # Test files prefixed test_stage<NN> may use that stage's private helpers
 # (with a TEMPORARY marker per AGENTS.md); all other private access is
 # cross-stage and forbidden.
+# 2026-07-01: added the v2 synthetic positive control branch stage
+# (synthetic_positive_control.py, preregistration
+# docs/protocols/v2_positive_control_preregistration_20260701.md); its test
+# file may touch that stage's privates only.
 STAGE_MODULE_BY_TEST_PREFIX = {
     "test_stage00": "data_split_label_freeze",
     "test_stage01": "feature_window_search",
@@ -66,6 +70,7 @@ STAGE_MODULE_BY_TEST_PREFIX = {
     "test_stage04": "diagnostics_ablation",
     "test_stage05": "thesis_synthesis",
     "test_v2_1": "guarded_walkforward_readout",
+    "test_synthetic_positive_control": "synthetic_positive_control",
 }
 
 

@@ -1,0 +1,170 @@
+# v2_synthetic_positive_control — preregistered train-domain synthetic positive control.
+stage_name: v2_synthetic_positive_control
+route: lst_models
+scope: validation_only
+holdout_test_contact: false
+synthetic_labels: true
+train_domain_only: true
+evidence_status: synthetic_positive_control_protocol_validation_only
+
+# Preregistration sidecar (frozen before any arm runs):
+# docs/protocols/v2_positive_control_preregistration_20260701.md
+
+inputs:
+  stage00_run_id: "20260610_051705_347450"
+  stage00_runtime_run_dir: /content/lst_models_results/00_data_split_label_freeze/20260610_051705_347450
+  stage00_drive_path_parts:
+    - lst_models
+    - results
+    - 00_data_split_label_freeze
+    - "20260610_051705_347450"
+  required_stage00_artifacts:
+    - raw_data_manifest.json
+    - split_freeze.json
+    - label_policy.json
+    - baseline_registry.json
+    - sample_event_index.csv
+    - run_manifest.json
+  raw_data_manifest: configs/lst_models_data.yaml
+  raw_data_dir: /content/lst_models_raw_stock_data
+  stage01_run_id: "20260610_075002"
+  stage01_runtime_run_dir: /content/lst_models_results/01_feature_window_search/20260610_075002
+  stage01_drive_path_parts:
+    - lst_models
+    - results
+    - 01_feature_window_search
+    - "20260610_075002"
+  required_stage01_artifacts:
+    - run_manifest.json
+    - 01_candidate_inputs.json
+  # Frozen REAL Stage 02 run: null-band source only (train-inner control spread
+  # of the identical candidate/family/profile on the real near-null labels).
+  stage02_real_run_id: "20260610_082130_797479"
+  stage02_real_runtime_run_dir: /content/lst_models_results/02_model_hpo_train_inner/20260610_082130_797479
+  stage02_real_drive_path_parts:
+    - lst_models
+    - results
+    - 02_model_hpo_train_inner
+    - "20260610_082130_797479"
+  required_stage02_artifacts:
+    - run_manifest.json
+    - 02_hpo_trial_ledger.csv
+  notebook_path: notebooks/v2_synthetic_positive_control_colab.ipynb
+
+# The frozen primary candidate input; feature_set / feature_columns /
+# window_size are read from the exact Stage 01 handoff artifact at run time.
+candidate:
+  candidate_id: price_volume_time_w20
+
+# Predeclared primary configuration only (compute scope: protocol sensitivity,
+# not a family comparison). The profile is read from the frozen search space.
+model:
+  family: tcn
+  probe_id: tcn_tiny
+  hpo_profile_id: tcn_p01
+  search_space: configs/models/tcn/search_space.yaml
+
+injection:
+  rule_id: sign_of_day_local_log_return_at_target_bar
+  rule_feature: log_return
+  injection_seed: 20260701
+  arms:
+    - arm_id: arm_s0p000
+      strength: 0.000
+      role: mandatory_null_arm
+    - arm_id: arm_s0p010
+      strength: 0.010
+      role: observed_edge_scale_threshold_arm
+    - arm_id: arm_s0p020
+      strength: 0.020
+      role: must_detect_arm
+    - arm_id: arm_s0p050
+      strength: 0.050
+      role: must_detect_ceiling_arm
+
+train_inner:
+  n_folds: 3
+  seeds: [101, 202]
+  official_validation_for_selection: false
+  event_overlap_count_required: 0
+
+# Identical to the executed Stage 02 fold-row policy.
+sample_policy:
+  max_train_samples_per_fold: 50000
+  max_eval_samples_per_fold: 20000
+  sample_method: deterministic_even_stride_by_ticker_label
+
+# Identical to the executed Stage 02 torch training defaults.
+probe_training_defaults:
+  torch:
+    epochs: 64
+    batch_size: 1024
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    device: auto
+    require_gpu: false
+    optimizer: AdamW
+    loss: class_weighted_cross_entropy
+    early_stopping: inner_train_chronological_tail
+    early_stopping_validation_fraction: 0.2
+    minimum_early_stopping_train_samples: 128
+    minimum_early_stopping_validation_samples: 128
+    early_stopping_patience: 8
+    early_stopping_min_delta: 0.0
+    gradient_clip_norm: 1.0
+
+budget:
+  # arms(4) x folds(3) x seeds(2) = 24 planned tcn_tiny fits
+  max_planned_fit_rows: 32
+
+sentinels:
+  n_perm: 200
+  seed: 20260617
+
+criteria:
+  primary_baseline: stratified_dummy_train_prior
+  minimum_positive_ticker_count: 3
+  null_strength: 0.0
+  detection_strengths: [0.02, 0.05]
+  monotone_strengths: [0.0, 0.02, 0.05]
+  threshold_strength: 0.01
+  null_band_source:
+    artifact: 02_hpo_trial_ledger.csv
+    candidate_id: price_volume_time_w20
+    model_family: tcn
+    hpo_profile_id: tcn_p01
+    expected_rows: 6
+
+checkpointing:
+  enabled: true
+  checkpoint_dir: /content/lst_models_checkpoints/v2_synthetic_positive_control
+
+outputs:
+  output_dir: /content/lst_models_results/v2_synthetic_positive_control
+  manifest: run_manifest.json
+  artifact_inventory: artifact_inventory.csv
+  trial_ledger: spc_trial_ledger.csv
+  arm_summary: spc_arm_summary.csv
+  baseline_control_summary: spc_baseline_control_summary.csv
+  sentinel_ledger: spc_sentinel_ledger.csv
+  injection_manifest: spc_injection_manifest.json
+  criteria_readout: spc_criteria_readout.json
+  per_arm_trials_prefix: spc_trials_
+
+forbidden:
+  search_axes:
+    - label_operator
+    - horizon_k
+    - no_trade_band_bps
+    - calendar_split_boundaries
+    - injection_rule_after_first_fit
+    - additional_arms_after_first_fit
+    - official_validation_tiebreaker
+    - holdout_test_wording
+  wording:
+    - market evidence
+    - real edge confirmed
+    - model evidence
+    - profitable
+    - clean test
+    - final model
