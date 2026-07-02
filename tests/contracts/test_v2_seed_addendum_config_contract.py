@@ -164,3 +164,52 @@ def test_budget_ledger_row_schema_matches_stage05_ledger() -> None:
         "stage_name", "run_id", "evidence_domain", "data_segment", "contact_type",
         "scoring_events", "for_selection", "notes",
     ]
+
+
+def test_entry_gate_flag_check_matches_frozen_artifact_layout() -> None:
+    """Regression for the 2026-07-01 Colab entry-gate failure.
+
+    The frozen 01_candidate_inputs.json (Stage 01 train-inner handoff) carries
+    holdout_test_contact but has NEVER carried official_validation_for_selection;
+    only the three Stage 02 payloads do. The for_selection safety check must
+    therefore cover exactly the Stage 02 payloads and must not require the flag
+    on the Stage 01 handoff (prereg section 13 dated repair).
+    """
+    import pytest
+
+    from lst_models.artifacts import require_safety_flags
+
+    stage01_handoff = {"holdout_test_contact": False}  # flag absent, as frozen
+    stage02_trio = [
+        ("stage02 run_manifest.json", {"holdout_test_contact": False, "official_validation_for_selection": False}),
+        ("02_stage03_handoff.json", {"holdout_test_contact": False, "official_validation_for_selection": False}),
+        ("02_frozen_candidate.json", {"holdout_test_contact": False, "official_validation_for_selection": False}),
+    ]
+    labelled = [
+        ("stage00 run_manifest.json", {"holdout_test_contact": False}),
+        ("stage01 run_manifest.json", {"holdout_test_contact": False}),
+        stage02_trio[0],
+        ("01_candidate_inputs.json", stage01_handoff),
+        stage02_trio[1],
+        stage02_trio[2],
+    ]
+    # holdout flag: all six payloads carry it and must pass.
+    require_safety_flags(
+        labelled, stage_label="v2_seed_addendum_readout", field="holdout_test_contact", expected=False
+    )
+    # for_selection flag: the Stage 02 trio passes...
+    require_safety_flags(
+        [labelled[2], labelled[4], labelled[5]],
+        stage_label="v2_seed_addendum_readout",
+        field="official_validation_for_selection",
+        expected=False,
+    )
+    # ...and re-including the Stage 01 handoff (the old labelled[2:] slice) must fail,
+    # which is exactly the crash this repair removed.
+    with pytest.raises(ValueError, match="01_candidate_inputs.json official_validation_for_selection"):
+        require_safety_flags(
+            labelled[2:],
+            stage_label="v2_seed_addendum_readout",
+            field="official_validation_for_selection",
+            expected=False,
+        )

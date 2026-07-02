@@ -510,7 +510,7 @@ artifact paths, and the reason, BEFORE any addendum result is used anywhere.
 
 ```text
 | date | deviation | artifacts | reason / disposition |
-| (none) | | | |
+| 2026-07-01 | Entry-gate repair BEFORE any scoring event: the runner required official_validation_for_selection=false on 01_candidate_inputs.json (labelled[2:] slice), but that Stage 01 train-inner artifact has never carried the flag; the gate failed closed in Colab at _verify_entry_gates with zero scoring events and zero budget consumption. | src/lst_models/stages/v2_seed_addendum_readout.py (check narrowed to the three Stage 02 payloads); tests/contracts/test_v2_seed_addendum_config_contract.py (regression test pinning the frozen-artifact flag layout) | Implementation repair, not a design change: sections 2-9 untouched; the frozen artifacts are the reference. Aborted run consumed no addendum scoring events; rerun proceeds under the repaired gate at the re-pinned commit. |
 ```
 
 ## 14. Sign-Off

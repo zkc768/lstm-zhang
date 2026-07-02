@@ -372,8 +372,14 @@ def _verify_entry_gates(config: Mapping[str, Any]) -> _AddendumInputs:
         ("02_frozen_candidate.json", frozen_candidate),
     ]
     require_safety_flags(labelled, stage_label=STAGE_NAME, field="holdout_test_contact", expected=False)
+    # official_validation_for_selection exists only on the Stage 02 payloads
+    # (run manifest, stage03 handoff, frozen candidate). The Stage 01 handoff
+    # 01_candidate_inputs.json is a train-inner artifact and has never carried
+    # the flag, so it must not be in this check (2026-07-01 entry-gate repair;
+    # the frozen artifacts are the reference, prereg section 13).
+    stage02_payloads = [labelled[2], labelled[4], labelled[5]]
     require_safety_flags(
-        labelled[2:], stage_label=STAGE_NAME, field="official_validation_for_selection", expected=False
+        stage02_payloads, stage_label=STAGE_NAME, field="official_validation_for_selection", expected=False
     )
     _require(
         stage02_handoff.get("ready_for_stage03") is True,
