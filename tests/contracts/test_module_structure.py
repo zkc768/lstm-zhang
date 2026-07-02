@@ -47,11 +47,27 @@ TESTS = ROOT / "tests"
 # stage-scoped exact-run-id resume entry (_load_resume_state/_ResumeState),
 # ledger-state checkpoint payload, and failed-seed retry purge landed in
 # frozen_validation_readout.py (1603 -> 1844).
+# 2026-07-01 v2 seed addendum (docs/protocols/
+# v2_seed_addendum_preregistration_20260701.md): v2_seed_addendum_readout.py
+# is a one-shot official-validation scoring stage, so it carries the
+# Stage-03-grade surface that freezes together — fail-closed Stage 00->01->02
+# entry gates, frozen-identity/date-bound/seed-rule gates, the scoring-event
+# budget cap, per-seed checkpoints with exact-run-id resume, and the Stage 03
+# verbatim output-schema constants (Stage 03 protocol section 10 freezes
+# those constants with the runner, so they cannot be hoisted to a shared
+# module without breaking that freeze; parity is pinned by
+# tests/contracts/test_v2_seed_addendum_config_contract.py instead).
+# Mechanism code is imported from domain modules (fitting.fit_stage_control,
+# metrics.*, data/features/windows/splits); the module is orchestration +
+# gates + payload writers only. Recorded stage-scoped budget: 1200 (squeezed
+# from a 1384-line first draft; compare frozen_validation_readout.py's 1844
+# for the same surface plus fallback/blocked paths).
 STAGE_MODULE_MAX_LINES = {
     "data_split_label_freeze.py": 133,
     "feature_window_search.py": 1004,
     "model_hpo_train_inner.py": 1880,
     "frozen_validation_readout.py": 1844,
+    "v2_seed_addendum_readout.py": 1200,
 }
 NEW_STAGE_MODULE_MAX_LINES = 700
 
@@ -63,6 +79,7 @@ NEW_STAGE_MODULE_MAX_LINES = 700
 # docs/protocols/v2_positive_control_preregistration_20260701.md); its test
 # file may touch that stage's privates only.
 STAGE_MODULE_BY_TEST_PREFIX = {
+    "test_v2_seed_addendum": "v2_seed_addendum_readout",
     "test_stage00": "data_split_label_freeze",
     "test_stage01": "feature_window_search",
     "test_stage02": "model_hpo_train_inner",

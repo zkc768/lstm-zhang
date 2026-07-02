@@ -109,6 +109,33 @@ budget_ledger:
       events_field: guarded_scoring_events
       for_selection: false
       notes: "guarded walk-forward; historically contacted post-2017 segment"
+    # PENDING WIRING (2026-07-01, half-spread control prereg section 3 —
+    # docs/protocols/v2_halfspread_control_preregistration_20260701.md).
+    # Runs completed: validation 20260702_001746_937371, guarded
+    # 20260702_002743_381300 (results/v2_halfspread_control/, local + Drive
+    # mirror; new_scoring_events=0 in both manifests). The entries below stay
+    # COMMENTED because the Stage 05 runner resolves events_source_key
+    # fail-closed from wired inputs only (synthesis.py); the next Stage 05
+    # re-run MUST wire both run manifests as inputs and uncomment these two
+    # entries. Deviation logged in the prereg section 12.
+    # - stage_name: v2_halfspread_control
+    #   run_id_key: halfspread_validation
+    #   evidence_domain: official_validation
+    #   data_segment: validation_2013_2017
+    #   contact_type: read_frozen_artifacts_only_plus_raw_bar_reaggregation
+    #   events_source_key: halfspread_validation
+    #   events_field: new_scoring_events
+    #   for_selection: false
+    #   notes: "disclosed diagnostic re-aggregation of the frozen Stage 03 dump by a raw-bar Roll half-spread proxy; zero new fit/predict events"
+    # - stage_name: v2_halfspread_control
+    #   run_id_key: halfspread_guarded
+    #   evidence_domain: guarded_walkforward
+    #   data_segment: guarded_holdout_2017_2024
+    #   contact_type: guarded_historically_contacted
+    #   events_source_key: halfspread_guarded
+    #   events_field: new_scoring_events
+    #   for_selection: false
+    #   notes: "same measure-only re-aggregation on the frozen V2.1 dumps; non-independent guarded context, never pooled with validation"
 
 # S5.2 claim boundary register. Each statement uses ONLY register-allowed wording
 # and is rejected if it contains any forbidden string. evidence_domain must be one

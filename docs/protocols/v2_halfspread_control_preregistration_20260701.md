@@ -436,6 +436,18 @@ full-bundle commit; notebook static-gate compatibility.
 
 ## 12. Deviation Log
 
+- 2026-07-01 (post-run, process bookkeeping only; sections 4-9 untouched): the
+  section 3 budget-ledger contact entries were appended to
+  `configs/stages/05_thesis_synthesis.yaml` as a COMMENTED pending-wiring
+  block rather than live entries. Reason: the Stage 05 runner resolves
+  `events_source_key` fail-closed from wired inputs only (`synthesis.py`), so
+  live entries without wired run manifests fail the Stage 05 contract tests
+  (observed: 18 failures, `KeyError: events_source_key 'halfspread_validation'
+  is not a wired record`). Both run manifests record `new_scoring_events=0`
+  (validation run 20260702_001746_937371; guarded run 20260702_002743_381300).
+  The next Stage 05 re-run must wire both manifests as inputs and uncomment
+  the entries. No measurement, rule, or outcome is affected.
+
 (Empty at registration. Any post-first-measurement change to sections 4-9
 must be recorded here as a dated entry stating what changed, why, what had
 already been observed at the time of the change, and which outputs are
