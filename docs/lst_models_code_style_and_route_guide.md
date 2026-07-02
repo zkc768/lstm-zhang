@@ -157,6 +157,7 @@ and update the guide before creating a new directory or abstraction.
 | `src/lst_models/preprocessing.py` | Train-only scaler/imputer helpers and transform contracts | Fit-on-all-data shortcuts |
 | `src/lst_models/metrics.py` | Macro F1, balanced accuracy, dummy-baseline deltas, LCB helpers, calibration/selective-prediction measurement (reliability bins, ECE, Brier decomposition, risk-coverage, AURC) | Wording decisions or thesis claims |
 | `src/lst_models/diagnostics.py` | Measure-only validation-diagnostics frame builders over frozen prediction dumps: dump schema gates plus derived columns, calibration/selective/robustness/failure tables, baseline-reconstruction equality gates | Model or calibrator fitting, stage entry gates, ledgers, artifact writing |
+| `src/lst_models/microstructure.py` | Measure-only microstructure spread proxies from already-loaded canonical bars (Roll / Corwin-Schultz half-spread), the frozen spread-to-band partition, spread-conditioned dump readouts, and the preregistered mechanical verdict rules | Raw-file loading, model fitting, stage entry gates, artifact writing, tradeability or significance wording |
 | `src/lst_models/artifacts.py` | Manifest writing, artifact inventory, schema checks, artifact paths | Model architecture |
 | `src/lst_models/device.py` | CUDA/CPU resolution and manifest fields | Research-selection decisions |
 | `src/lst_models/models/registry.py` | Small model registry and model lookup | Stage orchestration or training loops |
@@ -230,6 +231,7 @@ the doc is not implementation-ready.
 | Model architecture | `src/lst_models/models/<model>.py` | `<ModelName>Model` | `tests/stages/` or `tests/contracts/` |
 | Probe/trial fit wrappers and early-stopping splits | `src/lst_models/fitting.py` | `fit_probe`, `fit_lightgbm_probe`, `torch_inner_train_early_stopping_split` | `tests/stages/` or `tests/contracts/` |
 | Dump-frame diagnostics builders | `src/lst_models/diagnostics.py` | `gate_and_derive_dump`, `calibration_frames`, `robustness_frames` | `tests/stages/` (stage smoke) |
+| Spread proxies and spread-partition dump readouts | `src/lst_models/microstructure.py` | `roll_halfspread_by_day`, `assign_spread_partition`, `halfspread_partition_readout`, `verdict_from_readout` | `tests/contracts/` |
 | Stage orchestration | `src/lst_models/stages/<stage>.py` | `run_stage` | `tests/stages/` |
 | Notebook generation | `scripts/notebooks/generate_<stage>_colab.py` | `build_notebook` | `tests/notebooks/` |
 
