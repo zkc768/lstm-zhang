@@ -1,0 +1,164 @@
+# v2_embargo_robustness — preregistered train-domain one-day-embargo control.
+# Same run, like-for-like folds: the exact Stage 02 fold rows (no embargo) versus a
+# one-trading-day eval-side embargo. The embargo changes eval rows only, so both
+# variants share the identical fitted model per (fold, seed).
+stage_name: v2_embargo_robustness
+route: lst_models
+scope: validation_only
+holdout_test_contact: false
+train_domain_only: true
+evidence_status: train_inner_embargo_robustness_control
+
+# Preregistration sidecar (frozen before any fold runs):
+# docs/protocols/v2_embargo_robustness_preregistration_20260701.md
+
+inputs:
+  stage00_run_id: "20260610_051705_347450"
+  stage00_runtime_run_dir: /content/lst_models_results/00_data_split_label_freeze/20260610_051705_347450
+  stage00_drive_path_parts:
+    - lst_models
+    - results
+    - 00_data_split_label_freeze
+    - "20260610_051705_347450"
+  required_stage00_artifacts:
+    - raw_data_manifest.json
+    - split_freeze.json
+    - label_policy.json
+    - baseline_registry.json
+    - sample_event_index.csv
+    - run_manifest.json
+  raw_data_manifest: configs/lst_models_data.yaml
+  raw_data_dir: /content/lst_models_raw_stock_data
+  stage01_run_id: "20260610_075002"
+  stage01_runtime_run_dir: /content/lst_models_results/01_feature_window_search/20260610_075002
+  stage01_drive_path_parts:
+    - lst_models
+    - results
+    - 01_feature_window_search
+    - "20260610_075002"
+  required_stage01_artifacts:
+    - run_manifest.json
+    - 01_candidate_inputs.json
+    - 01_feature_window_search_summary.csv
+  # Frozen executed Stage 02 run: fold-row parity source. The no-embargo variant's
+  # capped fold rows must equal the recorded Stage 02 plan-ledger hashes exactly,
+  # so the baseline variant IS the executed Stage 02 row contract.
+  stage02_run_id: "20260610_082130_797479"
+  stage02_runtime_run_dir: /content/lst_models_results/02_model_hpo_train_inner/20260610_082130_797479
+  stage02_drive_path_parts:
+    - lst_models
+    - results
+    - 02_model_hpo_train_inner
+    - "20260610_082130_797479"
+  required_stage02_artifacts:
+    - run_manifest.json
+    - 02_hpo_plan_ledger.csv
+  notebook_path: notebooks/v2_embargo_robustness_colab.ipynb
+
+# The frozen primary candidate input; feature_set / feature_columns /
+# window_size are read from the exact Stage 01 handoff artifact at run time.
+candidate:
+  candidate_id: price_volume_time_w20
+
+# Predeclared primary configuration only. Labels are the frozen Stage 00 labels
+# (3.0 bps, 9 bars); nothing is relabeled in this experiment.
+model:
+  family: tcn
+  probe_id: tcn_tiny
+  hpo_profile_id: tcn_p01
+  search_space: configs/models/tcn/search_space.yaml
+
+embargo:
+  rule_id: drop_first_eval_trading_day_per_fold
+  embargo_trading_days: 1
+  # EXACT rule: drop every capped eval row whose trading day equals the fold's
+  # first eval trading day (the calendar day of the fold's eval_start). Train
+  # rows are untouched; the gap between train_end_exclusive and the first
+  # scored eval row becomes one trading day.
+  fits_shared_across_variants: true
+  variants:
+    - variant_id: no_embargo
+      role: stage02_baseline_fold_rows
+    - variant_id: embargo_1day
+      role: eval_side_one_trading_day_embargo
+
+train_inner:
+  n_folds: 3
+  seeds: [101, 202]
+  official_validation_for_selection: false
+  event_overlap_count_required: 0
+
+# Identical to the executed Stage 02 fold-row policy.
+sample_policy:
+  max_train_samples_per_fold: 50000
+  max_eval_samples_per_fold: 20000
+  sample_method: deterministic_even_stride_by_ticker_label
+
+# Identical to the executed Stage 02 torch training defaults.
+probe_training_defaults:
+  torch:
+    epochs: 64
+    batch_size: 1024
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    device: auto
+    require_gpu: false
+    optimizer: AdamW
+    loss: class_weighted_cross_entropy
+    early_stopping: inner_train_chronological_tail
+    early_stopping_validation_fraction: 0.2
+    minimum_early_stopping_train_samples: 128
+    minimum_early_stopping_validation_samples: 128
+    early_stopping_patience: 8
+    early_stopping_min_delta: 0.0
+    gradient_clip_norm: 1.0
+
+budget:
+  # folds(3) x seeds(2) = 6 planned tcn_tiny fits (shared across both variants);
+  # 6 fits x 2 variants = 12 readout rows.
+  max_planned_fit_rows: 8
+  max_readout_rows: 16
+
+reading_rules:
+  primary_baseline: stratified_dummy_train_prior
+  rule_id: embargoed_margin_shrinkage_vs_no_embargo
+  # "Materially smaller" is predeclared as: the embargoed fold-mean margin falls
+  # below shrinkage_fraction times the no-embargo fold-mean margin (more than
+  # half the baseline margin disappears). Applies per seed only when that
+  # seed's no-embargo margin is strictly positive; both seeds must agree.
+  shrinkage_fraction: 0.5
+  applicability: no_embargo_margin_positive_per_seed
+  evaluated_per_seed_and_must_agree: true
+
+checkpointing:
+  enabled: true
+  checkpoint_dir: /content/lst_models_checkpoints/v2_embargo_robustness
+
+outputs:
+  output_dir: /content/lst_models_results/v2_embargo_robustness
+  manifest: run_manifest.json
+  artifact_inventory: artifact_inventory.csv
+  trial_ledger: emb_trial_ledger.csv
+  variant_summary: emb_variant_summary.csv
+  fold_manifest: emb_fold_manifest.csv
+  dropped_rows: emb_dropped_rows.csv
+  baseline_control_summary: emb_baseline_control_summary.csv
+  reading_readout: emb_reading_readout.json
+
+forbidden:
+  search_axes:
+    - label_operator
+    - horizon_k
+    - no_trade_band_bps
+    - calendar_split_boundaries
+    - embargo_length_after_first_fit
+    - additional_variants_after_first_fit
+    - official_validation_tiebreaker
+    - holdout_test_wording
+  wording:
+    - solved problem
+    - leakage-free proof
+    - purge complete
+    - final model
+    - clean test
+    - profitable

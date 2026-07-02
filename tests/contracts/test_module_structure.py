@@ -78,6 +78,11 @@ NEW_STAGE_MODULE_MAX_LINES = 700
 # (synthetic_positive_control.py, preregistration
 # docs/protocols/v2_positive_control_preregistration_20260701.md); its test
 # file may touch that stage's privates only.
+# 2026-07-01: added the two train-domain robustness stages
+# (band_horizon_sensitivity.py / embargo_robustness.py, preregistrations
+# docs/protocols/v2_band_horizon_sensitivity_preregistration_20260701.md and
+# docs/protocols/v2_embargo_robustness_preregistration_20260701.md); each test
+# file may touch its own stage's privates only.
 STAGE_MODULE_BY_TEST_PREFIX = {
     "test_v2_seed_addendum": "v2_seed_addendum_readout",
     "test_stage00": "data_split_label_freeze",
@@ -88,6 +93,8 @@ STAGE_MODULE_BY_TEST_PREFIX = {
     "test_stage05": "thesis_synthesis",
     "test_v2_1": "guarded_walkforward_readout",
     "test_synthetic_positive_control": "synthetic_positive_control",
+    "test_band_horizon_sensitivity": "band_horizon_sensitivity",
+    "test_embargo_robustness": "embargo_robustness",
 }
 
 

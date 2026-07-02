@@ -1,0 +1,178 @@
+# v2_band_horizon_sensitivity — preregistered train-domain band/horizon sensitivity scan.
+# A CROSS through the frozen cell (3.0 bps, 9 bars), never a grid and never a tuning
+# pass: no cell is preferred, cells are never ranked, no alternative is recommended.
+stage_name: v2_band_horizon_sensitivity
+route: lst_models
+scope: validation_only
+holdout_test_contact: false
+train_domain_only: true
+sensitivity_scan_no_cell_selected: true
+evidence_status: train_inner_protocol_sensitivity_scan_no_cell_selected
+
+# Preregistration sidecar (frozen before any cell runs):
+# docs/protocols/v2_band_horizon_sensitivity_preregistration_20260701.md
+
+inputs:
+  stage00_run_id: "20260610_051705_347450"
+  stage00_runtime_run_dir: /content/lst_models_results/00_data_split_label_freeze/20260610_051705_347450
+  stage00_drive_path_parts:
+    - lst_models
+    - results
+    - 00_data_split_label_freeze
+    - "20260610_051705_347450"
+  required_stage00_artifacts:
+    - raw_data_manifest.json
+    - split_freeze.json
+    - label_policy.json
+    - baseline_registry.json
+    - sample_event_index.csv
+    - run_manifest.json
+  raw_data_manifest: configs/lst_models_data.yaml
+  raw_data_dir: /content/lst_models_raw_stock_data
+  stage01_run_id: "20260610_075002"
+  stage01_runtime_run_dir: /content/lst_models_results/01_feature_window_search/20260610_075002
+  stage01_drive_path_parts:
+    - lst_models
+    - results
+    - 01_feature_window_search
+    - "20260610_075002"
+  required_stage01_artifacts:
+    - run_manifest.json
+    - 01_candidate_inputs.json
+    - 01_feature_window_search_summary.csv
+  # Frozen executed Stage 02 run: fold-row parity source only. The frozen cell's
+  # capped fold rows must equal the recorded Stage 02 plan-ledger hashes; the
+  # rebuilt (2.0/4.0 bps, 6/12 bar) cells have their own labels and stand alone.
+  stage02_run_id: "20260610_082130_797479"
+  stage02_runtime_run_dir: /content/lst_models_results/02_model_hpo_train_inner/20260610_082130_797479
+  stage02_drive_path_parts:
+    - lst_models
+    - results
+    - 02_model_hpo_train_inner
+    - "20260610_082130_797479"
+  required_stage02_artifacts:
+    - run_manifest.json
+    - 02_hpo_plan_ledger.csv
+  notebook_path: notebooks/v2_band_horizon_sensitivity_colab.ipynb
+
+# The frozen primary candidate input; feature_set / feature_columns /
+# window_size are read from the exact Stage 01 handoff artifact at run time.
+candidate:
+  candidate_id: price_volume_time_w20
+
+# Predeclared primary configuration only (compute scope: protocol sensitivity,
+# not a family comparison). The profile is read from the frozen search space.
+model:
+  family: tcn
+  probe_id: tcn_tiny
+  hpo_profile_id: tcn_p01
+  search_space: configs/models/tcn/search_space.yaml
+
+label_scan:
+  operator: endpoint_cumulative_return
+  frozen_cell:
+    horizon_k: 9
+    no_trade_band_bps: 3.0
+  # 5 cells: band axis {2.0, 3.0, 4.0} bps at horizon 9; horizon axis
+  # {6, 9, 12} bars at 3.0 bps. The frozen cell appears exactly once.
+  cells:
+    - cell_id: h09_bps2p0
+      horizon_k: 9
+      no_trade_band_bps: 2.0
+      cell_axis: band
+    - cell_id: h09_bps3p0
+      horizon_k: 9
+      no_trade_band_bps: 3.0
+      cell_axis: frozen
+    - cell_id: h09_bps4p0
+      horizon_k: 9
+      no_trade_band_bps: 4.0
+      cell_axis: band
+    - cell_id: h06_bps3p0
+      horizon_k: 6
+      no_trade_band_bps: 3.0
+      cell_axis: horizon
+    - cell_id: h12_bps3p0
+      horizon_k: 12
+      no_trade_band_bps: 3.0
+      cell_axis: horizon
+
+train_inner:
+  n_folds: 3
+  seeds: [101, 202]
+  official_validation_for_selection: false
+  event_overlap_count_required: 0
+
+# Identical to the executed Stage 02 fold-row policy.
+sample_policy:
+  max_train_samples_per_fold: 50000
+  max_eval_samples_per_fold: 20000
+  sample_method: deterministic_even_stride_by_ticker_label
+
+# Identical to the executed Stage 02 torch training defaults.
+probe_training_defaults:
+  torch:
+    epochs: 64
+    batch_size: 1024
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    device: auto
+    require_gpu: false
+    optimizer: AdamW
+    loss: class_weighted_cross_entropy
+    early_stopping: inner_train_chronological_tail
+    early_stopping_validation_fraction: 0.2
+    minimum_early_stopping_train_samples: 128
+    minimum_early_stopping_validation_samples: 128
+    early_stopping_patience: 8
+    early_stopping_min_delta: 0.0
+    gradient_clip_norm: 1.0
+
+budget:
+  # cells(5) x folds(3) x seeds(2) = 30 planned tcn_tiny fits
+  max_planned_fit_rows: 36
+
+reading_rules:
+  primary_baseline: stratified_dummy_train_prior
+  rule_id: sign_stability_across_adjacent_cells_per_axis
+  cells_are_never_ranked: true
+  no_alternative_cell_recommended: true
+  report_all_cells: true
+  report_eligible_row_counts_per_cell: true
+
+checkpointing:
+  enabled: true
+  checkpoint_dir: /content/lst_models_checkpoints/v2_band_horizon_sensitivity
+
+outputs:
+  output_dir: /content/lst_models_results/v2_band_horizon_sensitivity
+  manifest: run_manifest.json
+  artifact_inventory: artifact_inventory.csv
+  trial_ledger: bhs_trial_ledger.csv
+  cell_summary: bhs_cell_summary.csv
+  cell_eligibility: bhs_cell_eligibility.csv
+  fold_manifest: bhs_fold_manifest.csv
+  baseline_control_summary: bhs_baseline_control_summary.csv
+  reading_readout: bhs_reading_readout.json
+  per_cell_trials_prefix: bhs_trials_
+
+forbidden:
+  search_axes:
+    - label_operator
+    - calendar_split_boundaries
+    - additional_cells_after_first_fit
+    - cell_ranking
+    - cell_selection
+    - official_validation_tiebreaker
+    - holdout_test_wording
+  wording:
+    - best band
+    - best horizon
+    - optimal band
+    - optimal horizon
+    - recommended band
+    - recommended horizon
+    - tuned threshold
+    - final model
+    - clean test
+    - profitable
